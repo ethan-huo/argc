@@ -18,25 +18,26 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 
 ```bash
 bun add github:ethan-huo/argc
-
-# update
-bun update github:ethan-huo/argc
 ```
 
 ## Quick Start
 
 ```typescript
-import { c, cli, group } from 'argc'
+import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
+
+import { c, cli } from 'argc'
+
+const s = toStandardJsonSchema
 
 const schema = {
   greet: c
     .meta({ description: 'Greet someone' })
     .args('name')
-    .input(v.object({
+    .input(s(v.object({
       name: v.pipe(v.string(), v.minLength(2)),
       loud: v.optional(v.boolean(), false),
-    })),
+    }))),
 }
 
 cli(schema, { name: 'hello', version: '1.0.0' }).run({
@@ -63,13 +64,13 @@ const schema = {
   seed: c
     .meta({ description: 'Seed database from file' })
     .args('file')
-    .input(v.object({
+    .input(s(v.object({
       file: v.pipe(
         v.string(),
         v.endsWith('.json'),
         v.transform((path) => Bun.file(path).json()),  // string → Promise<object>
       ),
-    })),
+    }))),
 }
 
 // Handler receives the transformed value
@@ -152,7 +153,7 @@ Define aliases that display like pnpm:
 ```typescript
 list: c
   .meta({ description: 'List users', aliases: ['ls', 'l'] })
-  .input(v.object({ ... }))
+  .input(s(v.object({ ... })))
 ```
 
 ```bash
@@ -197,10 +198,10 @@ Transform global options into a typed context available in all handlers:
 cli(schema, {
   name: 'myapp',
   version: '1.0.0',
-  globals: v.object({
+  globals: s(v.object({
     env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),
     verbose: v.optional(v.boolean(), false),
-  }),
+  })),
 }).run({
   // Transform globals into context
   context: (globals) => ({
@@ -249,7 +250,7 @@ c.meta({
   hidden: true,       // hides from help
 })
 .args('positional1', 'positional2')  // positional arguments (in order)
-.input(schema)                        // Standard Schema (valibot/zod/arktype)
+.input(schema)                        // Standard JSON Schema
 ```
 
 ### `group()` - Command Group
@@ -294,85 +295,99 @@ Note: `-v` and `--schema` only work at root level. Using them with subcommands s
 
 ## Schema Libraries
 
-Works with any Standard Schema compatible library:
+argc requires schemas that implement both `StandardSchemaV1` (validation) and `StandardJSONSchemaV1` (type introspection).
+
+For **Valibot**, use `toStandardJsonSchema` wrapper:
 
 ```typescript
-// valibot
+import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
-c.input(v.object({ name: v.string() }))
 
-// zod
-import { z } from 'zod'
-c.input(z.object({ name: z.string() }))
+const s = toStandardJsonSchema
 
-// arktype
-import { type } from 'arktype'
-c.input(type({ name: 'string' }))
+c.input(s(v.object({ name: v.string() })))
 ```
 
 ## Complete Example
 
 ```typescript
+import { toStandardJsonSchema } from '@valibot/to-json-schema'
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
 import * as v from 'valibot'
+
 import { c, cli, group } from 'argc'
+import * as tables from './db/schema'
+
+const s = toStandardJsonSchema
 
 const schema = {
   user: group({ description: 'User management' }, {
     list: c
       .meta({ description: 'List users', aliases: ['ls'] })
-      .input(v.object({
+      .input(s(v.object({
         format: v.optional(v.picklist(['json', 'table']), 'table'),
-      })),
+      }))),
 
     create: c
       .meta({
         description: 'Create user',
         examples: ['myapp user create --name john --email john@example.com'],
       })
-      .input(v.object({
+      .input(s(v.object({
         name: v.pipe(v.string(), v.minLength(3)),
         email: v.optional(v.pipe(v.string(), v.email())),
-      })),
+      }))),
   }),
 
   db: group({ description: 'Database operations' }, {
     seed: c
       .meta({ description: 'Seed from JSON file' })
       .args('file')
-      .input(v.object({
+      .input(s(v.object({
         file: v.pipe(
           v.string(),
           v.endsWith('.json'),
           v.transform((path) => Bun.file(path).json()),
         ),
-      })),
+      }))),
   }),
 }
 
 cli(schema, {
   name: 'myapp',
   version: '1.0.0',
-  globals: v.object({
+  globals: s(v.object({
     verbose: v.optional(v.boolean(), false),
-  }),
+  })),
 }).run({
   context: (globals) => ({
+    db: drizzle(postgres(process.env.DATABASE_URL!)),
     log: globals.verbose ? console.log : () => {},
   }),
 
   handlers: {
     user: {
-      list: ({ input, context }) => {
-        context.log('Listing...')
-        console.log('Format:', input.format)
+      list: async ({ input, context }) => {
+        context.log('Listing users...')
+        const users = await context.db.select().from(tables.users)
+        console.log(input.format === 'json' ? JSON.stringify(users) : users)
       },
-      create: ({ input }) => {
-        console.log('Created:', input.name, input.email ?? '')
+      create: async ({ input, context }) => {
+        context.log('Creating user...')
+        await context.db.insert(tables.users).values({
+          name: input.name,
+          email: input.email,
+        })
+        console.log('Created:', input.name)
       },
     },
     db: {
-      seed: async ({ input }) => {
-        console.log('Seeding:', await input.file)
+      seed: async ({ input, context }) => {
+        const data = await input.file
+        context.log('Seeding database...')
+        await context.db.insert(tables.users).values(data.users)
+        console.log('Seeded:', data.users.length, 'users')
       },
     },
   },
