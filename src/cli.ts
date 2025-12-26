@@ -435,9 +435,10 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 						opt.default !== undefined
 							? ` (default: ${JSON.stringify(opt.default)})`
 							: ''
+					const usageHint = getTypeUsageHint(opt.type, opt.name)
 					const desc = opt.description ?? ''
 					console.log(
-						`  ${colors.option(`${flag}${typeHint}`.padEnd(24))} ${colors.dim(`${desc}${defaultHint}`)}`,
+						`  ${colors.option(`${flag}${typeHint}`.padEnd(24))} ${colors.dim(`${desc}${defaultHint}${usageHint}`)}`,
 					)
 				}
 			}
@@ -600,4 +601,19 @@ export function cli<TSchema extends Router, TGlobals extends Schema = Schema>(
 	options: CLIOptions<TGlobals>,
 ): CLI<TSchema, TGlobals> {
 	return new CLI(schema, options)
+}
+
+// Generate usage hint for complex types
+function getTypeUsageHint(type: string, name: string): string {
+	// Array type: string[], number[], etc.
+	if (type.endsWith('[]')) {
+		return ` (repeatable)`
+	}
+
+	// Object type: { ... }
+	if (type.startsWith('{') && type.endsWith('}')) {
+		return ` (use --${name}.<key>)`
+	}
+
+	return ''
 }

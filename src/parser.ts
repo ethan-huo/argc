@@ -95,6 +95,12 @@ function setFlag(
 	key: string,
 	value: unknown,
 ): void {
+	// Handle dot notation: --user.name john -> { user: { name: 'john' } }
+	if (key.includes('.')) {
+		setNestedFlag(flags, key.split('.'), value)
+		return
+	}
+
 	const existing = flags[key]
 	if (existing !== undefined) {
 		// Multiple values -> array
@@ -106,6 +112,36 @@ function setFlag(
 	} else {
 		flags[key] = value
 	}
+}
+
+function setNestedFlag(
+	obj: Record<string, unknown>,
+	path: string[],
+	value: unknown,
+): void {
+	const key = path[0]
+
+	if (path.length === 1) {
+		// Leaf node - handle array merging
+		const existing = obj[key]
+		if (existing !== undefined) {
+			if (Array.isArray(existing)) {
+				existing.push(value)
+			} else {
+				obj[key] = [existing, value]
+			}
+		} else {
+			obj[key] = value
+		}
+		return
+	}
+
+	// Intermediate node - ensure object exists
+	if (!(key in obj) || typeof obj[key] !== 'object' || obj[key] === null) {
+		obj[key] = {}
+	}
+
+	setNestedFlag(obj[key] as Record<string, unknown>, path.slice(1), value)
 }
 
 function parseValue(str: string): unknown {

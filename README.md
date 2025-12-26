@@ -100,6 +100,45 @@ endpoint: v.pipe(v.string(), v.url(), v.transform((s) => new URL(s)))
 pattern: v.pipe(v.string(), v.transform((p) => new Bun.Glob(p)))
 ```
 
+## Arrays & Nested Objects
+
+Define complex types in your schema - argc handles the CLI input automatically.
+
+**Arrays** - repeat the flag:
+
+```typescript
+c.input(s(v.object({
+  tags: v.array(v.string()),
+})))
+```
+
+```bash
+$ myapp create --tags admin --tags dev
+# input.tags = ['admin', 'dev']
+```
+
+**Nested objects** - use dot notation:
+
+```typescript
+c.input(s(v.object({
+  db: v.object({
+    host: v.string(),
+    port: v.number(),
+  }),
+})))
+```
+
+```bash
+$ myapp connect --db.host localhost --db.port 5432
+# input.db = { host: 'localhost', port: 5432 }
+```
+
+Help output shows usage hints:
+```
+--tags <string[]>                    (repeatable)
+--db <{ host: string, port: number }>  (use --db.<key>)
+```
+
 ## Rust-Style Error Messages
 
 Precise errors that point exactly where validation failed:

@@ -21,16 +21,26 @@ const schema = {
 				),
 			),
 
-			create: c.meta({ description: 'Create a new user' }).input(
-				s(
-					v.object({
-						name: v.pipe(v.string(), v.minLength(3), v.maxLength(8)),
-						email: v.optional(
-							v.pipe(v.string(), v.email(), v.description('user email')),
-						),
-					}),
+			create: c
+				.meta({
+					description: 'Create a new user',
+					examples: [
+						'demo user create --name john --email john@example.com',
+						'demo user create --name john --tags admin --tags dev',
+					],
+				})
+				.input(
+					s(
+						v.object({
+							name: v.pipe(v.string(), v.minLength(3), v.maxLength(8)),
+							email: v.optional(
+								v.pipe(v.string(), v.email(), v.description('user email')),
+							),
+							// Array: use --tags admin --tags dev
+							tags: v.optional(v.array(v.string()), []),
+						}),
+					),
 				),
-			),
 		},
 	),
 
@@ -57,6 +67,26 @@ const schema = {
 						v.object({
 							key: v.string(),
 							value: v.string(),
+						}),
+					),
+				),
+
+			// Nested object example: use --db.host localhost --db.port 5432
+			connect: c
+				.meta({
+					description: 'Connect to database',
+					examples: [
+						'demo config connect --db.host localhost --db.port 5432 --db.name mydb',
+					],
+				})
+				.input(
+					s(
+						v.object({
+							db: v.object({
+								host: v.string(),
+								port: v.number(),
+								name: v.string(),
+							}),
 						}),
 					),
 				),
@@ -199,7 +229,9 @@ app.run({
 
 			create: ({ input, context }) => {
 				context.log('Creating user...')
-				console.log('Created user:', input.name, input.email ?? '(no email)')
+				console.log('Created user:', input.name, input.email ?? '(no email)', {
+					tags: input.tags,
+				})
 			},
 		},
 
@@ -227,6 +259,11 @@ app.run({
 			clear: ({ input, context }) => {
 				context.log('Clearing config...')
 				console.log('Config cleared', { force: input.force })
+			},
+
+			connect: ({ input, context }) => {
+				context.log('Connecting to database...')
+				console.log('Database config:', input.db)
 			},
 		},
 
