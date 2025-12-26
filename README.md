@@ -297,14 +297,25 @@ Note: `-v` and `--schema` only work at root level. Using them with subcommands s
 
 argc requires schemas that implement both `StandardSchemaV1` (validation) and `StandardJSONSchemaV1` (type introspection).
 
-For **Valibot**, use `toStandardJsonSchema` wrapper:
+**Zod** and **ArkType** natively support Standard JSON Schema - no wrapper needed:
+
+```typescript
+// zod - works directly
+import { z } from 'zod'
+c.input(z.object({ name: z.string() }))
+
+// arktype - works directly  
+import { type } from 'arktype'
+c.input(type({ name: 'string' }))
+```
+
+**Valibot** requires a wrapper (to keep core bundle small):
 
 ```typescript
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
 const s = toStandardJsonSchema
-
 c.input(s(v.object({ name: v.string() })))
 ```
 
