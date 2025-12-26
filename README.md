@@ -6,6 +6,7 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 
 - **Schema-first** - Your schema IS the CLI definition
 - **Transform inputs** - Convert strings to rich objects (`Bun.file()`, dates, etc.)
+- **Arrays & Objects** - `--tags a --tags b` and `--db.host localhost` syntax
 - **Rust-style errors** - Precise error messages with `^` caret pointing to invalid fields
 - **AI-friendly** - `--schema` outputs TypeScript-like type definitions
 - **Command aliases** - `ls, list` style display like pnpm
@@ -161,23 +162,23 @@ Run `--schema` to get a TypeScript-like type definition:
 $ myapp --schema
 ```
 
-```typescript
-/** My CLI app */
+```
+CLI Syntax:
+  arrays:  --tags a --tags b           → tags: ["a", "b"]
+  objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }
+
+My CLI app
+
 type Myapp = {
-  /** Global options available to all commands */
+  // Global options available to all commands
   $globals: { verbose?: boolean = false }
 
-  /** User management */
+  // User management
   user: {
-    /**
-     * List all users
-     */
-    list(all?: boolean = false, format?: ('json' | 'table') = "table")
-    /**
-     * Create a new user
-     * @example
-     * myapp user create --name john --email john@example.com
-     */
+    // List all users
+    list(all?: boolean = false, format?: "json" | "table" = "table")
+    // Create a new user
+    // $ myapp user create --name john --email john@example.com
     create(name: string, email?: string)
   }
 }
