@@ -3,7 +3,8 @@ import * as v from 'valibot'
 
 import { c, cli, group } from '../src'
 
-// Helper: wrap valibot schema to add JSON Schema support
+// Valibot requires this wrapper to add JSON Schema support.
+// Zod and ArkType don't need this - they natively implement StandardJSONSchemaV1.
 const s = toStandardJsonSchema
 
 // Define schema with group meta

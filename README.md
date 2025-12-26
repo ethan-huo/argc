@@ -321,6 +321,8 @@ c.input(s(v.object({ name: v.string() })))
 
 ## Complete Example
 
+See full working example: [examples/demo.ts](./examples/demo.ts)
+
 ```typescript
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import { drizzle } from 'drizzle-orm/postgres-js'
