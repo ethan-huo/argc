@@ -212,6 +212,13 @@ function generateCommandSchema(
 export function generateSchema(schema: Router, options: SchemaOptions): string {
 	const lines: string[] = []
 
+	// CLI syntax hint for AI agents
+	lines.push('/**')
+	lines.push(' * CLI Syntax:')
+	lines.push(' *   arrays:  --tags a --tags b      → tags: ["a", "b"]')
+	lines.push(' *   objects: --user.name x --user.age 1 → user: { name: "x", age: 1 }')
+	lines.push(' */')
+
 	// Header comment
 	if (options.description) {
 		lines.push(`/** ${options.description} */`)
