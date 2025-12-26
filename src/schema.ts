@@ -1,102 +1,90 @@
 // Schema generator - outputs TypeScript-like type definition for AI agents
+// Uses Standard JSON Schema (StandardJSONSchemaV1) for schema introspection
 
-import type { AnySchema, Router } from './types'
-
+import type { Router, Schema } from './types'
 import { isCommand, isGroup } from './types'
 
 type SchemaOptions = {
 	name: string
 	description?: string
-	globals?: AnySchema
+	globals?: Schema
 }
 
-// Try to extract type string from various schema libraries
-function extractTypeFromSchema(schema: AnySchema): string {
-	const s = schema as unknown as Record<string, unknown>
+type JSONSchema = Record<string, unknown>
 
-	// Valibot: has 'expects' field
-	if (typeof s.expects === 'string') {
-		return normalizeType(s.expects)
+// Convert JSON Schema to TypeScript-like type string
+function jsonSchemaToTypeString(schema: JSONSchema): string {
+	const type = schema.type as string | undefined
+
+	// Handle const
+	if ('const' in schema) {
+		return JSON.stringify(schema.const)
 	}
 
-	// Zod: has '_def' with typeName
-	if (s._def && typeof s._def === 'object') {
-		return extractZodType(s._def as Record<string, unknown>)
+	// Handle enum
+	if (schema.enum) {
+		return (schema.enum as unknown[]).map((v) => JSON.stringify(v)).join(' | ')
 	}
 
-	// ArkType: has 'infer' or 'expression'
-	if (typeof s.expression === 'string') {
-		return s.expression
+	// Handle oneOf/anyOf (union types)
+	if (schema.oneOf || schema.anyOf) {
+		const variants = (schema.oneOf || schema.anyOf) as JSONSchema[]
+		return variants.map((v) => jsonSchemaToTypeString(v)).join(' | ')
 	}
 
-	// Fallback: try to infer from ~standard
-	return 'unknown'
-}
+	// Handle allOf (intersection types)
+	if (schema.allOf) {
+		const variants = schema.allOf as JSONSchema[]
+		return variants.map((v) => jsonSchemaToTypeString(v)).join(' & ')
+	}
 
-function extractZodType(def: Record<string, unknown>): string {
-	const typeName = def.typeName as string | undefined
+	// Handle $ref (simplified - just show as unknown)
+	if (schema.$ref) {
+		return 'unknown'
+	}
 
-	switch (typeName) {
-		case 'ZodString':
+	switch (type) {
+		case 'string':
 			return 'string'
-		case 'ZodNumber':
+		case 'number':
+		case 'integer':
 			return 'number'
-		case 'ZodBoolean':
+		case 'boolean':
 			return 'boolean'
-		case 'ZodLiteral':
-			return JSON.stringify(def.value)
-		case 'ZodEnum':
-			return (def.values as string[]).map((v) => JSON.stringify(v)).join(' | ')
-		case 'ZodOptional':
-			return extractZodType(def.innerType as Record<string, unknown>) + '?'
-		case 'ZodDefault':
-			return extractZodType(def.innerType as Record<string, unknown>)
-		case 'ZodObject': {
-			const shape = def.shape as
-				| Record<string, { _def: Record<string, unknown> }>
+		case 'null':
+			return 'null'
+		case 'array': {
+			const items = schema.items as JSONSchema | undefined
+			if (items) {
+				return `${jsonSchemaToTypeString(items)}[]`
+			}
+			return 'unknown[]'
+		}
+		case 'object': {
+			const properties = schema.properties as
+				| Record<string, JSONSchema>
 				| undefined
-			if (!shape) return 'object'
-			const entries = Object.entries(shape)
-				.map(([k, v]) => `${k}: ${extractZodType(v._def)}`)
+			if (!properties) return 'object'
+
+			const required = new Set((schema.required as string[]) ?? [])
+			const entries = Object.entries(properties)
+				.map(([k, v]) => {
+					const opt = required.has(k) ? '' : '?'
+					return `${k}${opt}: ${jsonSchemaToTypeString(v)}`
+				})
 				.join(', ')
 			return `{ ${entries} }`
 		}
 		default:
+			// No type specified, try to infer
+			if (schema.properties) {
+				return jsonSchemaToTypeString({ ...schema, type: 'object' })
+			}
 			return 'unknown'
 	}
 }
 
-function normalizeType(expects: string): string {
-	// Clean up valibot's expects format
-	// "(\"prod\" | \"dev\")" -> "'prod' | 'dev'"
-	// "((\"prod\" | \"dev\") | undefined)" -> "'prod' | 'dev' | undefined"
-	return expects
-		.replace(/^\(|\)$/g, '') // Remove outer parens
-		.replace(/\\"/g, "'") // \"x\" -> 'x'
-		.replace(/"/g, "'") // "x" -> 'x'
-}
-
-// Extract description from valibot pipe metadata
-function extractDescription(field: Record<string, unknown>): string | null {
-	// Check pipe array for description metadata
-	const pipe = field.pipe as Array<Record<string, unknown>> | undefined
-	if (pipe) {
-		for (const item of pipe) {
-			if (item.kind === 'metadata' && item.type === 'description') {
-				return item.description as string
-			}
-		}
-	}
-
-	// Check wrapped schema (for optional fields)
-	const wrapped = field.wrapped as Record<string, unknown> | undefined
-	if (wrapped) {
-		return extractDescription(wrapped)
-	}
-
-	return null
-}
-
+// Parameter info for help display and schema generation
 type ParamInfo = {
 	name: string
 	type: string
@@ -105,64 +93,43 @@ type ParamInfo = {
 	description?: string
 }
 
-function extractInputParamsDetailed(schema: AnySchema): ParamInfo[] {
-	const s = schema as unknown as Record<string, unknown>
-	const params: ParamInfo[] = []
-
-	// Valibot object schema
-	if (s.type === 'object' && s.entries) {
-		const entries = s.entries as Record<string, Record<string, unknown>>
-
-		for (const [key, field] of Object.entries(entries)) {
-			const isOptional = field.type === 'optional'
-			const typeStr = extractTypeFromSchema(field as unknown as AnySchema)
-			const defaultVal = field.default
-			const description = extractDescription(field) ?? undefined
-
-			params.push({
-				name: key,
-				type: typeStr.replace(' | undefined', '').replace('?', ''),
-				optional: isOptional,
-				default: defaultVal,
-				description,
-			})
-		}
-
-		return params
+// Extract parameters from schema using JSON Schema
+function extractInputParamsDetailed(schema: Schema): ParamInfo[] {
+	let jsonSchema: JSONSchema
+	try {
+		jsonSchema = schema['~standard'].jsonSchema.input({ target: 'draft-07' })
+	} catch {
+		return []
 	}
 
-	// Zod object schema
-	if (s._def && (s._def as Record<string, unknown>).typeName === 'ZodObject') {
-		const def = s._def as Record<string, unknown>
-		const shape = def.shape as
-			| Record<string, Record<string, unknown>>
-			| undefined
-		if (!shape) return []
+	const params: ParamInfo[] = []
+	const properties = jsonSchema.properties as
+		| Record<string, JSONSchema>
+		| undefined
+	if (!properties) return []
 
-		for (const [key, field] of Object.entries(shape)) {
-			const fieldDef = field._def as Record<string, unknown>
-			const isOptional =
-				fieldDef.typeName === 'ZodOptional' ||
-				fieldDef.typeName === 'ZodDefault'
-			const typeStr = extractZodType(fieldDef)
-			// Zod description is in fieldDef.description
-			const description = fieldDef.description as string | undefined
+	const required = new Set((jsonSchema.required as string[]) ?? [])
 
-			params.push({
-				name: key,
-				type: typeStr.replace('?', ''),
-				optional: isOptional,
-				description,
-			})
-		}
+	for (const [name, prop] of Object.entries(properties)) {
+		const isOptional = !required.has(name)
+		const typeStr = jsonSchemaToTypeString(prop)
+		const description = prop.description as string | undefined
+		const defaultVal = prop.default
 
-		return params
+		params.push({
+			name,
+			type: typeStr,
+			optional: isOptional,
+			default: defaultVal,
+			description,
+		})
 	}
 
 	return params
 }
 
-function extractInputParams(schema: AnySchema): string {
+// Format params as function signature
+function extractInputParams(schema: Schema): string {
 	const params = extractInputParamsDetailed(schema)
 	return params
 		.map((p) => {
@@ -190,7 +157,6 @@ function generateCommandSchema(
 	if (isCommand(router)) {
 		const meta = router['~argc'].meta
 		const input = router['~argc'].input
-		const args = router['~argc'].args
 
 		// JSDoc comments
 		if (meta.description || meta.deprecated || meta.examples?.length) {
@@ -210,9 +176,8 @@ function generateCommandSchema(
 			lines.push(`${indent} */`)
 		}
 
-		// Extract params from input schema (args are already included in input)
+		// Extract params from input schema
 		const params = input ? extractInputParams(input) : ''
-
 		lines.push(`${indent}${name}(${params})`)
 		return lines
 	}
@@ -226,7 +191,7 @@ function generateCommandSchema(
 
 		lines.push(`${indent}${name}: {`)
 		for (const [key, child] of Object.entries(router['~argc.group'].children)) {
-			const childLines = generateCommandSchema(key, child, indent + '  ')
+			const childLines = generateCommandSchema(key, child, `${indent}  `)
 			lines.push(...childLines)
 		}
 		lines.push(`${indent}}`)
@@ -236,7 +201,7 @@ function generateCommandSchema(
 	// Plain object router (group without meta)
 	lines.push(`${indent}${name}: {`)
 	for (const [key, child] of Object.entries(router)) {
-		const childLines = generateCommandSchema(key, child, indent + '  ')
+		const childLines = generateCommandSchema(key, child, `${indent}  `)
 		lines.push(...childLines)
 	}
 	lines.push(`${indent}}`)
@@ -244,10 +209,7 @@ function generateCommandSchema(
 	return lines
 }
 
-export function generateSchema(
-	schema: Router,
-	options: SchemaOptions,
-): string {
+export function generateSchema(schema: Router, options: SchemaOptions): string {
 	const lines: string[] = []
 
 	// Header comment
@@ -269,13 +231,13 @@ export function generateSchema(
 	}
 
 	// Commands
-	for (const [key, child] of Object.entries(
-		isGroup(schema)
-			? schema['~argc.group'].children
-			: isCommand(schema)
-				? {}
-				: schema,
-	)) {
+	const children = isGroup(schema)
+		? schema['~argc.group'].children
+		: isCommand(schema)
+			? {}
+			: schema
+
+	for (const [key, child] of Object.entries(children)) {
 		const childLines = generateCommandSchema(key, child, '  ')
 		lines.push(...childLines)
 	}

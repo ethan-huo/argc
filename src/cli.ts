@@ -1,11 +1,10 @@
 import type {
 	AnyCommand,
-	AnySchema,
 	CLIOptions,
 	Handlers,
-	InferOutput,
 	Router,
 	Schema,
+	StandardSchemaV1,
 } from './types'
 
 import { colors } from './colors'
@@ -21,31 +20,26 @@ function getRouterChildren(router: Router): { [key: string]: Router } {
 	return router
 }
 
-type ContextFn<TGlobals extends AnySchema, TContext> = (
-	globals: InferOutput<TGlobals>,
+type ContextFn<TGlobals extends Schema, TContext> = (
+	globals: StandardSchemaV1.InferOutput<TGlobals>,
 ) => TContext | Promise<TContext>
 
 type RunOptionsWithContext<
 	TSchema extends Router,
-	TGlobals extends AnySchema,
+	TGlobals extends Schema,
 	TContext,
 > = {
 	context: ContextFn<TGlobals, TContext>
 	handlers: Handlers<TSchema, TContext>
 }
 
-type RunOptionsWithoutContext<
-	TSchema extends Router,
-	TGlobals extends AnySchema,
-> = {
-	context?: never
-	handlers: Handlers<TSchema, InferOutput<TGlobals>>
-}
+type RunOptionsWithoutContext<TSchema extends Router, TGlobals extends Schema> =
+	{
+		context?: never
+		handlers: Handlers<TSchema, StandardSchemaV1.InferOutput<TGlobals>>
+	}
 
-export class CLI<
-	TSchema extends Router,
-	TGlobals extends AnySchema = Schema<Record<string, never>>,
-> {
+export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 	private schema: TSchema
 	private options: CLIOptions<TGlobals>
 
@@ -177,7 +171,9 @@ export class CLI<
 				const errorMessages: Record<string, string> = {}
 				for (const issue of result.issues) {
 					const field = issue.path
-						?.map((p) => (typeof p === 'object' ? p.key : p))
+						?.map((p: { key: PropertyKey } | PropertyKey) =>
+							typeof p === 'object' ? p.key : p,
+						)
 						.join('.')
 					if (field) {
 						errorFields.add(field)
@@ -195,7 +191,7 @@ export class CLI<
 		}
 
 		// Parse and validate globals
-		let globals = parsed.flags as InferOutput<TGlobals>
+		let globals = parsed.flags as StandardSchemaV1.InferOutput<TGlobals>
 		if (this.options.globals) {
 			const result = await this.options.globals['~standard'].validate(
 				parsed.flags,
@@ -206,7 +202,9 @@ export class CLI<
 				)
 				for (const issue of result.issues) {
 					const path = issue.path
-						?.map((p) => (typeof p === 'object' ? p.key : p))
+						?.map((p: { key: PropertyKey } | PropertyKey) =>
+							typeof p === 'object' ? p.key : p,
+						)
 						.join('.')
 					console.error(
 						`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
@@ -214,7 +212,7 @@ export class CLI<
 				}
 				process.exit(1)
 			}
-			globals = result.value as InferOutput<TGlobals>
+			globals = result.value as StandardSchemaV1.InferOutput<TGlobals>
 		}
 
 		// Build context
@@ -399,7 +397,7 @@ export class CLI<
 			// Usage line
 			let usage = `${colors.bold('Usage:')} ${colors.command(fullCommand)}`
 			if (args?.length) {
-				usage += ' ' + args.map((a) => colors.arg(`<${a.name}>`)).join(' ')
+				usage += ` ${args.map((a) => colors.arg(`<${a.name}>`)).join(' ')}`
 			}
 			usage += ` ${colors.dim('[options]')}`
 			console.log(usage)
@@ -439,7 +437,7 @@ export class CLI<
 							: ''
 					const desc = opt.description ?? ''
 					console.log(
-						`  ${colors.option((flag + typeHint).padEnd(24))} ${colors.dim(desc + defaultHint)}`,
+						`  ${colors.option(`${flag}${typeHint}`.padEnd(24))} ${colors.dim(`${desc}${defaultHint}`)}`,
 					)
 				}
 			}
@@ -565,7 +563,7 @@ export class CLI<
 				)
 			} else {
 				console.error(
-					`   ${colors.option(`<${arg.name}>`)}${desc ? '  ' + desc : ''}`,
+					`   ${colors.option(`<${arg.name}>`)}${desc ? `  ${desc}` : ''}`,
 				)
 			}
 		}
@@ -590,17 +588,14 @@ export class CLI<
 				)
 			} else {
 				console.error(
-					`   ${colors.option(flag)}${colors.dim(typeHint)}${desc ? '  ' + desc : ''}${colors.dim(defaultHint)}`,
+					`   ${colors.option(flag)}${colors.dim(typeHint)}${desc ? `  ${desc}` : ''}${colors.dim(defaultHint)}`,
 				)
 			}
 		}
 	}
 }
 
-export function cli<
-	TSchema extends Router,
-	TGlobals extends AnySchema = Schema<Record<string, never>>,
->(
+export function cli<TSchema extends Router, TGlobals extends Schema = Schema>(
 	schema: TSchema,
 	options: CLIOptions<TGlobals>,
 ): CLI<TSchema, TGlobals> {

@@ -1,5 +1,4 @@
 import type {
-	AnySchema,
 	ArgDef,
 	CommandDef,
 	CommandMeta,
@@ -9,11 +8,11 @@ import type {
 	Schema,
 } from './types'
 
-type CommandBuilderDef<TInput extends AnySchema> = CommandDef<TInput>['~argc']
+type CommandBuilderDef<TInput extends Schema> = CommandDef<TInput>['~argc']
 
-export class CommandBuilder<
-	TInput extends AnySchema = Schema<unknown>,
-> implements CommandDef<TInput> {
+export class CommandBuilder<TInput extends Schema = Schema>
+	implements CommandDef<TInput>
+{
 	'~argc': CommandBuilderDef<TInput>
 
 	constructor(def: Partial<CommandBuilderDef<TInput>> = {}) {
@@ -23,7 +22,7 @@ export class CommandBuilder<
 		} as CommandBuilderDef<TInput>
 	}
 
-	input<T extends AnySchema>(schema: T): CommandBuilder<T> {
+	input<T extends Schema>(schema: T): CommandBuilder<T> {
 		return new CommandBuilder({
 			...this['~argc'],
 			input: schema,

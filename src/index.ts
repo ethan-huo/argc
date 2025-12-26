@@ -7,7 +7,6 @@ export { isCommand, isGroup } from './types'
 export type {
 	AnyCommand,
 	AnyGroup,
-	AnySchema,
 	ArgDef,
 	CLIOptions,
 	CommandDef,
@@ -18,9 +17,9 @@ export type {
 	HandlerMeta,
 	HandlerOptions,
 	Handlers,
-	InferInput,
-	InferOutput,
 	Router,
 	RunConfig,
 	Schema,
+	StandardJSONSchemaV1,
+	StandardSchemaV1,
 } from './types'

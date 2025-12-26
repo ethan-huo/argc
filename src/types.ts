@@ -1,16 +1,18 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec'
+import type {
+	StandardJSONSchemaV1,
+	StandardSchemaV1,
+} from '@standard-schema/spec'
 
-// ============ Schema Types ============
+// Re-export Standard Schema types
+export type { StandardJSONSchemaV1, StandardSchemaV1 }
 
+// Schema type: validation + JSON Schema generation
+// This is what argc requires - a schema that can both validate AND generate JSON Schema
 export type Schema<TInput = unknown, TOutput = TInput> = StandardSchemaV1<
 	TInput,
 	TOutput
->
-
-export type AnySchema = Schema<unknown, unknown>
-
-export type InferInput<T> = T extends Schema<infer I, unknown> ? I : never
-export type InferOutput<T> = T extends Schema<unknown, infer O> ? O : never
+> &
+	StandardJSONSchemaV1<TInput, TOutput>
 
 // ============ Command Types ============
 
@@ -27,7 +29,7 @@ export type ArgDef = {
 	description?: string
 }
 
-export type CommandDef<TInput extends AnySchema = AnySchema> = {
+export type CommandDef<TInput extends Schema = Schema> = {
 	'~argc': {
 		input?: TInput
 		meta: CommandMeta
@@ -35,7 +37,7 @@ export type CommandDef<TInput extends AnySchema = AnySchema> = {
 	}
 }
 
-export type AnyCommand = CommandDef<AnySchema>
+export type AnyCommand = CommandDef<Schema>
 
 // ============ Group Types ============
 
@@ -65,9 +67,7 @@ export type Router = AnyCommand | AnyGroup | { [key: string]: Router }
 
 // ============ CLI Options ============
 
-export type CLIOptions<
-	TGlobals extends AnySchema = Schema<Record<string, never>>,
-> = {
+export type CLIOptions<TGlobals extends Schema = Schema> = {
 	name: string
 	version: string
 	description?: string
@@ -95,7 +95,7 @@ export type Handler<TInput, TContext> = (
 // Recursive handler type matching router structure
 export type Handlers<T extends Router, TContext> =
 	T extends CommandDef<infer TInput>
-		? Handler<InferOutput<TInput>, TContext>
+		? Handler<StandardSchemaV1.InferOutput<TInput>, TContext>
 		: T extends GroupDef<infer TChildren>
 			? {
 					[K in keyof TChildren]: TChildren[K] extends Router
@@ -109,14 +109,16 @@ export type Handlers<T extends Router, TContext> =
 // ============ Run Config ============
 
 export type RunConfig<
-	TContract extends Router,
-	TGlobals extends AnySchema,
+	TSchema extends Router,
+	TGlobals extends Schema,
 	TContext,
 > = {
-	context?: (globals: InferOutput<TGlobals>) => TContext | Promise<TContext>
+	context?: (
+		globals: StandardSchemaV1.InferOutput<TGlobals>,
+	) => TContext | Promise<TContext>
 	handlers: Handlers<
-		TContract,
-		unknown extends TContext ? InferOutput<TGlobals> : TContext
+		TSchema,
+		unknown extends TContext ? StandardSchemaV1.InferOutput<TGlobals> : TContext
 	>
 }
 

@@ -1,6 +1,10 @@
+import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
 import { c, cli, group } from '../src'
+
+// Helper: wrap valibot schema to add JSON Schema support
+const s = toStandardJsonSchema
 
 // Define schema with group meta
 const schema = {
@@ -8,19 +12,23 @@ const schema = {
 		{ description: 'User management commands' },
 		{
 			list: c.meta({ description: 'List all users', aliases: ['ls'] }).input(
-				v.object({
-					all: v.optional(v.boolean(), false),
-					format: v.optional(v.picklist(['json', 'table']), 'table'),
-				}),
+				s(
+					v.object({
+						all: v.optional(v.boolean(), false),
+						format: v.optional(v.picklist(['json', 'table']), 'table'),
+					}),
+				),
 			),
 
 			create: c.meta({ description: 'Create a new user' }).input(
-				v.object({
-					name: v.pipe(v.string(), v.minLength(3), v.maxLength(8)),
-					email: v.optional(
-						v.pipe(v.string(), v.email(), v.description('user email')),
-					),
-				}),
+				s(
+					v.object({
+						name: v.pipe(v.string(), v.minLength(3), v.maxLength(8)),
+						email: v.optional(
+							v.pipe(v.string(), v.email(), v.description('user email')),
+						),
+					}),
+				),
 			),
 		},
 	),
@@ -35,7 +43,7 @@ const schema = {
 					examples: ['demo config get DATABASE_URL', 'demo config g API_KEY'],
 				})
 				.args('key')
-				.input(v.object({ key: v.string() })),
+				.input(s(v.object({ key: v.string() }))),
 
 			set: c
 				.meta({
@@ -44,10 +52,12 @@ const schema = {
 				})
 				.args('key', 'value')
 				.input(
-					v.object({
-						key: v.string(),
-						value: v.string(),
-					}),
+					s(
+						v.object({
+							key: v.string(),
+							value: v.string(),
+						}),
+					),
 				),
 
 			// Test deprecated
@@ -57,7 +67,7 @@ const schema = {
 					deprecated: true,
 					aliases: ['r'],
 				})
-				.input(v.object({})),
+				.input(s(v.object({}))),
 
 			// Test hidden
 			debug: c
@@ -65,12 +75,12 @@ const schema = {
 					description: 'Debug config internals',
 					hidden: true,
 				})
-				.input(v.object({})),
+				.input(s(v.object({}))),
 
 			// New replacement command
 			clear: c
 				.meta({ description: 'Clear all config values' })
-				.input(v.object({ force: v.optional(v.boolean(), false) })),
+				.input(s(v.object({ force: v.optional(v.boolean(), false) }))),
 		},
 	),
 
@@ -84,25 +94,29 @@ const schema = {
 					examples: ['demo db migrate --step 1', 'demo db migrate --dry-run'],
 				})
 				.input(
-					v.object({
-						step: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
-						dryRun: v.optional(v.boolean(), false),
-					}),
+					s(
+						v.object({
+							step: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
+							dryRun: v.optional(v.boolean(), false),
+						}),
+					),
 				),
 
 			seed: c
 				.meta({ description: 'Seed the database' })
 				.args('file')
 				.input(
-					v.object({
-						file: v.pipe(
-							v.string(),
-							v.endsWith('.json'),
-							v.transform((it) => Bun.file(it).json()),
-							v.description('JSON seed file'),
-						),
-						truncate: v.optional(v.boolean(), false),
-					}),
+					s(
+						v.object({
+							file: v.pipe(
+								v.string(),
+								v.endsWith('.json'),
+								v.transform((it) => Bun.file(it).json()),
+								v.description('JSON seed file'),
+							),
+							truncate: v.optional(v.boolean(), false),
+						}),
+					),
 				),
 		},
 	),
@@ -115,32 +129,38 @@ const schema = {
 				{ description: 'AWS deployment' },
 				{
 					lambda: c.meta({ description: 'Deploy to AWS Lambda' }).input(
-						v.object({
-							region: v.optional(
-								v.picklist(['us-east-1', 'us-west-2', 'eu-west-1']),
-								'us-east-1',
-							),
-							memory: v.optional(
-								v.pipe(v.number(), v.minValue(128), v.maxValue(10240)),
-								512,
-							),
-						}),
+						s(
+							v.object({
+								region: v.optional(
+									v.picklist(['us-east-1', 'us-west-2', 'eu-west-1']),
+									'us-east-1',
+								),
+								memory: v.optional(
+									v.pipe(v.number(), v.minValue(128), v.maxValue(10240)),
+									512,
+								),
+							}),
+						),
 					),
 					s3: c
 						.meta({ description: 'Deploy to S3' })
 						.args('bucket')
 						.input(
-							v.object({
-								bucket: v.pipe(v.string(), v.minLength(3)),
-								prefix: v.optional(v.string(), '/'),
-							}),
+							s(
+								v.object({
+									bucket: v.pipe(v.string(), v.minLength(3)),
+									prefix: v.optional(v.string(), '/'),
+								}),
+							),
 						),
 				},
 			),
 			vercel: c.meta({ description: 'Deploy to Vercel' }).input(
-				v.object({
-					prod: v.optional(v.boolean(), false),
-				}),
+				s(
+					v.object({
+						prod: v.optional(v.boolean(), false),
+					}),
+				),
 			),
 		},
 	),
@@ -151,10 +171,12 @@ const app = cli(schema, {
 	name: 'demo',
 	version: '0.1.0',
 	description: 'A demo CLI built with argc',
-	globals: v.object({
-		env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),
-		verbose: v.optional(v.boolean(), false),
-	}),
+	globals: s(
+		v.object({
+			env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),
+			verbose: v.optional(v.boolean(), false),
+		}),
+	),
 })
 
 // Run
