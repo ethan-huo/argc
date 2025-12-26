@@ -1,0 +1,25 @@
+{
+	"name": "argc",
+	"version": "0.0.1",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"fmt": "oxfmt .",
+		"fmt:check": "oxfmt --check ."
+	},
+	"dependencies": {
+		"valibot": "^1.2.0"
+	},
+	"devDependencies": {
+		"@standard-schema/spec": "^1.0.0",
+		"@types/bun": "^1.3.5",
+		"oxfmt": "^0.20.0",
+		"typescript": "^5.7.2"
+	},
+	"peerDependencies": {
+		"@standard-schema/spec": "^1.0.0"
+	}
+}
