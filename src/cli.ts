@@ -96,7 +96,14 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 					description: this.options.description,
 					globals: this.options.globals,
 				})
-				console.log(schemaOutput)
+				// Dim comment lines for readability
+				for (const line of schemaOutput.split('\n')) {
+					if (line.trimStart().startsWith('//') || line.startsWith('CLI Syntax:') || line.startsWith('  arrays:') || line.startsWith('  objects:')) {
+						console.log(colors.dim(line))
+					} else {
+						console.log(line)
+					}
+				}
 				return
 			}
 			// Otherwise fall through

@@ -158,22 +158,15 @@ function generateCommandSchema(
 		const meta = router['~argc'].meta
 		const input = router['~argc'].input
 
-		// JSDoc comments
-		if (meta.description || meta.deprecated || meta.examples?.length) {
-			lines.push(`${indent}/**`)
-			if (meta.description) {
-				lines.push(`${indent} * ${meta.description}`)
+		// Comments
+		if (meta.description) {
+			const deprecatedTag = meta.deprecated ? ' [DEPRECATED]' : ''
+			lines.push(`${indent}// ${meta.description}${deprecatedTag}`)
+		}
+		if (meta.examples?.length) {
+			for (const ex of meta.examples) {
+				lines.push(`${indent}// $ ${ex}`)
 			}
-			if (meta.deprecated) {
-				lines.push(`${indent} * @deprecated`)
-			}
-			if (meta.examples?.length) {
-				lines.push(`${indent} * @example`)
-				for (const ex of meta.examples) {
-					lines.push(`${indent} * ${ex}`)
-				}
-			}
-			lines.push(`${indent} */`)
 		}
 
 		// Extract params from input schema
@@ -186,7 +179,7 @@ function generateCommandSchema(
 		const meta = router['~argc.group'].meta
 
 		if (meta.description) {
-			lines.push(`${indent}/** ${meta.description} */`)
+			lines.push(`${indent}// ${meta.description}`)
 		}
 
 		lines.push(`${indent}${name}: {`)
@@ -213,15 +206,15 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 	const lines: string[] = []
 
 	// CLI syntax hint for AI agents
-	lines.push('/**')
-	lines.push(' * CLI Syntax:')
-	lines.push(' *   arrays:  --tags a --tags b      → tags: ["a", "b"]')
-	lines.push(' *   objects: --user.name x --user.age 1 → user: { name: "x", age: 1 }')
-	lines.push(' */')
+	lines.push('CLI Syntax:')
+	lines.push('  arrays:  --tags a --tags b           → tags: ["a", "b"]')
+	lines.push('  objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }')
+	lines.push('')
 
-	// Header comment
+	// Description
 	if (options.description) {
-		lines.push(`/** ${options.description} */`)
+		lines.push(options.description)
+		lines.push('')
 	}
 
 	// Type declaration
@@ -231,7 +224,7 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 	if (options.globals) {
 		const globalsParams = extractInputParams(options.globals)
 		if (globalsParams) {
-			lines.push(`  /** Global options available to all commands */`)
+			lines.push(`  // Global options available to all commands`)
 			lines.push(`  $globals: { ${globalsParams} }`)
 			lines.push('')
 		}
