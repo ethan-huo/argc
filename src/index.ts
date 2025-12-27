@@ -2,7 +2,6 @@ export { CLI, cli } from './cli'
 export { c, CommandBuilder, group, GroupBuilder } from './command'
 export { parseArgv } from './parser'
 export { generateSchema } from './schema'
-export { isCommand, isGroup } from './types'
 export type {
 	AnyCommand,
 	AnyGroup,
