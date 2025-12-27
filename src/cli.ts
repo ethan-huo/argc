@@ -515,7 +515,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 			`  ${colors.option('-v, --version'.padEnd(16))} ${colors.dim('Show version')}`,
 		)
 		console.log(
-			`  ${colors.option('--schema'.padEnd(16))} ${colors.dim('Output schema for AI agents')}`,
+			`  ${colors.option('--schema'.padEnd(16))} ${colors.dim('Typed CLI spec for AI agents')}`,
 		)
 	}
 

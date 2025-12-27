@@ -329,7 +329,7 @@ cli(schema, {
 | --------------- | ----------- | --------------------------- |
 | `-h, --help`    | Everywhere  | Show help                   |
 | `-v, --version` | Root only   | Show version                |
-| `--schema`      | Root only   | Output schema for AI agents |
+| `--schema`      | Root only   | Typed CLI spec for AI agents |
 
 Note: `-v` and `--schema` only work at root level. Using them with subcommands shows an error (like bun's behavior).
 
