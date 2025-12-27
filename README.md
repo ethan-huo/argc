@@ -359,6 +359,40 @@ const s = toStandardJsonSchema
 c.input(s(v.object({ name: v.string() })))
 ```
 
+## Handlers in Separate Files
+
+When handlers are split across multiple files, use `InferHandlers` to get type-safe handlers:
+
+```typescript
+// schema.ts
+import { c, type InferHandlers } from 'argc'
+
+export const schema = {
+  get: c.meta({ ... }).input(...),
+  set: c.meta({ ... }).input(...),
+}
+
+export type AppHandlers = InferHandlers<typeof schema>
+```
+
+```typescript
+// commands/get.ts
+import type { AppHandlers } from '../schema'
+
+export const runGet: AppHandlers['get'] = async ({ input }) => {
+  // input is fully typed!
+  console.log(input.key)
+}
+```
+
+For nested groups, use dot notation with `InferInput`:
+
+```typescript
+import type { InferInput } from 'argc'
+
+type UserCreateInput = InferInput<typeof schema, 'user.create'>
+```
+
 ## Complete Example
 
 See full working example: [examples/demo.ts](./examples/demo.ts)

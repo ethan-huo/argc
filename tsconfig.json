@@ -1,7 +1,7 @@
 {
 	"compilerOptions": {
-		"target": "ES2022",
-		"module": "ESNext",
+		"target": "esnext",
+		"module": "esnext",
 		"moduleResolution": "bundler",
 		"strict": true,
 		"noEmit": true,
@@ -11,5 +11,8 @@
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true
 	},
-	"include": ["src/**/*", "examples/**/*"]
+	"include": [
+		"src/**/*",
+		"examples/**/*"
+	]
 }

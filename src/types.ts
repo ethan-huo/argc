@@ -127,3 +127,70 @@ export type RunConfig<
 export function isCommand(x: unknown): x is AnyCommand {
 	return x !== null && typeof x === 'object' && '~argc' in x
 }
+
+// ============ Inference Helpers ============
+
+/**
+ * Infer all handler types from a schema.
+ * Useful when handlers are split across multiple files.
+ *
+ * @example
+ * ```ts
+ * // schema.ts
+ * export const schema = { get: c.meta(...).input(...), ... }
+ * export type AppHandlers = InferHandlers<typeof schema>
+ *
+ * // commands/get.ts
+ * import type { AppHandlers } from '../schema'
+ * export const runGet: AppHandlers['get'] = ({ input }) => { ... }
+ * ```
+ */
+export type InferHandlers<
+	TSchema extends Router,
+	TContext = unknown,
+> = Handlers<TSchema, TContext>
+
+/**
+ * Infer the input type for a specific command path.
+ *
+ * @example
+ * ```ts
+ * type GetInput = InferInput<typeof schema, 'get'>
+ * type UserCreateInput = InferInput<typeof schema, 'user.create'>
+ * ```
+ */
+export type InferInput<
+	TSchema extends Router,
+	TPath extends string,
+> = TPath extends `${infer Head}.${infer Tail}`
+	? Head extends keyof TSchema
+		? TSchema[Head] extends Router
+			? InferInput<TSchema[Head], Tail>
+			: never
+		: never
+	: TPath extends keyof TSchema
+		? TSchema[TPath] extends CommandDef<infer TInput>
+			? StandardSchemaV1.InferOutput<TInput>
+			: TSchema[TPath] extends GroupDef<infer TChildren>
+				? TPath extends keyof TChildren
+					? TChildren[TPath] extends CommandDef<infer TInput>
+						? StandardSchemaV1.InferOutput<TInput>
+						: never
+					: never
+				: never
+		: never
+
+/**
+ * Infer the handler function type for a specific command path.
+ *
+ * @example
+ * ```ts
+ * type GetHandler = InferHandler<typeof schema, 'get'>
+ * export const runGet: GetHandler = ({ input }) => { ... }
+ * ```
+ */
+export type InferHandler<
+	TSchema extends Router,
+	TPath extends string,
+	TContext = unknown,
+> = Handler<InferInput<TSchema, TPath>, TContext>

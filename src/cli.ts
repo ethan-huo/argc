@@ -7,7 +7,7 @@ import type {
 	StandardSchemaV1,
 } from './types'
 
-import { colors } from './colors'
+import { fmt as colors } from './terminal'
 import { parseArgv } from './parser'
 import { extractInputParamsDetailed, generateSchema } from './schema'
 import { formatSuggestion, suggestSimilar } from './suggest'
@@ -116,13 +116,13 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 		// Check for invalid root-only flags used with subcommands
 		if (commandPath.length > 0) {
 			if (parsed.flags.version || parsed.flags.v) {
-				console.log(`${colors.error('error:')} Invalid argument '-v'`)
+				console.log(colors.error("Invalid argument '-v'"))
 				console.log()
 				this.showHelp(commandPath, router)
 				process.exit(1)
 			}
 			if (parsed.flags.schema) {
-				console.log(`${colors.error('error:')} Invalid argument '--schema'`)
+				console.log(colors.error("Invalid argument '--schema'"))
 				console.log()
 				this.showHelp(commandPath, router)
 				process.exit(1)
@@ -159,7 +159,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 		)
 		if (!handler) {
 			console.error(
-				`${colors.error('error:')} No handler for command: ${colors.command(commandPath.join(' '))}`,
+				colors.error(`No handler for command: ${colors.command(commandPath.join(' '))}`),
 			)
 			process.exit(1)
 		}
@@ -181,7 +181,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 						?.map((p: { key: PropertyKey } | PropertyKey) =>
 							typeof p === 'object' ? p.key : p,
 						)
-						.join('.')
+						?.join('.')
 					if (field) {
 						errorFields.add(field)
 						errorMessages[field] = issue.message
@@ -189,7 +189,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 				}
 
 				// Show Rust-style error with inline annotations
-				console.error(`${colors.error('error:')} missing required arguments`)
+				console.error(colors.error('invalid arguments'))
 				console.error()
 				this.showOptionsWithErrors(command, errorFields, errorMessages)
 				process.exit(1)
@@ -204,15 +204,13 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 				parsed.flags,
 			)
 			if (result.issues) {
-				console.error(
-					`${colors.error('error:')} Global options validation failed`,
-				)
+				console.error(colors.error('Global options validation failed'))
 				for (const issue of result.issues) {
 					const path = issue.path
 						?.map((p: { key: PropertyKey } | PropertyKey) =>
 							typeof p === 'object' ? p.key : p,
 						)
-						.join('.')
+						?.join('.')
 					console.error(
 						`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
 					)
@@ -565,9 +563,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 			const desc = arg.description ?? paramInfo?.description ?? ''
 
 			if (isError) {
-				console.error(`   ${colors.error(`<${arg.name}>`)}`)
+				console.error(`   ${colors.red(`<${arg.name}>`)}`)
 				console.error(
-					`   ${colors.error('^')} ${colors.error(errorMessages[arg.name])}`,
+					`   ${colors.red('^')} ${colors.red(errorMessages[arg.name]!)}`,
 				)
 			} else {
 				console.error(
@@ -590,9 +588,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 					: ''
 
 			if (isError) {
-				console.error(`   ${colors.error(flag)}${typeHint}`)
+				console.error(`   ${colors.red(flag)}${typeHint}`)
 				console.error(
-					`   ${colors.error('^')} ${colors.error(errorMessages[opt.name])}`,
+					`   ${colors.red('^')} ${colors.red(errorMessages[opt.name]!)}`,
 				)
 			} else {
 				console.error(

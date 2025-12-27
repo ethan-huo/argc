@@ -74,5 +74,3 @@ export function group<T extends { [key: string]: Router }>(
 ): GroupDef<T> {
 	return new GroupBuilder(meta, children)
 }
-
-export const g = new GroupBuilder()
