@@ -1,7 +1,7 @@
 import type {
 	AnyCommand,
 	CLIOptions,
-	FlattenHandlers,
+	CombinedHandlers,
 	Handlers,
 	Router,
 	RunConfig,
@@ -31,8 +31,8 @@ export class CLI<
 	TContext = undefined,
 > {
 	// Phantom type for external inference (e.g., typeof app.Handlers)
-	// Flattened to dot-notation paths: AppHandlers['user.create']
-	declare Handlers: FlattenHandlers<Handlers<TSchema, Awaited<TContext>>>
+	// Combined: both nested ['user']['get'] and flat ['user.get'] access
+	declare Handlers: CombinedHandlers<Handlers<TSchema, Awaited<TContext>>>
 
 	private schema: TSchema
 	private options: CLIOptions<TGlobals, TContext>

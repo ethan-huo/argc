@@ -244,3 +244,19 @@ type Simplify<T> = { [K in keyof T]: T[K] } & {}
  * ```
  */
 export type FlattenHandlers<T> = Simplify<UnionToIntersection<FlatHandlers<T>>>
+
+/**
+ * Combined handlers: both nested access and dot-notation paths.
+ *
+ * @example
+ * ```ts
+ * type AppHandlers = typeof app.Handlers
+ *
+ * // Dot-notation for single handlers
+ * const runGet: AppHandlers['user.get'] = ...
+ *
+ * // Nested access for handler groups
+ * const userHandlers: AppHandlers['user'] = { get: ..., create: ... }
+ * ```
+ */
+export type CombinedHandlers<T> = T & FlattenHandlers<T>

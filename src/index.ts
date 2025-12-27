@@ -7,6 +7,7 @@ export type {
 	AnyGroup,
 	ArgDef,
 	CLIOptions,
+	CombinedHandlers,
 	CommandDef,
 	CommandMeta,
 	FlattenHandlers,

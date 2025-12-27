@@ -363,7 +363,7 @@ c.input(s(v.object({ name: v.string() })))
 
 ## Handlers in Separate Files
 
-When handlers are split across multiple files, use `typeof app.Handlers` to get type-safe handlers. Handler types are **flattened to dot-notation paths** for easy access:
+When handlers are split across multiple files, use `typeof app.Handlers` to get type-safe handlers. Handler types support **both nested and dot-notation access**:
 
 ```typescript
 // cli.ts
@@ -390,7 +390,7 @@ export const app = cli(schema, {
   }),
 })
 
-// Handler types are flattened - use dot-notation paths
+// Handler types support both nested and dot-notation access
 export type AppHandlers = typeof app.Handlers
 ```
 
@@ -398,9 +398,15 @@ export type AppHandlers = typeof app.Handlers
 // commands/user-get.ts
 import type { AppHandlers } from '../cli'
 
-// Dot-notation access - no nested brackets needed
+// Dot-notation for single handlers
 export const runUserGet: AppHandlers['user.get'] = async ({ input, context }) => {
   context.log(input.key)  // fully typed
+}
+
+// Nested access for handler groups
+export const userHandlers: AppHandlers['user'] = {
+  get: async ({ input, context }) => { ... },
+  create: async ({ input, context }) => { ... },
 }
 
 // Works for deeply nested commands too

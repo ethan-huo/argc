@@ -225,7 +225,6 @@ export type AppHandlers = typeof app.Handlers
 export type UserCreateInput = InferInput<typeof schema, 'user.create'>
 export type DbMigrateInput = InferInput<typeof schema, 'db.migrate'>
 export type DeployLambdaInput = InferInput<typeof schema, 'deploy.aws.lambda'>
-
 // Run with handlers only
 app.run({
 	handlers: {
