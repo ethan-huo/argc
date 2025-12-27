@@ -183,9 +183,12 @@ describe('cli', () => {
 
 			process.argv = ['bun', 'cli', 'test']
 
-			const app = cli(schema, { name: 'test', version: '1.0.0' })
-			await app.run({
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
 				context: () => ({ env: 'test', count: 42 }),
+			})
+			await app.run({
 				handlers: {
 					test: ({ context }) => {
 						receivedContext = context
@@ -204,12 +207,15 @@ describe('cli', () => {
 
 			process.argv = ['bun', 'cli', 'test']
 
-			const app = cli(schema, { name: 'test', version: '1.0.0' })
-			await app.run({
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
 				context: async () => {
 					await Promise.resolve()
 					return { loaded: true }
 				},
+			})
+			await app.run({
 				handlers: {
 					test: ({ context }) => {
 						receivedContext = context
@@ -232,13 +238,13 @@ describe('cli', () => {
 				name: 'test',
 				version: '1.0.0',
 				globals: s(v.object({ verbose: v.optional(v.boolean(), false) })),
-			})
-
-			await app.run({
 				context: (globals) => {
 					receivedGlobals = globals
 					return {}
 				},
+			})
+
+			await app.run({
 				handlers: {
 					test: () => {},
 				},

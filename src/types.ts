@@ -67,11 +67,17 @@ export type Router = AnyCommand | AnyGroup | { [key: string]: Router }
 
 // ============ CLI Options ============
 
-export type CLIOptions<TGlobals extends Schema = Schema> = {
+export type CLIOptions<
+	TGlobals extends Schema = Schema,
+	TContext = undefined,
+> = {
 	name: string
 	version: string
 	description?: string
 	globals?: TGlobals
+	context?: (
+		globals: StandardSchemaV1.InferOutput<TGlobals>,
+	) => TContext | Promise<TContext>
 }
 
 // ============ Handler Types ============
@@ -108,18 +114,8 @@ export type Handlers<T extends Router, TContext> =
 
 // ============ Run Config ============
 
-export type RunConfig<
-	TSchema extends Router,
-	TGlobals extends Schema,
-	TContext,
-> = {
-	context?: (
-		globals: StandardSchemaV1.InferOutput<TGlobals>,
-	) => TContext | Promise<TContext>
-	handlers: Handlers<
-		TSchema,
-		unknown extends TContext ? StandardSchemaV1.InferOutput<TGlobals> : TContext
-	>
+export type RunConfig<TSchema extends Router, TContext> = {
+	handlers: Handlers<TSchema, TContext>
 }
 
 // ============ Utilities ============
@@ -162,21 +158,31 @@ export type InferHandlers<
 export type InferInput<
 	TSchema extends Router,
 	TPath extends string,
+> = TSchema extends GroupDef<infer TChildren>
+	? InferInputFromRouter<TChildren, TPath>
+	: TSchema extends CommandDef<infer TInput>
+		? TPath extends ''
+			? StandardSchemaV1.InferOutput<TInput>
+			: never
+		: TSchema extends { [key: string]: Router }
+			? InferInputFromRouter<TSchema, TPath>
+			: never
+
+// Helper: navigate through a plain router object
+type InferInputFromRouter<
+	TRouter extends { [key: string]: Router },
+	TPath extends string,
 > = TPath extends `${infer Head}.${infer Tail}`
-	? Head extends keyof TSchema
-		? TSchema[Head] extends Router
-			? InferInput<TSchema[Head], Tail>
+	? Head extends keyof TRouter
+		? TRouter[Head] extends Router
+			? InferInput<TRouter[Head], Tail>
 			: never
 		: never
-	: TPath extends keyof TSchema
-		? TSchema[TPath] extends CommandDef<infer TInput>
+	: TPath extends keyof TRouter
+		? TRouter[TPath] extends CommandDef<infer TInput>
 			? StandardSchemaV1.InferOutput<TInput>
-			: TSchema[TPath] extends GroupDef<infer TChildren>
-				? TPath extends keyof TChildren
-					? TChildren[TPath] extends CommandDef<infer TInput>
-						? StandardSchemaV1.InferOutput<TInput>
-						: never
-					: never
+			: TRouter[TPath] extends GroupDef
+				? never // Group needs subcommand
 				: never
 		: never
 

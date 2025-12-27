@@ -235,22 +235,23 @@ $ myapp deploy aws lambda --region us-west-2
 Transform global options into a typed context available in all handlers:
 
 ```typescript
-cli(schema, {
+const app = cli(schema, {
   name: 'myapp',
   version: '1.0.0',
   globals: s(v.object({
     env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),
     verbose: v.optional(v.boolean(), false),
   })),
-}).run({
-  // Transform globals into context
+  // Transform globals into context (type inferred from return value)
   context: (globals) => ({
     env: globals.env,
     log: globals.verbose
       ? (msg: string) => console.log(`[${globals.env}]`, msg)
       : () => {},
   }),
+})
 
+app.run({
   handlers: {
     deploy: ({ input, context }) => {
       context.log('Starting deployment...')  // Only logs if --verbose
@@ -306,20 +307,23 @@ group({ description: 'Group description' }, {
 ### `cli()` - Create CLI
 
 ```typescript
-cli(schema, {
+const app = cli(schema, {
   name: 'myapp',          // required
   version: '1.0.0',       // required (shown with -v)
   description: 'My CLI',  // optional (shown in help)
   globals: globalsSchema, // optional (global options schema)
+  context: (globals) => ({ ... }),  // optional: transform globals to context
 })
+
+// Handler types inferred from app (includes context type)
+type AppHandlers = typeof app.Handlers
 ```
 
 ### `.run()` - Execute
 
 ```typescript
-.run({
-  context: (globals) => ({ ... }),  // optional: transform globals to context
-  handlers: { ... },                 // required: type-safe command handlers
+app.run({
+  handlers: { ... },  // required: type-safe command handlers
 })
 ```
 
@@ -359,31 +363,41 @@ c.input(s(v.object({ name: v.string() })))
 
 ## Handlers in Separate Files
 
-When handlers are split across multiple files, use `InferHandlers` to get type-safe handlers:
+When handlers are split across multiple files, use `typeof app.Handlers` to get type-safe handlers with full context inference:
 
 ```typescript
 // schema.ts
-import { c, type InferHandlers } from 'argc'
+import { c, cli } from 'argc'
 
-export const schema = {
+const schema = {
   get: c.meta({ ... }).input(...),
   set: c.meta({ ... }).input(...),
 }
 
-export type AppHandlers = InferHandlers<typeof schema>
+export const app = cli(schema, {
+  name: 'myapp',
+  version: '1.0.0',
+  context: (globals) => ({
+    db: createDbConnection(),
+    log: console.log,
+  }),
+})
+
+// Handler types include context - inferred from app
+export type AppHandlers = typeof app.Handlers
 ```
 
 ```typescript
 // commands/get.ts
 import type { AppHandlers } from '../schema'
 
-export const runGet: AppHandlers['get'] = async ({ input }) => {
-  // input is fully typed!
-  console.log(input.key)
+export const runGet: AppHandlers['get'] = async ({ input, context }) => {
+  // input and context are fully typed!
+  context.log(input.key)
 }
 ```
 
-For nested groups, use dot notation with `InferInput`:
+For input types only, use `InferInput`:
 
 ```typescript
 import type { InferInput } from 'argc'
@@ -439,18 +453,24 @@ const schema = {
   }),
 }
 
-cli(schema, {
+// Create app with context (type inferred from return value)
+const app = cli(schema, {
   name: 'myapp',
   version: '1.0.0',
   globals: s(v.object({
     verbose: v.optional(v.boolean(), false),
   })),
-}).run({
   context: (globals) => ({
     db: drizzle(postgres(process.env.DATABASE_URL!)),
     log: globals.verbose ? console.log : () => {},
   }),
+})
 
+// Handler types include context
+export type AppHandlers = typeof app.Handlers
+
+// Run with handlers only
+app.run({
   handlers: {
     user: {
       list: async ({ input, context }) => {

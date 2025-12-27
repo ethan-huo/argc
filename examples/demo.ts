@@ -1,7 +1,7 @@
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
-import { c, cli, group } from '../src'
+import { c, cli, group, type InferInput } from '../src'
 
 // Valibot requires this wrapper to add JSON Schema support.
 // Zod and ArkType don't need this - they natively implement StandardJSONSchemaV1.
@@ -197,7 +197,7 @@ const schema = {
 	),
 }
 
-// Create CLI
+// Create CLI with context in options
 const app = cli(schema, {
 	name: 'demo',
 	version: '0.1.0',
@@ -208,10 +208,6 @@ const app = cli(schema, {
 			verbose: v.optional(v.boolean(), false),
 		}),
 	),
-})
-
-// Run
-app.run({
 	context: (globals) => ({
 		env: globals.env,
 		verbose: globals.verbose,
@@ -219,7 +215,18 @@ app.run({
 			if (globals.verbose) console.log(`[${globals.env}]`, msg)
 		},
 	}),
+})
 
+// Handler types can be inferred from app
+export type AppHandlers = typeof app.Handlers
+
+// Input types can be inferred for specific commands (useful for shared logic)
+export type UserCreateInput = InferInput<typeof schema, 'user.create'>
+export type DbMigrateInput = InferInput<typeof schema, 'db.migrate'>
+export type DeployLambdaInput = InferInput<typeof schema, 'deploy.aws.lambda'>
+
+// Run with handlers only
+app.run({
 	handlers: {
 		user: {
 			list: ({ input, context }) => {

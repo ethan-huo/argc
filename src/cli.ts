@@ -3,6 +3,7 @@ import type {
 	CLIOptions,
 	Handlers,
 	Router,
+	RunConfig,
 	Schema,
 	StandardSchemaV1,
 } from './types'
@@ -20,33 +21,21 @@ function getRouterChildren(router: Router): { [key: string]: Router } {
 	return router
 }
 
-type ContextFn<TGlobals extends Schema, TContext> = (
-	globals: StandardSchemaV1.InferOutput<TGlobals>,
-) => TContext | Promise<TContext>
-
-type RunOptionsWithContext<
-	TSchema extends Router,
-	TGlobals extends Schema,
-	TContext,
-> = {
-	context: ContextFn<TGlobals, TContext>
-	handlers: Handlers<TSchema, TContext>
-}
-
-type RunOptionsWithoutContext<TSchema extends Router, TGlobals extends Schema> =
-	{
-		context?: never
-		handlers: Handlers<TSchema, StandardSchemaV1.InferOutput<TGlobals>>
-	}
-
 // Reserved global option names that conflict with built-in flags
 const RESERVED_GLOBALS = new Set(['help', 'h', 'version', 'v', 'schema'])
 
-export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
-	private schema: TSchema
-	private options: CLIOptions<TGlobals>
+export class CLI<
+	TSchema extends Router,
+	TGlobals extends Schema = Schema,
+	TContext = undefined,
+> {
+	// Phantom type for external inference (e.g., typeof app.Handlers)
+	declare Handlers: Handlers<TSchema, Awaited<TContext>>
 
-	constructor(schema: TSchema, options: CLIOptions<TGlobals>) {
+	private schema: TSchema
+	private options: CLIOptions<TGlobals, TContext>
+
+	constructor(schema: TSchema, options: CLIOptions<TGlobals, TContext>) {
 		this.schema = schema
 		this.options = options
 
@@ -70,23 +59,8 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 		}
 	}
 
-	// Overload: with context function
-	run<TContext>(
-		runOptions: RunOptionsWithContext<TSchema, TGlobals, TContext>,
-		argv?: string[],
-	): Promise<void>
-
-	// Overload: without context function
-	run(
-		runOptions: RunOptionsWithoutContext<TSchema, TGlobals>,
-		argv?: string[],
-	): Promise<void>
-
-	// Implementation
-	async run<TContext>(
-		runOptions:
-			| RunOptionsWithContext<TSchema, TGlobals, TContext>
-			| RunOptionsWithoutContext<TSchema, TGlobals>,
+	async run(
+		runOptions: RunConfig<TSchema, Awaited<TContext>>,
 		argv: string[] = process.argv.slice(2),
 	): Promise<void> {
 		const parsed = parseArgv(argv)
@@ -242,10 +216,10 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 			globals = result.value as StandardSchemaV1.InferOutput<TGlobals>
 		}
 
-		// Build context
-		let context: unknown = globals
-		if (runOptions.context) {
-			context = await runOptions.context(globals)
+		// Build context from options
+		let context: unknown = undefined
+		if (this.options.context) {
+			context = await this.options.context(globals)
 		}
 
 		// Call handler
@@ -638,10 +612,14 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 	}
 }
 
-export function cli<TSchema extends Router, TGlobals extends Schema = Schema>(
+export function cli<
+	TSchema extends Router,
+	TGlobals extends Schema = Schema,
+	TContext = undefined,
+>(
 	schema: TSchema,
-	options: CLIOptions<TGlobals>,
-): CLI<TSchema, TGlobals> {
+	options: CLIOptions<TGlobals, TContext>,
+): CLI<TSchema, TGlobals, TContext> {
 	return new CLI(schema, options)
 }
 
