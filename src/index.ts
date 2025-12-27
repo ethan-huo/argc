@@ -9,6 +9,7 @@ export type {
 	CLIOptions,
 	CommandDef,
 	CommandMeta,
+	FlattenHandlers,
 	GroupDef,
 	GroupMeta,
 	Handler,

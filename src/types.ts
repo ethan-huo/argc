@@ -200,3 +200,47 @@ export type InferHandler<
 	TPath extends string,
 	TContext = unknown,
 > = Handler<InferInput<TSchema, TPath>, TContext>
+
+/**
+ * Flatten nested handlers to dot-notation paths.
+ *
+ * @example
+ * ```ts
+ * type AppHandlers = FlatHandlers<typeof app.Handlers>
+ * const runGet: AppHandlers['user.get'] = ...  // instead of ['user']['get']
+ * ```
+ */
+export type FlatHandlers<T, Prefix extends string = ''> = T extends Handler<
+	infer I,
+	infer C
+>
+	? { [K in Prefix]: Handler<I, C> }
+	: {
+			[K in keyof T & string]: FlatHandlers<
+				T[K],
+				Prefix extends '' ? K : `${Prefix}.${K}`
+			>
+		}[keyof T & string]
+
+// Convert union to intersection: { a: 1 } | { b: 2 } → { a: 1 } & { b: 2 }
+type UnionToIntersection<U> = (
+	U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void
+	? I
+	: never
+
+// Merge intersection into single object type
+type Simplify<T> = { [K in keyof T]: T[K] } & {}
+
+/**
+ * Flatten nested handlers to dot-notation paths (as single object type).
+ *
+ * @example
+ * ```ts
+ * export type AppHandlers = FlattenHandlers<typeof app.Handlers>
+ *
+ * // commands/get.ts
+ * const runGet: AppHandlers['user.get'] = ({ input, context }) => { ... }
+ * ```
+ */
+export type FlattenHandlers<T> = Simplify<UnionToIntersection<FlatHandlers<T>>>

@@ -217,10 +217,11 @@ const app = cli(schema, {
 	}),
 })
 
-// Handler types can be inferred from app
+// Handler types inferred from app (flattened to dot-notation)
 export type AppHandlers = typeof app.Handlers
+// Example: AppHandlers['user.create'], AppHandlers['deploy.aws.lambda']
 
-// Input types can be inferred for specific commands (useful for shared logic)
+// Input types can be inferred for specific commands
 export type UserCreateInput = InferInput<typeof schema, 'user.create'>
 export type DbMigrateInput = InferInput<typeof schema, 'db.migrate'>
 export type DeployLambdaInput = InferInput<typeof schema, 'deploy.aws.lambda'>

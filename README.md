@@ -363,15 +363,22 @@ c.input(s(v.object({ name: v.string() })))
 
 ## Handlers in Separate Files
 
-When handlers are split across multiple files, use `typeof app.Handlers` to get type-safe handlers with full context inference:
+When handlers are split across multiple files, use `typeof app.Handlers` to get type-safe handlers. Handler types are **flattened to dot-notation paths** for easy access:
 
 ```typescript
-// schema.ts
-import { c, cli } from 'argc'
+// cli.ts
+import { c, cli, group } from 'argc'
 
 const schema = {
-  get: c.meta({ ... }).input(...),
-  set: c.meta({ ... }).input(...),
+  user: group({ description: 'User management' }, {
+    get: c.meta({ ... }).input(...),
+    create: c.meta({ ... }).input(...),
+  }),
+  deploy: group({ description: 'Deployment' }, {
+    aws: group({ description: 'AWS' }, {
+      lambda: c.meta({ ... }).input(...),
+    }),
+  }),
 }
 
 export const app = cli(schema, {
@@ -383,26 +390,32 @@ export const app = cli(schema, {
   }),
 })
 
-// Handler types include context - inferred from app
+// Handler types are flattened - use dot-notation paths
 export type AppHandlers = typeof app.Handlers
 ```
 
 ```typescript
-// commands/get.ts
-import type { AppHandlers } from '../schema'
+// commands/user-get.ts
+import type { AppHandlers } from '../cli'
 
-export const runGet: AppHandlers['get'] = async ({ input, context }) => {
-  // input and context are fully typed!
-  context.log(input.key)
+// Dot-notation access - no nested brackets needed
+export const runUserGet: AppHandlers['user.get'] = async ({ input, context }) => {
+  context.log(input.key)  // fully typed
+}
+
+// Works for deeply nested commands too
+export const runLambda: AppHandlers['deploy.aws.lambda'] = async ({ input, context }) => {
+  // ...
 }
 ```
 
-For input types only, use `InferInput`:
+For input types only, use `InferInput` with the same dot-notation:
 
 ```typescript
 import type { InferInput } from 'argc'
 
 type UserCreateInput = InferInput<typeof schema, 'user.create'>
+type LambdaInput = InferInput<typeof schema, 'deploy.aws.lambda'>
 ```
 
 ## Complete Example
