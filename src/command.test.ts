@@ -75,7 +75,9 @@ describe('CommandBuilder', () => {
 	describe('input()', () => {
 		test('sets input schema', () => {
 			const schema = v.object({ name: v.string() })
+			// @ts-expect-error - valibot ObjectSchema doesn't satisfy StandardJSONSchemaV1
 			const cmd = c.input(schema)
+			// @ts-ignore - test only checks internal storage
 			expect(cmd['~argc'].input).toBe(schema)
 		})
 	})
@@ -86,10 +88,12 @@ describe('CommandBuilder', () => {
 			const cmd = c
 				.meta({ description: 'Delete files' })
 				.args('file')
+				// @ts-expect-error - valibot ObjectSchema doesn't satisfy StandardJSONSchemaV1, but we only test internal storage
 				.input(schema)
 
 			expect(cmd['~argc'].meta.description).toBe('Delete files')
 			expect(cmd['~argc'].args).toEqual([{ name: 'file' }])
+			// @ts-ignore - test only checks internal storage
 			expect(cmd['~argc'].input).toBe(schema)
 		})
 	})

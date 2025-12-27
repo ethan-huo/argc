@@ -16,13 +16,13 @@ export function parseArgv(argv: string[]): ParsedArgs {
 	let i = 0
 
 	while (i < argv.length) {
-		const arg = argv[i]
+		const arg = argv[i]!
 
 		if (arg === '--') {
 			// Everything after -- is positional
 			i++
 			while (i < argv.length) {
-				result.positionals.push(argv[i])
+				result.positionals.push(argv[i]!)
 				i++
 			}
 			break
@@ -61,7 +61,7 @@ export function parseArgv(argv: string[]): ParsedArgs {
 
 		if (arg.startsWith('-') && arg.length === 2) {
 			// Short flag: -v or -v value
-			const key = arg[1]
+			const key = arg[1]!
 			const next = argv[i + 1]
 			if (next !== undefined && !next.startsWith('-')) {
 				setFlag(result.flags, key, parseValue(next))
@@ -119,7 +119,7 @@ function setNestedFlag(
 	path: string[],
 	value: unknown,
 ): void {
-	const key = path[0]
+	const key = path[0]!
 
 	if (path.length === 1) {
 		// Leaf node - handle array merging

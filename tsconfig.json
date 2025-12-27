@@ -9,7 +9,9 @@
 		"declaration": true,
 		"esModuleInterop": true,
 		"isolatedModules": true,
-		"verbatimModuleSyntax": true
+		"verbatimModuleSyntax": true,
+		"noUncheckedIndexedAccess": true,
+		"noFallthroughCasesInSwitch": true
 	},
 	"include": [
 		"src/**/*",

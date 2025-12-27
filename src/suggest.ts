@@ -14,25 +14,25 @@ function editDistance(a: string, b: string): number {
 		d[i] = [i]
 	}
 	for (let j = 0; j <= b.length; j++) {
-		d[0][j] = j
+		d[0]![j] = j
 	}
 
 	for (let j = 1; j <= b.length; j++) {
 		for (let i = 1; i <= a.length; i++) {
 			const cost = a[i - 1] === b[j - 1] ? 0 : 1
-			d[i][j] = Math.min(
-				d[i - 1][j] + 1, // deletion
-				d[i][j - 1] + 1, // insertion
-				d[i - 1][j - 1] + cost, // substitution
+			d[i]![j] = Math.min(
+				d[i - 1]![j]! + 1, // deletion
+				d[i]![j - 1]! + 1, // insertion
+				d[i - 1]![j - 1]! + cost, // substitution
 			)
 			// transposition
 			if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-				d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1)
+				d[i]![j] = Math.min(d[i]![j]!, d[i - 2]![j - 2]! + 1)
 			}
 		}
 	}
 
-	return d[a.length][b.length]
+	return d[a.length]![b.length]!
 }
 
 export function suggestSimilar(word: string, candidates: string[]): string[] {

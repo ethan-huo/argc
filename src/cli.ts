@@ -252,7 +252,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 			const children = getRouterChildren(current)
 			if (segment in children) {
 				commandPath.push(segment)
-				current = children[segment]
+				current = children[segment]!
 			} else {
 				break
 			}
@@ -272,7 +272,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 		const commandPath: string[] = []
 
 		for (let i = 0; i < positionals.length; i++) {
-			const segment = positionals[i]
+			const segment = positionals[i]!
 
 			if (isCommand(current)) {
 				return {
@@ -288,7 +288,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 			// Try direct match first
 			if (segment in children) {
 				commandPath.push(segment)
-				current = children[segment]
+				current = children[segment]!
 			} else {
 				// Try alias match
 				const aliasMatch = this.findByAlias(children, segment)
@@ -367,7 +367,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 
 		if (argDefs) {
 			for (let i = 0; i < argDefs.length && i < positionals.length; i++) {
-				input[argDefs[i].name] = positionals[i]
+				input[argDefs[i]!.name] = positionals[i]!
 			}
 		}
 
