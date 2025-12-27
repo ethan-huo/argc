@@ -17,7 +17,7 @@
 			["parent", "sibling", "index"],
 			["side-effect", "side-effect-style", "style"]
 		],
-		"internalPattern": ["~/**", "@/**"],
+		"internalPattern": ["~/", "@/"],
 		"newlinesBetween": true
 	},
 	"ignorePatterns": ["node_modules", "refs", "dist", "*.lock"]
