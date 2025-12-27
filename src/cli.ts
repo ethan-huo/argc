@@ -39,6 +39,9 @@ type RunOptionsWithoutContext<TSchema extends Router, TGlobals extends Schema> =
 		handlers: Handlers<TSchema, StandardSchemaV1.InferOutput<TGlobals>>
 	}
 
+// Reserved global option names that conflict with built-in flags
+const RESERVED_GLOBALS = new Set(['help', 'h', 'version', 'v', 'schema'])
+
 export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 	private schema: TSchema
 	private options: CLIOptions<TGlobals>
@@ -46,6 +49,25 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 	constructor(schema: TSchema, options: CLIOptions<TGlobals>) {
 		this.schema = schema
 		this.options = options
+
+		// Check for reserved global option names
+		if (options.globals) {
+			const globalParams = extractInputParamsDetailed(options.globals)
+			const conflicts = globalParams
+				.map((p) => p.name)
+				.filter((name) => RESERVED_GLOBALS.has(name))
+			if (conflicts.length > 0) {
+				console.error(colors.error('Invalid global options configuration'))
+				console.error()
+				console.error(
+					`  Reserved names: ${conflicts.map((n) => colors.option(`--${n}`)).join(', ')}`,
+				)
+				console.error(
+					colors.dim('  These conflict with built-in flags: -h/--help, -v/--version, --schema'),
+				)
+				process.exit(1)
+			}
+		}
 	}
 
 	// Overload: with context function
@@ -508,14 +530,33 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 
 		console.log()
 		console.log(colors.bold('Global Options:'))
+
+		// Show user-defined global options
+		if (this.options.globals) {
+			const globalParams = extractInputParamsDetailed(this.options.globals)
+			for (const opt of globalParams) {
+				const flag = `--${opt.name}`
+				const typeHint = opt.type !== 'boolean' ? ` <${opt.type}>` : ''
+				const defaultHint =
+					opt.default !== undefined
+						? ` (default: ${JSON.stringify(opt.default)})`
+						: ''
+				const desc = opt.description ?? ''
+				console.log(
+					`  ${colors.option(`${flag}${typeHint}`.padEnd(24))} ${colors.dim(`${desc}${defaultHint}`)}`,
+				)
+			}
+		}
+
+		// Built-in options
 		console.log(
-			`  ${colors.option('-h, --help'.padEnd(16))} ${colors.dim('Show help')}`,
+			`  ${colors.option('-h, --help'.padEnd(24))} ${colors.dim('Show help')}`,
 		)
 		console.log(
-			`  ${colors.option('-v, --version'.padEnd(16))} ${colors.dim('Show version')}`,
+			`  ${colors.option('-v, --version'.padEnd(24))} ${colors.dim('Show version')}`,
 		)
 		console.log(
-			`  ${colors.option('--schema'.padEnd(16))} ${colors.dim('Typed CLI spec for AI agents')}`,
+			`  ${colors.option('--schema'.padEnd(24))} ${colors.dim('Typed CLI spec for AI agents')}`,
 		)
 	}
 
