@@ -374,7 +374,7 @@ describe('cli', () => {
 
 			const output = consoleOutput.join('\n')
 			expect(output).toContain('invalid arguments')
-			expect(output).toContain('--name')
+			expect(output).toContain('name')
 			expect(exitCode).toBe(1)
 		})
 

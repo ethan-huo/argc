@@ -213,7 +213,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 				// Show Rust-style error with inline annotations
 				console.error(colors.error('invalid arguments'))
 				console.error()
-				this.showOptionsWithErrors(command, errorFields, errorMessages)
+				this.showRustStyleError(commandPath, command, errorFields, errorMessages)
 				process.exit(1)
 			}
 			validatedInput = result.value as Record<string, unknown>
@@ -587,56 +587,52 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema> {
 		return null
 	}
 
-	private showOptionsWithErrors(
+	private showRustStyleError(
+		commandPath: string[],
 		command: AnyCommand,
 		errorFields: Set<string>,
 		errorMessages: Record<string, string>,
 	): void {
-		const args = command['~argc'].args
+		const args = command['~argc'].args ?? []
 		const input = command['~argc'].input
-		const argNames = new Set(args?.map((a) => a.name) ?? [])
+		const argNames = new Set(args.map((a) => a.name))
 		const inputParams = input ? extractInputParamsDetailed(input) : []
 
-		// First show positional args
-		for (const arg of args ?? []) {
-			const isError = errorFields.has(arg.name)
-			const paramInfo = inputParams.find((p) => p.name === arg.name)
-			const desc = arg.description ?? paramInfo?.description ?? ''
+		// Build usage line
+		const cmdName = commandPath.join(' ')
+		const argParts = args.map((a) => `<${a.name}>`)
+		const hasOptions = inputParams.some((p) => !argNames.has(p.name))
+		const optionsPart = hasOptions ? '[options]' : ''
+		const usageLine = [cmdName, ...argParts, optionsPart]
+			.filter(Boolean)
+			.join(' ')
 
-			if (isError) {
-				console.error(`   ${colors.red(`<${arg.name}>`)}`)
-				console.error(
-					`   ${colors.red('^')} ${colors.red(errorMessages[arg.name]!)}`,
-				)
-			} else {
-				console.error(
-					`   ${colors.option(`<${arg.name}>`)}${desc ? `  ${desc}` : ''}`,
-				)
-			}
+		// Show usage
+		console.error(`  ${usageLine}`)
+		console.error()
+
+		// Collect all errors
+		const errors: { field: string; message: string }[] = []
+
+		for (const field of errorFields) {
+			errors.push({ field, message: errorMessages[field]! })
 		}
 
-		// Then show options (non-positional)
-		for (const opt of inputParams) {
-			if (argNames.has(opt.name)) continue
-
-			const isError = errorFields.has(opt.name)
-			const flag = `--${opt.name}`
-			const typeHint = opt.type !== 'boolean' ? ` <${opt.type}>` : ''
-			const desc = opt.description ?? ''
-			const defaultHint =
-				opt.default !== undefined
-					? ` (default: ${JSON.stringify(opt.default)})`
-					: ''
-
-			if (isError) {
-				console.error(`   ${colors.red(flag)}${typeHint}`)
-				console.error(
-					`   ${colors.red('^')} ${colors.red(errorMessages[opt.name]!)}`,
-				)
-			} else {
-				console.error(
-					`   ${colors.option(flag)}${colors.dim(typeHint)}${desc ? `  ${desc}` : ''}${colors.dim(defaultHint)}`,
-				)
+		// Show errors
+		if (errors.length > 0) {
+			console.error(colors.bold('Errors:'))
+			const maxFieldLen = Math.max(...errors.map((e) => e.field.length))
+			for (const err of errors) {
+				// Improve valibot error messages for CLI context
+				let msg = err.message
+				// "Invalid key: Expected "foo" but received undefined" -> "required"
+				if (/^Invalid key: Expected .+ but received undefined$/.test(msg)) {
+					msg = 'required'
+				} else {
+					// Strip "Invalid type: " prefix
+					msg = msg.replace(/^Invalid \w+: /, '')
+				}
+				console.error(`  ${colors.red(err.field.padEnd(maxFieldLen))}  ${msg}`)
 			}
 		}
 	}
