@@ -9,7 +9,7 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 - **Arrays & Objects** - `--tags a --tags b` and `--db.host localhost` syntax
 - **Rust-style errors** - Precise error messages with `^` caret pointing to invalid fields
 - **AI-friendly** - `--schema` outputs TypeScript-like type definitions
-- **Command aliases** - `ls, list` style display like pnpm
+- **Command aliases** - `ls, list` style display
 - **Nested groups** - Unlimited depth (`deploy aws lambda`)
 - **Lazy validation** - Transform only runs for executed command
 - **Global → Context** - Transform globals into injected context
@@ -188,7 +188,7 @@ Feed this to any AI agent - it instantly understands your CLI structure.
 
 ## Command Aliases
 
-Define aliases that display like pnpm:
+Define command aliases:
 
 ```typescript
 list: c
@@ -330,8 +330,6 @@ cli(schema, {
 | `-h, --help`    | Everywhere  | Show help                   |
 | `-v, --version` | Root only   | Show version                |
 | `--schema`      | Root only   | Typed CLI spec for AI agents |
-
-Note: `-v` and `--schema` only work at root level. Using them with subcommands shows an error (like bun's behavior).
 
 ## Schema Libraries
 
