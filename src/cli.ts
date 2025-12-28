@@ -9,7 +9,7 @@ import type {
 	StandardSchemaV1,
 } from './types'
 
-import { fmt as colors } from './terminal'
+import { fmt as colors, padEnd } from './terminal'
 import { parseArgv } from './parser'
 import { extractInputParamsDetailed, generateSchema } from './schema'
 import { formatSuggestion, suggestSimilar } from './suggest'
@@ -186,10 +186,10 @@ export class CLI<
 					}
 				}
 
-				// Show Rust-style error with inline annotations
+				// Show validation error summary + details
 				console.error(colors.error('invalid arguments'))
 				console.error()
-				this.showRustStyleError(commandPath, command, errorFields, errorMessages)
+				this.showValidationError(commandPath, command, errorFields, errorMessages)
 				process.exit(1)
 			}
 			validatedInput = result.value as Record<string, unknown>
@@ -563,7 +563,7 @@ export class CLI<
 		return null
 	}
 
-	private showRustStyleError(
+	private showValidationError(
 		commandPath: string[],
 		command: AnyCommand,
 		errorFields: Set<string>,
@@ -575,7 +575,10 @@ export class CLI<
 		const inputParams = input ? extractInputParamsDetailed(input) : []
 
 		// Build usage line
-		const cmdName = commandPath.join(' ')
+		const cmdName =
+			commandPath.length > 0
+				? `${this.options.name} ${commandPath.join(' ')}`
+				: this.options.name
 		const argParts = args.map((a) => `<${a.name}>`)
 		const hasOptions = inputParams.some((p) => !argNames.has(p.name))
 		const optionsPart = hasOptions ? '[options]' : ''
@@ -583,34 +586,71 @@ export class CLI<
 			.filter(Boolean)
 			.join(' ')
 
-		// Show usage
-		console.error(`  ${usageLine}`)
+		console.error(`${colors.bold('Usage:')} ${colors.command(usageLine)}`)
 		console.error()
 
-		// Collect all errors
-		const errors: { field: string; message: string }[] = []
-
+		const orderedFields: string[] = []
+		for (const arg of args) orderedFields.push(arg.name)
+		for (const param of inputParams) {
+			if (!argNames.has(param.name)) orderedFields.push(param.name)
+		}
 		for (const field of errorFields) {
-			errors.push({ field, message: errorMessages[field]! })
+			if (!orderedFields.includes(field)) orderedFields.push(field)
 		}
 
-		// Show errors
+		const errors: {
+			field: string
+			label: string
+			message: string
+			required: boolean
+		}[] = []
+
+		for (const field of orderedFields) {
+			if (!errorFields.has(field)) continue
+			const raw = errorMessages[field] ?? ''
+			let msg = raw
+			let required = false
+			if (/^Invalid key: Expected .+ but received undefined$/.test(msg)) {
+				msg = 'required'
+				required = true
+			} else {
+				msg = msg.replace(/^Invalid \w+: /, '')
+				if (msg.toLowerCase() === 'required') required = true
+			}
+
+			const label = argNames.has(field) ? `<${field}>` : `--${field}`
+			errors.push({ field, label, message: msg, required })
+		}
+
+		const missing = errors.filter((e) => e.required).map((e) => e.label)
+		if (missing.length > 0) {
+			console.error(
+				`${colors.bold('Missing required:')} ${missing.join(', ')}`,
+			)
+			console.error()
+		}
+
 		if (errors.length > 0) {
-			console.error(colors.bold('Errors:'))
-			const maxFieldLen = Math.max(...errors.map((e) => e.field.length))
+			console.error(colors.bold('Details:'))
+			const maxLabelLen = Math.max(...errors.map((e) => e.label.length))
 			for (const err of errors) {
-				// Improve valibot error messages for CLI context
-				let msg = err.message
-				// "Invalid key: Expected "foo" but received undefined" -> "required"
-				if (/^Invalid key: Expected .+ but received undefined$/.test(msg)) {
-					msg = 'required'
-				} else {
-					// Strip "Invalid type: " prefix
-					msg = msg.replace(/^Invalid \w+: /, '')
-				}
-				console.error(`  ${colors.red(err.field.padEnd(maxFieldLen))}  ${msg}`)
+				console.error(
+					`  ${colors.red(padEnd(err.label, maxLabelLen))}  ${err.message}`,
+				)
 			}
 		}
+
+		const examples = command['~argc'].meta.examples
+		if (examples?.length) {
+			console.error()
+			console.error(colors.bold('Hint:'))
+			console.error(`  ${colors.dim(examples[0]!)}`)
+		}
+
+		console.error()
+		console.error(
+			colors.dim(`Run '${cmdName} --help' for full usage.`),
+		)
 	}
 }
 
