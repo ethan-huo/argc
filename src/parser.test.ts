@@ -110,9 +110,9 @@ describe('parseArgv', () => {
 	})
 
 	describe('array values (repeated flags)', () => {
-		test('--tags a --tags b', () => {
-			const result = parseArgv(['--tags', 'a', '--tags', 'b'])
-			expect(result.flags).toEqual({ tags: ['a', 'b'] })
+		test('--tag a --tag b', () => {
+			const result = parseArgv(['--tag', 'a', '--tag', 'b'])
+			expect(result.flags).toEqual({ tag: ['a', 'b'] })
 		})
 
 		test('three values', () => {

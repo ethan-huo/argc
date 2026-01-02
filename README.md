@@ -6,7 +6,7 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 
 - **Schema-first** - Your schema IS the CLI definition
 - **Transform inputs** - Convert strings to rich objects (`Bun.file()`, dates, etc.)
-- **Arrays & Objects** - `--tags a --tags b` and `--db.host localhost` syntax
+- **Arrays & Objects** - `--tag a --tag b` and `--db.host localhost` syntax
 - **Rust-style errors** - Precise error messages with `^` caret pointing to invalid fields
 - **AI-friendly** - `--schema` outputs TypeScript-like type definitions
 - **Command aliases** - `ls, list` style display
@@ -164,7 +164,7 @@ $ myapp --schema
 
 ```
 CLI Syntax:
-  arrays:  --tags a --tags b           → tags: ["a", "b"]
+  arrays:  --tag a --tag b             → tag: ["a", "b"]
   objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }
 
 My CLI app
