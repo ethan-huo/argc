@@ -154,7 +154,8 @@ export function getInputTypeHint(schema: Schema): string {
 	if (params.length === 0) return 'object'
 	const parts = params.map((p) => {
 		const typeHint = formatInputHintType(p.type)
-		return `${p.name}: ${typeHint}`
+		const key = p.optional ? `${p.name}?` : p.name
+		return `${key}: ${typeHint}`
 	})
 	return `{ ${parts.join(', ')} }`
 }
@@ -333,22 +334,36 @@ function formatInputHintType(type: string): string {
 	if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
 		return 'object'
 	}
-	if (isStringLiteralUnion(trimmed)) {
+	if (isLiteralUnion(trimmed)) {
 		return 'enum'
 	}
 	if (trimmed.endsWith('[]')) {
 		const inner = trimmed.slice(0, -2).trim()
 		if (inner.startsWith('{') && inner.endsWith('}')) return 'object[]'
+		if (isLiteralUnion(inner)) return 'enum[]'
 	}
 	return type
 }
 
-function isStringLiteralUnion(type: string): boolean {
+function isLiteralUnion(type: string): boolean {
 	const parts = type.split('|').map((part) => part.trim())
 	if (parts.length < 2) return false
-	return parts.every(
-		(part) =>
-			(part.startsWith('"') && part.endsWith('"')) ||
-			(part.startsWith("'") && part.endsWith("'")),
-	)
+	return parts.every((part) => isLiteralToken(part))
+}
+
+function isLiteralToken(part: string): boolean {
+	if (
+		(part.startsWith('"') && part.endsWith('"')) ||
+		(part.startsWith("'") && part.endsWith("'"))
+	) {
+		return true
+	}
+	if (part === 'true' || part === 'false' || part === 'null') return true
+	return isNumberLiteral(part)
+}
+
+function isNumberLiteral(part: string): boolean {
+	if (part === '') return false
+	const num = Number(part)
+	return !Number.isNaN(num) && String(num) === part
 }

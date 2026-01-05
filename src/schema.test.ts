@@ -225,4 +225,47 @@ describe('generateSchema', () => {
 		const hint = getInputTypeHint(schema.cmd['~argc'].input!)
 		expect(hint).toBe('{ db: object, env: enum }')
 	})
+
+	test('input type hint covers common top-level cases', () => {
+		const schema = {
+			cmd: c.input(
+				s(
+					v.object({
+						name: v.string(),
+						age: v.number(),
+						active: v.boolean(),
+						tags: v.array(v.string()),
+						meta: v.object({ id: v.string(), score: v.number() }),
+						items: v.array(v.object({ id: v.string() })),
+						role: v.picklist(['admin', 'member', 'guest']),
+						status: v.union([v.literal('ok'), v.literal(1)]),
+						modes: v.array(v.picklist(['a', 'b'])),
+					}),
+				),
+			),
+		}
+
+		const hint = getInputTypeHint(schema.cmd['~argc'].input!)
+		expect(hint).toBe(
+			'{ name: string, age: number, active: boolean, tags: string[], meta: object, items: object[], role: enum, status: enum, modes: enum[] }',
+		)
+	})
+
+	test('input type hint shows optional keys', () => {
+		const schema = {
+			cmd: c.input(
+				s(
+					v.object({
+						name: v.string(),
+						email: v.optional(v.string()),
+						tags: v.optional(v.array(v.string())),
+						role: v.optional(v.picklist(['admin', 'member'])),
+					}),
+				),
+			),
+		}
+
+		const hint = getInputTypeHint(schema.cmd['~argc'].input!)
+		expect(hint).toBe('{ name: string, email?: string, tags?: string[], role?: enum }')
+	})
 })
