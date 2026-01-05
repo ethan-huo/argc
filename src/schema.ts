@@ -152,7 +152,11 @@ function formatParams(params: ParamInfo[]): string {
 export function getInputTypeHint(schema: Schema): string {
 	const params = extractInputParamsDetailed(schema)
 	if (params.length === 0) return 'object'
-	return `{ ${formatParams(params)} }`
+	const parts = params.map((p) => {
+		const typeHint = formatInputHintType(p.type)
+		return `${p.name}: ${typeHint}`
+	})
+	return `{ ${parts.join(', ')} }`
 }
 
 // Export for cli.ts help display
@@ -322,4 +326,29 @@ function findDeepPath(
 		if (found) return found
 	}
 	return null
+}
+
+function formatInputHintType(type: string): string {
+	const trimmed = type.trim()
+	if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+		return 'object'
+	}
+	if (isStringLiteralUnion(trimmed)) {
+		return 'enum'
+	}
+	if (trimmed.endsWith('[]')) {
+		const inner = trimmed.slice(0, -2).trim()
+		if (inner.startsWith('{') && inner.endsWith('}')) return 'object[]'
+	}
+	return type
+}
+
+function isStringLiteralUnion(type: string): boolean {
+	const parts = type.split('|').map((part) => part.trim())
+	if (parts.length < 2) return false
+	return parts.every(
+		(part) =>
+			(part.startsWith('"') && part.endsWith('"')) ||
+			(part.startsWith("'") && part.endsWith("'")),
+	)
 }

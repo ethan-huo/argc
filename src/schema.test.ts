@@ -3,7 +3,7 @@ import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
 import { c, group } from './command'
-import { generateSchema, generateSchemaHintExample, generateSchemaOutline } from './schema'
+import { generateSchema, generateSchemaHintExample, generateSchemaOutline, getInputTypeHint } from './schema'
 
 const s = toStandardJsonSchema
 
@@ -208,5 +208,21 @@ describe('generateSchema', () => {
 
 		const hint = generateSchemaHintExample(schema)
 		expect(hint).toBe('user.list')
+	})
+
+	test('input type hint uses top-level summary', () => {
+		const schema = {
+			cmd: c.input(
+				s(
+					v.object({
+						db: v.object({ host: v.string(), port: v.number() }),
+						env: v.picklist(['dev', 'prod']),
+					}),
+				),
+			),
+		}
+
+		const hint = getInputTypeHint(schema.cmd['~argc'].input!)
+		expect(hint).toBe('{ db: object, env: enum }')
 	})
 })
