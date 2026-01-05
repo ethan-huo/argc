@@ -11,9 +11,20 @@ import type {
 
 import { fmt as colors, padEnd } from './terminal'
 import { parseArgv } from './parser'
-import { extractInputParamsDetailed, generateSchema } from './schema'
+import {
+	extractInputParamsDetailed,
+	generateSchema,
+	generateSchemaHintExample,
+	generateSchemaOutline,
+	getInputTypeHint,
+} from './schema'
 import { formatSuggestion, suggestSimilar } from './suggest'
 import { isCommand, isGroup } from './types'
+import {
+	buildSchemaSubset,
+	matchSchemaSelector,
+	parseSchemaSelector,
+} from './schema-selector'
 
 // Helper to get children from a router (handles both groups and plain objects)
 function getRouterChildren(router: Router): { [key: string]: Router } {
@@ -23,7 +34,7 @@ function getRouterChildren(router: Router): { [key: string]: Router } {
 }
 
 // Reserved global option names that conflict with built-in flags
-const RESERVED_GLOBALS = new Set(['help', 'h', 'version', 'v', 'schema'])
+const RESERVED_GLOBALS = new Set(['help', 'h', 'version', 'v', 'schema', 'input'])
 
 export class CLI<
 	TSchema extends Router,
@@ -89,14 +100,68 @@ export class CLI<
 		// Handle --schema (root only, for AI agents)
 		if (parsed.flags.schema) {
 			if (isRootLevel) {
-				const schemaOutput = generateSchema(this.schema, {
+				let selectorMatches: ReturnType<typeof matchSchemaSelector> | null =
+					null
+				let schemaOutput = generateSchema(this.schema, {
 					name: this.options.name,
 					description: this.options.description,
 					globals: this.options.globals,
 				})
+				const selectorValue =
+					typeof parsed.flags.schema === 'string'
+						? parsed.flags.schema
+						: null
+					if (selectorValue) {
+						try {
+							const steps = parseSchemaSelector(selectorValue)
+							selectorMatches = matchSchemaSelector(this.schema, steps)
+							const subset = buildSchemaSubset(this.schema, selectorMatches, 1)
+							schemaOutput = generateSchema(subset, {
+								name: this.options.name,
+								description: this.options.description,
+								globals: this.options.globals,
+							})
+					} catch (error) {
+						const message =
+							error instanceof Error ? error.message : String(error)
+						console.log(colors.error(`Invalid schema selector: ${message}`))
+						process.exit(1)
+					}
+				}
+				const maxLines = this.options.schemaMaxLines ?? 100
+				const lines = schemaOutput.split('\n')
+
+					if (lines.length > maxLines) {
+						console.log(
+							`Schema too large (${lines.length} lines). Showing compact outline.`,
+						)
+						console.log()
+						const outlineSchema =
+							selectorMatches === null
+								? this.schema
+								: buildSchemaSubset(this.schema, selectorMatches, 2)
+						for (const line of generateSchemaOutline(outlineSchema, 2)) {
+							console.log(line)
+						}
+					console.log()
+					const hintExample = generateSchemaHintExample(outlineSchema)
+					if (hintExample) {
+						console.log(`hint: use --schema=.${hintExample}`)
+					}
+					console.log(
+						'hint: selector is jq-like (path, *, {a,b}, ..name)',
+					)
+					return
+				}
+
 				// Dim comment lines for readability
-				for (const line of schemaOutput.split('\n')) {
-					if (line.trimStart().startsWith('//') || line.startsWith('CLI Syntax:') || line.startsWith('  arrays:') || line.startsWith('  objects:')) {
+				for (const line of lines) {
+					if (
+						line.trimStart().startsWith('//') ||
+						line.startsWith('CLI Syntax:') ||
+						line.startsWith('  arrays:') ||
+						line.startsWith('  objects:')
+					) {
 						console.log(colors.dim(line))
 					} else {
 						console.log(line)
@@ -162,9 +227,15 @@ export class CLI<
 			process.exit(1)
 		}
 
-		// Build input from flags + positionals
 		const commandDef = command['~argc']
-		const input = this.buildInput(parsed.flags, remaining, commandDef.args)
+		const { flagsWithoutInput, inputFlag } = this.extractInputFlag(parsed.flags)
+		if (inputFlag !== undefined) {
+			this.assertJsonInputUsage(flagsWithoutInput, remaining)
+		}
+		let input = this.buildInput(flagsWithoutInput, remaining, commandDef.args)
+		if (inputFlag !== undefined) {
+			input = await this.parseJsonInput(inputFlag)
+		}
 
 		// Validate input with schema
 		let validatedInput = input
@@ -196,10 +267,10 @@ export class CLI<
 		}
 
 		// Parse and validate globals
-		let globals = parsed.flags as StandardSchemaV1.InferOutput<TGlobals>
+		let globals = flagsWithoutInput as StandardSchemaV1.InferOutput<TGlobals>
 		if (this.options.globals) {
 			const result = await this.options.globals['~standard'].validate(
-				parsed.flags,
+				flagsWithoutInput,
 			)
 			if (result.issues) {
 				console.error(colors.error('Global options validation failed'))
@@ -376,6 +447,101 @@ export class CLI<
 		return input
 	}
 
+	private extractInputFlag(flags: Record<string, unknown>): {
+		flagsWithoutInput: Record<string, unknown>
+		inputFlag: unknown | undefined
+	} {
+		const { input, ...rest } = flags as Record<string, unknown>
+		return { flagsWithoutInput: rest, inputFlag: input }
+	}
+
+	private assertJsonInputUsage(
+		flagsWithoutInput: Record<string, unknown>,
+		positionals: string[],
+	): void {
+		const globalNames = this.getGlobalOptionNames()
+		const nonGlobalFlags = Object.keys(flagsWithoutInput).filter(
+			(name) => !globalNames.has(name),
+		)
+
+		if (positionals.length === 0 && nonGlobalFlags.length === 0) return
+
+		console.log(colors.error('Invalid --input usage'))
+		console.log()
+		if (positionals.length > 0) {
+			console.log('  Cannot use positional arguments with --input')
+		}
+		if (nonGlobalFlags.length > 0) {
+			console.log(
+				`  Cannot use flags with --input: ${nonGlobalFlags.map((name) => `--${name}`).join(', ')}`,
+			)
+		}
+		process.exit(1)
+	}
+
+	private getGlobalOptionNames(): Set<string> {
+		if (!this.options.globals) return new Set()
+		const params = extractInputParamsDetailed(this.options.globals)
+		return new Set(params.map((p) => p.name))
+	}
+
+	private async parseJsonInput(flag: unknown): Promise<Record<string, unknown>> {
+		const raw =
+			flag === true
+				? await this.readStdin()
+				: typeof flag === 'string'
+					? await this.readInputString(flag)
+					: null
+		if (raw === null) {
+			console.log(
+				colors.error(
+					'Invalid --input value (expected JSON string, @file, or stdin)',
+				),
+			)
+			process.exit(1)
+		}
+
+		let parsed: unknown
+		try {
+			parsed = JSON.parse(raw)
+		} catch {
+			console.log(colors.error('Invalid JSON input'))
+			process.exit(1)
+		}
+
+		if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+			console.log(colors.error('JSON input must be an object'))
+			process.exit(1)
+		}
+
+		return parsed as Record<string, unknown>
+	}
+
+	private async readStdin(): Promise<string> {
+		return await new Response(Bun.stdin).text()
+	}
+
+	private async readInputString(value: string): Promise<string> {
+		if (value.startsWith('@')) {
+			const path = this.expandHome(value.slice(1))
+			if (!path) {
+				console.log(colors.error('Invalid --input file path'))
+				process.exit(1)
+			}
+			return await Bun.file(path).text()
+		}
+		return value
+	}
+
+	private expandHome(path: string): string {
+		if (path.startsWith('~/')) {
+			const home = process.env.HOME
+			if (!home) return path
+			return `${home}${path.slice(1)}`
+		}
+		return path
+	}
+
 	private showHelp(commandPath: string[], router: Router): void {
 		const { name, version, description } = this.options
 		const fullCommand =
@@ -445,6 +611,13 @@ export class CLI<
 					)
 				}
 			}
+
+			console.log()
+			console.log(colors.bold('Input:'))
+			const inputType = input ? getInputTypeHint(input) : 'object'
+			console.log(
+				`  ${colors.option(`--input <${inputType}>`.padEnd(24))} ${colors.dim('Read command input from JSON string or stdin')}`,
+			)
 
 			// Examples
 			if (meta.examples?.length) {

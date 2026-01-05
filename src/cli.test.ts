@@ -172,6 +172,147 @@ describe('cli', () => {
 
 			expect(receivedInput).toEqual({ tags: ['a', 'b'] })
 		})
+
+		test('parses JSON input', async () => {
+			let receivedInput: unknown
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'update',
+				'--input',
+				'{"name":"Alice"}',
+			]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					update: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ name: 'Alice' })
+		})
+
+		test('parses JSON input from file', async () => {
+			let receivedInput: unknown
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			const filePath = `.tmp-argc-input-${Date.now()}.json`
+			await Bun.write(filePath, '{"name":"FileUser"}')
+
+			process.argv = ['bun', 'cli', 'update', '--input', `@${filePath}`]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					update: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ name: 'FileUser' })
+		})
+
+		test('parses JSON input from ~ path', async () => {
+			let receivedInput: unknown
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			const originalHome = process.env.HOME
+			try {
+				process.env.HOME = process.cwd()
+				const filePath = `.tmp-argc-input-${Date.now()}-home.json`
+				await Bun.write(filePath, '{"name":"HomeUser"}')
+
+				process.argv = ['bun', 'cli', 'update', '--input', `@~/${filePath}`]
+
+				const app = cli(schema, { name: 'test', version: '1.0.0' })
+				await app.run({
+					handlers: {
+						update: ({ input }) => {
+							receivedInput = input
+						},
+					},
+				})
+			} finally {
+				if (originalHome === undefined) {
+					delete process.env.HOME
+				} else {
+					process.env.HOME = originalHome
+				}
+			}
+
+			expect(receivedInput).toEqual({ name: 'HomeUser' })
+		})
+
+		test('rejects flags with --input', async () => {
+			const schema = {
+				greet: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'greet',
+				'--input',
+				'{"name":"Alice"}',
+				'--name',
+				'Bob',
+			]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			try {
+				await app.run({
+					handlers: {
+						greet: () => {},
+					},
+				})
+			} catch {
+				// expected
+			}
+
+			expect(consoleOutput.join('\n')).toContain('Invalid --input usage')
+		})
+
+		test('rejects positionals with --input', async () => {
+			const schema = {
+				greet: c
+					.args('name')
+					.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'greet',
+				'World',
+				'--input',
+				'{"name":"Alice"}',
+			]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			try {
+				await app.run({
+					handlers: {
+						greet: () => {},
+					},
+				})
+			} catch {
+				// expected
+			}
+
+			expect(consoleOutput.join('\n')).toContain('Invalid --input usage')
+		})
 	})
 
 	describe('context', () => {

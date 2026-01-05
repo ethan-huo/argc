@@ -131,6 +131,11 @@ function extractInputParamsDetailed(schema: Schema): ParamInfo[] {
 // Format params as function signature
 function extractInputParams(schema: Schema): string {
 	const params = extractInputParamsDetailed(schema)
+	return formatParams(params)
+}
+
+// Export for cli.ts help display
+function formatParams(params: ParamInfo[]): string {
 	return params
 		.map((p) => {
 			let str = p.name
@@ -142,6 +147,12 @@ function extractInputParams(schema: Schema): string {
 			return str
 		})
 		.join(', ')
+}
+
+export function getInputTypeHint(schema: Schema): string {
+	const params = extractInputParamsDetailed(schema)
+	if (params.length === 0) return 'object'
+	return `{ ${formatParams(params)} }`
 }
 
 // Export for cli.ts help display
@@ -247,9 +258,68 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 	return lines.join('\n')
 }
 
+export function generateSchemaOutline(
+	schema: Router,
+	depth: number = 2,
+): string[] {
+	const children = getRouterChildren(schema)
+	const lines: string[] = []
+	for (const [name, child] of Object.entries(children)) {
+		lines.push(renderOutlineNode(name, child, depth))
+	}
+	return lines
+}
+
+export function generateSchemaHintExample(schema: Router): string | null {
+	const children = getRouterChildren(schema)
+	const entries = Object.entries(children)
+	for (const [name, child] of entries) {
+		const deep = findDeepPath(child, [name], 3)
+		if (deep) return deep.join('.')
+	}
+	for (const [name, child] of entries) {
+		const two = findDeepPath(child, [name], 2)
+		if (two) return two.join('.')
+	}
+	if (entries.length > 0) return entries[0]![0]
+	return null
+}
+
 function pascalCase(str: string): string {
 	return str
 		.split(/[-_\s]+/)
 		.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
 		.join('')
+}
+
+function getRouterChildren(router: Router): { [key: string]: Router } {
+	if (isCommand(router)) return {}
+	if (isGroup(router)) return router['~argc.group'].children
+	return router
+}
+
+function renderOutlineNode(name: string, router: Router, depth: number): string {
+	if (depth <= 0) return name
+	if (isCommand(router)) return name
+	const children = getRouterChildren(router)
+	const parts = Object.entries(children).map(([childName, child]) =>
+		renderOutlineNode(childName, child, depth - 1),
+	)
+	if (parts.length === 0) return `${name}{}`
+	return `${name}{${parts.join(',')}}`
+}
+
+function findDeepPath(
+	router: Router,
+	path: string[],
+	minDepth: number,
+): string[] | null {
+	if (minDepth <= 1) return path
+	if (isCommand(router)) return null
+	const children = getRouterChildren(router)
+	for (const [name, child] of Object.entries(children)) {
+		const found = findDeepPath(child, [...path, name], minDepth - 1)
+		if (found) return found
+	}
+	return null
 }

@@ -74,6 +74,7 @@ export type CLIOptions<
 	name: string
 	version: string
 	description?: string
+	schemaMaxLines?: number
 	globals?: TGlobals
 	context?: (
 		globals: StandardSchemaV1.InferOutput<TGlobals>,

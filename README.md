@@ -34,7 +34,6 @@ const s = toStandardJsonSchema
 const schema = {
   greet: c
     .meta({ description: 'Greet someone' })
-    .args('name')
     .input(s(v.object({
       name: v.pipe(v.string(), v.minLength(2)),
       loud: v.optional(v.boolean(), false),
@@ -52,8 +51,28 @@ cli(schema, { name: 'hello', version: '1.0.0' }).run({
 ```
 
 ```bash
-$ hello greet world --loud
+$ hello greet --name world --loud
 HELLO, WORLD!
+```
+
+### Positional Arguments (use sparingly)
+
+Prefer `input()` flags for agent-friendly schemas. Use positional args only when they make the CLI clearer for humans.
+
+```typescript
+const schema = {
+  env: c
+    .meta({ description: 'Set an env var' })
+    .args('key', 'value')
+    .input(s(v.object({
+      key: v.string(),
+      value: v.string(),
+    }))),
+}
+```
+
+```bash
+$ myapp env API_KEY secret
 ```
 
 ## Transform: Schema Superpowers
@@ -64,7 +83,6 @@ The killer feature. Your schema transforms CLI strings into rich objects:
 const schema = {
   seed: c
     .meta({ description: 'Seed database from file' })
-    .args('file')
     .input(s(v.object({
       file: v.pipe(
         v.string(),
@@ -84,7 +102,7 @@ handlers: {
 ```
 
 ```bash
-$ myapp seed ./data.json
+$ myapp seed --file ./data.json
 Seeding: { users: [...], products: [...] }
 ```
 
@@ -117,6 +135,28 @@ c.input(s(v.object({
 $ myapp create --tags admin --tags dev
 # input.tags = ['admin', 'dev']
 ```
+
+## JSON Input
+
+Commands can accept a full JSON object via `--input` (useful for agents or generated payloads).
+
+```bash
+$ myapp user set --input '{"name":"alice","role":"admin"}'
+```
+
+You can also load JSON from a file:
+
+```bash
+$ myapp user set --input @payload.json
+```
+
+You can also pipe JSON from stdin:
+
+```bash
+$ echo '{"name":"alice","role":"admin"}' | myapp user set --input
+```
+
+When using `--input`, do not pass other command flags or positionals (global options are still allowed).
 
 **Nested objects** - use dot notation:
 
@@ -291,7 +331,7 @@ c.meta({
   hidden: true,       // hides from help
 })
 .args('positional1', 'positional2')  // positional arguments (in order)
-.input(schema)                        // Standard JSON Schema
+.input(schema)                        // Standard JSON Schema (still required)
 ```
 
 ### `group()` - Command Group

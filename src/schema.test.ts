@@ -3,7 +3,7 @@ import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
 import { c, group } from './command'
-import { generateSchema } from './schema'
+import { generateSchema, generateSchemaHintExample, generateSchemaOutline } from './schema'
 
 const s = toStandardJsonSchema
 
@@ -178,5 +178,35 @@ describe('generateSchema', () => {
 
 		const output = generateSchema(schema, { name: 'app' })
 		expect(output).toContain('db: { host: string, port: number }')
+	})
+
+	test('compact outline', () => {
+		const schema = {
+			deploy: group({ description: 'Deploy' }, {
+				aws: group({ description: 'AWS' }, {
+					lambda: c.input(s(v.object({}))),
+					s3: c.input(s(v.object({}))),
+				}),
+				vercel: c.input(s(v.object({}))),
+			}),
+		}
+
+		const lines = generateSchemaOutline(schema, 2)
+		expect(lines).toEqual(['deploy{aws{lambda,s3},vercel}'])
+	})
+
+	test('outline hints', () => {
+		const schema = {
+			user: group({ description: 'User' }, {
+				list: c.input(s(v.object({}))),
+				create: c.input(s(v.object({}))),
+			}),
+			config: group({ description: 'Config' }, {
+				get: c.input(s(v.object({}))),
+			}),
+		}
+
+		const hint = generateSchemaHintExample(schema)
+		expect(hint).toBe('user.list')
 	})
 })
