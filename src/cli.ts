@@ -612,12 +612,14 @@ export class CLI<
 				}
 			}
 
-			console.log()
-			console.log(colors.bold('Input:'))
-			const inputType = input ? getInputTypeHint(input) : 'object'
-			console.log(
-				`  ${colors.option(`--input <${inputType}>`.padEnd(24))} ${colors.dim('Read command input from JSON string or stdin')}`,
-			)
+			if (inputParams.length > 0) {
+				console.log()
+				console.log(colors.bold('Input:'))
+				const inputType = input ? getInputTypeHint(input) : 'object'
+				console.log(
+					`  ${colors.option(`--input <${inputType}>`.padEnd(24))} ${colors.dim('Read command input from JSON string or stdin')}`,
+				)
+			}
 
 			// Examples
 			if (meta.examples?.length) {
