@@ -75,6 +75,21 @@ const schema = {
 $ myapp env API_KEY secret
 ```
 
+Variadic positional args are supported by adding `...` to the last arg name:
+
+```typescript
+const schema = {
+  join: c
+    .meta({ description: 'Join files' })
+    .args('files...')
+    .input(s(v.object({ files: v.array(v.string()) }))),
+}
+```
+
+```bash
+$ myapp join a.txt b.txt c.txt
+```
+
 ## Transform: Schema Superpowers
 
 The killer feature. Your schema transforms CLI strings into rich objects:

@@ -173,6 +173,53 @@ describe('cli', () => {
 			expect(receivedInput).toEqual({ tags: ['a', 'b'] })
 		})
 
+		test('handles variadic positional args', async () => {
+			let receivedInput: unknown
+			const schema = {
+				join: c
+					.args('files...')
+					.input(s(v.object({ files: v.array(v.string()) }))),
+			}
+
+			process.argv = ['bun', 'cli', 'join', 'a.txt', 'b.txt', 'c.txt']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					join: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ files: ['a.txt', 'b.txt', 'c.txt'] })
+		})
+
+		test('rejects variadic arg not last', async () => {
+			const schema = {
+				bad: c
+					.args('files...', 'tail')
+					.input(s(v.object({ files: v.array(v.string()), tail: v.string() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'bad', 'a.txt', 'b.txt', 'end']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			try {
+				await app.run({
+					handlers: {
+						bad: () => {},
+					},
+				})
+			} catch {
+				// expected
+			}
+
+			expect(consoleOutput.join('\n')).toContain(
+				'Invalid args: variadic argument must be last',
+			)
+		})
+
 		test('parses JSON input', async () => {
 			let receivedInput: unknown
 			const schema = {

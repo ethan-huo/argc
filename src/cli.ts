@@ -435,8 +435,25 @@ export class CLI<
 		const input: Record<string, unknown> = { ...flags }
 
 		if (argDefs) {
-			for (let i = 0; i < argDefs.length && i < positionals.length; i++) {
-				input[argDefs[i]!.name] = positionals[i]!
+			for (let i = 0; i < argDefs.length; i++) {
+				const argName = argDefs[i]!.name
+				const isVariadic = argName.endsWith('...')
+				const normalized = this.normalizeArgName(argName)
+
+				if (isVariadic) {
+					if (i !== argDefs.length - 1) {
+						console.log(
+							colors.error('Invalid args: variadic argument must be last'),
+						)
+						process.exit(1)
+					}
+					input[normalized] = positionals.slice(i)
+					return input
+				}
+
+				if (i < positionals.length) {
+					input[normalized] = positionals[i]!
+				}
 			}
 		}
 
@@ -558,7 +575,7 @@ export class CLI<
 			const meta = router['~argc'].meta
 			const args = router['~argc'].args
 			const input = router['~argc'].input
-			const argNames = new Set(args?.map((a) => a.name) ?? [])
+			const argInfo = this.getArgInfo(args)
 
 			// Extract input params with descriptions
 			const inputParams = input ? extractInputParamsDetailed(input) : []
@@ -582,7 +599,9 @@ export class CLI<
 				console.log(colors.bold('Arguments:'))
 				for (const arg of args) {
 					// Find description from input params
-					const paramInfo = inputParams.find((p) => p.name === arg.name)
+					const paramInfo = inputParams.find(
+						(p) => p.name === this.normalizeArgName(arg.name),
+					)
 					const desc = arg.description ?? paramInfo?.description ?? ''
 					console.log(
 						`  ${colors.arg(arg.name.padEnd(16))} ${colors.dim(desc)}`,
@@ -591,7 +610,7 @@ export class CLI<
 			}
 
 			// Options (non-positional input params)
-			const options = inputParams.filter((p) => !argNames.has(p.name))
+			const options = inputParams.filter((p) => !argInfo.names.has(p.name))
 			if (options.length > 0) {
 				console.log()
 				console.log(colors.bold('Options:'))
@@ -746,7 +765,7 @@ export class CLI<
 	): void {
 		const args = command['~argc'].args ?? []
 		const input = command['~argc'].input
-		const argNames = new Set(args.map((a) => a.name))
+		const argInfo = this.getArgInfo(args)
 		const inputParams = input ? extractInputParamsDetailed(input) : []
 
 		// Build usage line
@@ -755,7 +774,7 @@ export class CLI<
 				? `${this.options.name} ${commandPath.join(' ')}`
 				: this.options.name
 		const argParts = args.map((a) => `<${a.name}>`)
-		const hasOptions = inputParams.some((p) => !argNames.has(p.name))
+		const hasOptions = inputParams.some((p) => !argInfo.names.has(p.name))
 		const optionsPart = hasOptions ? '[options]' : ''
 		const usageLine = [cmdName, ...argParts, optionsPart]
 			.filter(Boolean)
@@ -765,9 +784,10 @@ export class CLI<
 		console.error()
 
 		const orderedFields: string[] = []
-		for (const arg of args) orderedFields.push(arg.name)
+		for (const arg of args)
+			orderedFields.push(this.normalizeArgName(arg.name))
 		for (const param of inputParams) {
-			if (!argNames.has(param.name)) orderedFields.push(param.name)
+			if (!argInfo.names.has(param.name)) orderedFields.push(param.name)
 		}
 		for (const field of errorFields) {
 			if (!orderedFields.includes(field)) orderedFields.push(field)
@@ -793,7 +813,8 @@ export class CLI<
 				if (msg.toLowerCase() === 'required') required = true
 			}
 
-			const label = argNames.has(field) ? `<${field}>` : `--${field}`
+			const display = argInfo.display.get(field)
+			const label = display ? `<${display}>` : `--${field}`
 			errors.push({ field, label, message: msg, required })
 		}
 
@@ -826,6 +847,23 @@ export class CLI<
 		console.error(
 			colors.dim(`Run '${cmdName} --help' for full usage.`),
 		)
+	}
+
+	private normalizeArgName(name: string): string {
+		return name.endsWith('...') ? name.slice(0, -3) : name
+	}
+
+	private getArgInfo(
+		args?: { name: string }[],
+	): { names: Set<string>; display: Map<string, string> } {
+		const names = new Set<string>()
+		const display = new Map<string, string>()
+		for (const arg of args ?? []) {
+			const normalized = this.normalizeArgName(arg.name)
+			names.add(normalized)
+			display.set(normalized, arg.name)
+		}
+		return { names, display }
 	}
 }
 
