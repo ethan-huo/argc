@@ -360,6 +360,34 @@ describe('cli', () => {
 
 			expect(consoleOutput.join('\n')).toContain('Invalid --input usage')
 		})
+
+		test('allows command input field named input', async () => {
+			let receivedInput: unknown
+			const schema = {
+				run: c.input(s(v.object({ input: v.string(), model: v.string() }))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'run',
+				'--input',
+				'payload',
+				'--model',
+				'x',
+			]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					run: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ input: 'payload', model: 'x' })
+		})
 	})
 
 	describe('context', () => {

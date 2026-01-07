@@ -228,12 +228,20 @@ export class CLI<
 		}
 
 		const commandDef = command['~argc']
-		const { flagsWithoutInput, inputFlag } = this.extractInputFlag(parsed.flags)
-		if (inputFlag !== undefined) {
+		const inputParams = commandDef.input
+			? extractInputParamsDetailed(commandDef.input)
+			: []
+		const inputFieldNames = new Set(inputParams.map((p) => p.name))
+		const allowSystemInput = !inputFieldNames.has('input')
+
+		const { flagsWithoutInput, inputFlag } = allowSystemInput
+			? this.extractInputFlag(parsed.flags)
+			: { flagsWithoutInput: parsed.flags, inputFlag: undefined }
+		if (allowSystemInput && inputFlag !== undefined) {
 			this.assertJsonInputUsage(flagsWithoutInput, remaining)
 		}
 		let input = this.buildInput(flagsWithoutInput, remaining, commandDef.args)
-		if (inputFlag !== undefined) {
+		if (allowSystemInput && inputFlag !== undefined) {
 			input = await this.parseJsonInput(inputFlag)
 		}
 
@@ -579,6 +587,7 @@ export class CLI<
 
 			// Extract input params with descriptions
 			const inputParams = input ? extractInputParamsDetailed(input) : []
+			const inputFieldNames = new Set(inputParams.map((p) => p.name))
 
 			// Usage line
 			let usage = `${colors.bold('Usage:')} ${colors.command(fullCommand)}`
@@ -631,7 +640,7 @@ export class CLI<
 				}
 			}
 
-			if (inputParams.length > 0) {
+			if (inputParams.length > 0 && !inputFieldNames.has('input')) {
 				console.log()
 				console.log(colors.bold('Input:'))
 				const inputType = input ? getInputTypeHint(input) : 'object'
