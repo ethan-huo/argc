@@ -7,8 +7,7 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 - **Schema-first** - Your schema IS the CLI definition
 - **Transform inputs** - Convert strings to rich objects (`Bun.file()`, dates, etc.)
 - **Arrays & Objects** - `--tag a --tag b` and `--db.host localhost` syntax
-- **Rust-style errors** - Precise error messages with `^` caret pointing to invalid fields
-- **AI-friendly** - `--schema` outputs TypeScript-like type definitions
+- **AI-native schema** - `--schema` outputs TypeScript-like types, compact outlines, and jq-like selectors
 - **Command aliases** - `ls, list` style display
 - **Nested groups** - Unlimited depth (`deploy aws lambda`)
 - **Lazy validation** - Transform only runs for executed command
@@ -197,20 +196,6 @@ Help output shows usage hints:
 --db <{ host: string, port: number }>  (use --db.<key>)
 ```
 
-## Rust-Style Error Messages
-
-Precise errors that point exactly where validation failed:
-
-```bash
-$ myapp user create --name ab --email invalid
-error: invalid arguments
-
-   --name <string>
-   ^ Invalid length: Expected >=3 but received 2
-   --email <string>  user email
-   ^ Invalid email: Received "invalid"
-```
-
 ## AI Agent Integration
 
 Run `--schema` to get a TypeScript-like type definition:
@@ -239,6 +224,14 @@ type Myapp = {
     create(name: string, email?: string)
   }
 }
+```
+
+If the schema is large, `--schema` prints a compact outline and hints for exploration. Use jq-like selectors:
+
+```bash
+myapp --schema=.user
+myapp --schema=.deploy.aws
+myapp --schema=..create
 ```
 
 Feed this to any AI agent - it instantly understands your CLI structure.
