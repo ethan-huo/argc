@@ -90,6 +90,8 @@ const schema = {
 $ myapp join a.txt b.txt c.txt
 ```
 
+Note: `...` must be used on the last positional argument.
+
 ## Transform: Schema Superpowers
 
 The killer feature. Your schema transforms CLI strings into rich objects:
