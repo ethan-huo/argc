@@ -246,16 +246,38 @@ describe('cli', () => {
 			expect(receivedInput).toEqual({ name: 'Alice' })
 		})
 
-		test('parses JSON input from file', async () => {
+		test('parses JSONC/JSON5 input', async () => {
 			let receivedInput: unknown
 			const schema = {
-				update: c.input(s(v.object({ name: v.string() }))),
+				update: c.input(
+					s(
+							v.object({
+								name: v.string(),
+								count: v.number(),
+								big: v.number(),
+								inf: v.number(),
+								tags: v.array(v.string()),
+							}),
+						),
+					),
 			}
 
-			const filePath = `.tmp-argc-input-${Date.now()}.json`
-			await Bun.write(filePath, '{"name":"FileUser"}')
-
-			process.argv = ['bun', 'cli', 'update', '--input', `@${filePath}`]
+			process.argv = [
+				'bun',
+				'cli',
+				'update',
+				'--input',
+				`
+				// comment
+				{
+				  name: 'Alice',
+				  count: +2,
+				  big: 0x10,
+				  inf: Infinity,
+				  tags: ['a', 'b',],
+				}
+				`,
+			]
 
 			const app = cli(schema, { name: 'test', version: '1.0.0' })
 			await app.run({
@@ -265,6 +287,42 @@ describe('cli', () => {
 					},
 				},
 			})
+
+			expect(receivedInput).toEqual({
+				name: 'Alice',
+				count: 2,
+				big: 16,
+				inf: Infinity,
+				tags: ['a', 'b'],
+			})
+		})
+
+		test('parses JSON input from file', async () => {
+			let receivedInput: unknown
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			const filePath = `.tmp-argc-input-${Date.now()}.json`
+			await Bun.write(filePath, '{"name":"FileUser"}')
+			try {
+				process.argv = ['bun', 'cli', 'update', '--input', `@${filePath}`]
+
+				const app = cli(schema, { name: 'test', version: '1.0.0' })
+				await app.run({
+					handlers: {
+						update: ({ input }) => {
+							receivedInput = input
+						},
+					},
+				})
+			} finally {
+				try {
+					await Bun.file(filePath).delete()
+				} catch {
+					// ignore
+				}
+			}
 
 			expect(receivedInput).toEqual({ name: 'FileUser' })
 		})
@@ -280,17 +338,24 @@ describe('cli', () => {
 				process.env.HOME = process.cwd()
 				const filePath = `.tmp-argc-input-${Date.now()}-home.json`
 				await Bun.write(filePath, '{"name":"HomeUser"}')
+				try {
+					process.argv = ['bun', 'cli', 'update', '--input', `@~/${filePath}`]
 
-				process.argv = ['bun', 'cli', 'update', '--input', `@~/${filePath}`]
-
-				const app = cli(schema, { name: 'test', version: '1.0.0' })
-				await app.run({
-					handlers: {
-						update: ({ input }) => {
-							receivedInput = input
+					const app = cli(schema, { name: 'test', version: '1.0.0' })
+					await app.run({
+						handlers: {
+							update: ({ input }) => {
+								receivedInput = input
+							},
 						},
-					},
-				})
+					})
+				} finally {
+					try {
+						await Bun.file(filePath).delete()
+					} catch {
+						// ignore
+					}
+				}
 			} finally {
 				if (originalHome === undefined) {
 					delete process.env.HOME
@@ -387,6 +452,144 @@ describe('cli', () => {
 			})
 
 			expect(receivedInput).toEqual({ input: 'payload', model: 'x' })
+		})
+	})
+
+	describe('scripting mode', () => {
+		test('--eval runs with handler-only API', async () => {
+			let received: unknown
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'--eval',
+				`
+				if ('context' in argc) throw new Error('context leaked')
+				await argc.handlers.update({ name: 'EvalUser' })
+				`,
+			]
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				context: () => ({ secret: 'x' }),
+			})
+			await app.run({
+				handlers: {
+					update: ({ input, context }) => {
+						received = { input, context }
+					},
+				},
+			})
+
+			expect(received).toEqual({ input: { name: 'EvalUser' }, context: { secret: 'x' } })
+		})
+
+		test('--script runs a TS module with default export', async () => {
+			let received: unknown
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			const filePath = `.tmp-argc-script-${Date.now()}.ts`
+			await Bun.write(
+				filePath,
+				`
+				export default async function (argc: any) {
+				  if ('context' in argc) throw new Error('context leaked')
+				  await argc.handlers.update({ name: 'ScriptUser' })
+				}
+				`,
+			)
+
+			try {
+				process.argv = ['bun', 'cli', '--script', filePath]
+
+				const app = cli(schema, { name: 'test', version: '1.0.0' })
+				await app.run({
+					handlers: {
+						update: ({ input }) => {
+							received = input
+						},
+					},
+				})
+
+				expect(received).toEqual({ name: 'ScriptUser' })
+			} finally {
+				try {
+					await Bun.file(filePath).delete()
+				} catch {
+					// ignore
+				}
+			}
+		})
+
+		test('--script exposes argc as globalThis.__argcScript for side-effect modules', async () => {
+			let received: unknown
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			const filePath = `.tmp-argc-script-sidefx-${Date.now()}.ts`
+			await Bun.write(
+				filePath,
+				`
+				const argc: any = (globalThis as any).__argcScript
+				if (!argc) throw new Error('missing __argcScript')
+				await argc.handlers.update({ name: 'SideEffectUser' })
+				`,
+			)
+
+			try {
+				process.argv = ['bun', 'cli', '--script', filePath]
+
+				const app = cli(schema, { name: 'test', version: '1.0.0' })
+				await app.run({
+					handlers: {
+						update: ({ input }) => {
+							received = input
+						},
+					},
+				})
+
+				expect(received).toEqual({ name: 'SideEffectUser' })
+			} finally {
+				try {
+					await Bun.file(filePath).delete()
+				} catch {
+					// ignore
+				}
+			}
+		})
+	})
+
+	describe('error handling', () => {
+		test('does not print stack when handler throws', async () => {
+			const schema = {
+				boom: c.input(s(v.object({}))),
+			}
+
+			process.argv = ['bun', 'cli', 'boom']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			try {
+				await app.run({
+					handlers: {
+						boom: () => {
+							throw new Error('Boom')
+						},
+					},
+				})
+			} catch {
+				// expected (process.exit mocked)
+			}
+
+			const out = consoleOutput.join('\n')
+			expect(out).toContain('Boom')
+			expect(out).not.toContain('at ')
 		})
 	})
 

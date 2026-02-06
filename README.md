@@ -172,7 +172,49 @@ You can also pipe JSON from stdin:
 $ echo '{"name":"alice","role":"admin"}' | myapp user set --input
 ```
 
+`--input` also accepts JSONC/JSON5 (comments, trailing commas, single quotes, unquoted keys, `Infinity`, `.5`, etc.):
+
+```bash
+$ myapp user set --input "{ name: 'alice', /* comment */ role: 'admin', }"
+```
+
 When using `--input`, do not pass other command flags or positionals (global options are still allowed).
+
+## Scripting Mode
+
+You can run scripts against your CLI handlers via global flags:
+
+```bash
+# Inline block
+$ myapp --eval "await argc.handlers.user.create({ name: 'alice' })"
+
+# File (TS/JS)
+$ myapp --script ./scripts/seed.ts
+
+# Read --eval code from stdin
+$ cat ./scripts/seed-snippet.js | myapp --eval
+```
+
+The script receives an `argc` object with:
+
+- `argc.handlers` - your handlers as functions, matching your schema shape
+- `argc.call` - flat map (`'user.create' -> fn`)
+- `argc.globals` - validated global options
+- `argc.args` - extra positionals passed to the script (use `--` to pass through values that look like flags)
+
+Notes:
+
+- Scripts do not receive `context` directly; they can only call handlers.
+- `--script` modules can export either `default` or `main`:
+  - `export default async function (argc) { ... }`
+  - `export async function main(argc) { ... }`
+- For `--script`, `argc` is also available as `globalThis.__argcScript` for modules that run via side effects.
+
+Example passing args:
+
+```bash
+$ myapp --script ./scripts/batch.ts -- user1 user2 user3
+```
 
 **Nested objects** - use dot notation:
 
