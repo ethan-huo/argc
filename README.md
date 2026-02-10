@@ -56,7 +56,7 @@ HELLO, WORLD!
 
 ### Positional Arguments (use sparingly)
 
-Prefer `input()` flags for agent-friendly schemas. Use positional args only when they make the CLI clearer for humans.
+Prefer `input()` flags for agent-friendly schemas. Use positional args only when they make the CLI clearer for humans. Positional args are always required. For optional parameters, use flags or `--input`.
 
 ```typescript
 const schema = {
@@ -152,6 +152,28 @@ $ myapp create --tags admin --tags dev
 # input.tags = ['admin', 'dev']
 ```
 
+**Nested objects** - use dot notation:
+
+```typescript
+c.input(s(v.object({
+  db: v.object({
+    host: v.string(),
+    port: v.number(),
+  }),
+})))
+```
+
+```bash
+$ myapp connect --db.host localhost --db.port 5432
+# input.db = { host: 'localhost', port: 5432 }
+```
+
+Help output shows usage hints:
+```
+--tags <string[]>                    (repeatable)
+--db <{ host: string, port: number }>  (use --db.<key>)
+```
+
 ## JSON Input
 
 Commands can accept a full JSON object via `--input` (useful for agents or generated payloads).
@@ -216,28 +238,6 @@ Example passing args:
 $ myapp --script ./scripts/batch.ts -- user1 user2 user3
 ```
 
-**Nested objects** - use dot notation:
-
-```typescript
-c.input(s(v.object({
-  db: v.object({
-    host: v.string(),
-    port: v.number(),
-  }),
-})))
-```
-
-```bash
-$ myapp connect --db.host localhost --db.port 5432
-# input.db = { host: 'localhost', port: 5432 }
-```
-
-Help output shows usage hints:
-```
---tags <string[]>                    (repeatable)
---db <{ host: string, port: number }>  (use --db.<key>)
-```
-
 ## AI Agent Integration
 
 Run `--schema` to get a TypeScript-like type definition:
@@ -268,15 +268,18 @@ type Myapp = {
 }
 ```
 
-If the schema is large, `--schema` prints a compact outline and hints for exploration. Use jq-like selectors:
+If the schema is large (>`schemaMaxLines`, default 100), `--schema` prints a compact outline and hints for exploration.
 
-```bash
-myapp --schema=.user
-myapp --schema=.deploy.aws
-myapp --schema=..create
-```
+Use jq-like selectors to narrow the output:
 
-Feed this to any AI agent - it instantly understands your CLI structure.
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `.name` | Navigate to child | `--schema=.user.create` |
+| `.*` | All children | `--schema=.user.*` |
+| `.{a,b}` | Specific children | `--schema=.{user,deploy}` |
+| `..name` | Recursive search | `--schema=..create` |
+
+Patterns compose: `--schema=.deploy..lambda`, `--schema=.*.list`
 
 ## Command Aliases
 
@@ -405,6 +408,7 @@ const app = cli(schema, {
   description: 'My CLI',  // optional (shown in help)
   globals: globalsSchema, // optional (global options schema)
   context: (globals) => ({ ... }),  // optional: transform globals to context
+  schemaMaxLines: 100,    // optional: --schema switches to outline above this (default: 100)
 })
 
 // Handler types inferred from app (includes context type)
@@ -419,13 +423,56 @@ app.run({
 })
 ```
 
+Each handler receives `{ input, context, meta }`:
+
+- `input` - validated command input (typed from schema)
+- `context` - value returned by `context()` option (or `undefined`)
+- `meta.path` - command path as array (`['user', 'create']`)
+- `meta.command` - command path as string (`'user create'`)
+- `meta.raw` - original argv before parsing
+
+Handlers can be registered as nested objects or flat dot-notation:
+
+```typescript
+app.run({
+  handlers: {
+    // Nested
+    user: {
+      get: ({ input }) => { ... },
+      create: ({ input }) => { ... },
+    },
+    // Flat (can mix with nested)
+    'deploy.aws.lambda': ({ input }) => { ... },
+  },
+})
+```
+
 ## Built-in Flags
 
-| Flag            | Scope       | Description                 |
-| --------------- | ----------- | --------------------------- |
-| `-h, --help`    | Everywhere  | Show help                   |
-| `-v, --version` | Root only   | Show version                |
-| `--schema`      | Root only   | Typed CLI spec for AI agents |
+| Flag | Scope | Description |
+|------|-------|-------------|
+| `-h, --help` | Everywhere | Show help |
+| `-v, --version` | Root only | Show version |
+| `--schema[=selector]` | Root only | Typed CLI spec for AI agents |
+| `--input <json\|@file>` | Command level | Pass input as JSON/JSON5 string, file, or stdin |
+| `--eval <code>` | Root only | Run inline script with handler API |
+| `--script <file>` | Root only | Run script file with handler API |
+| `--completions <shell>` | Root only | Generate shell completion script |
+
+## Shell Completions
+
+Generate and install completion scripts:
+
+```bash
+# bash
+myapp --completions bash > ~/.local/share/bash-completion/completions/myapp
+
+# zsh
+myapp --completions zsh > ~/.zfunc/_myapp  # ensure ~/.zfunc is in $fpath
+
+# fish
+myapp --completions fish > ~/.config/fish/completions/myapp.fish
+```
 
 ## Schema Libraries
 
