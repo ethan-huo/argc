@@ -826,6 +826,42 @@ describe('cli', () => {
 		})
 	})
 
+	describe('completions', () => {
+		test('--completions at root generates shell script', async () => {
+			const schema = { test: c.input(s(v.object({}))) }
+			process.argv = ['bun', 'cli', '--completions', 'bash']
+
+			const app = cli(schema, { name: 'app', version: '1.0.0' })
+			await app.run({ handlers: { test: () => {} } })
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('_app_completions')
+			expect(output).toContain('COMPREPLY')
+		})
+
+		test('--completions with subcommand falls through to handler', async () => {
+			let receivedInput: unknown
+			const schema = {
+				run: c.input(
+					s(v.object({ completions: v.optional(v.string()) })),
+				),
+			}
+
+			process.argv = ['bun', 'cli', 'run', '--completions', 'abc']
+
+			const app = cli(schema, { name: 'app', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					run: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ completions: 'abc' })
+		})
+	})
+
 	describe('unknown command', () => {
 		test('shows error and suggestion', async () => {
 			const schema = {

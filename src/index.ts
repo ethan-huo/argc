@@ -1,4 +1,6 @@
 export { CLI, cli } from './cli'
+export { complete, generateCompletionScript } from './complete'
+export type { CompletionContext } from './complete'
 export { c, CommandBuilder, group, GroupBuilder } from './command'
 export { parseArgv } from './parser'
 export { generateSchema, generateSchemaHintExample, generateSchemaOutline } from './schema'
