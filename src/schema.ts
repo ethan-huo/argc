@@ -3,6 +3,7 @@
 
 import type { Router, Schema } from './types'
 import { isCommand, isGroup } from './types'
+import { getRouterChildren } from './router'
 
 type SchemaOptions = {
 	name: string
@@ -295,12 +296,6 @@ function pascalCase(str: string): string {
 		.split(/[-_\s]+/)
 		.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
 		.join('')
-}
-
-function getRouterChildren(router: Router): { [key: string]: Router } {
-	if (isCommand(router)) return {}
-	if (isGroup(router)) return router['~argc.group'].children
-	return router
 }
 
 function renderOutlineNode(name: string, router: Router, depth: number): string {
