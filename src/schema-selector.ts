@@ -1,6 +1,7 @@
 import type { Router } from './types'
-import { isCommand, isGroup } from './types'
+
 import { group } from './command'
+import { isCommand, isGroup } from './types'
 
 export type SelectorStep =
 	| { type: 'key'; name: string }
@@ -60,10 +61,7 @@ export function parseSchemaSelector(input: string): SelectorStep[] {
 	return steps
 }
 
-export function matchSchemaSelector(
-	schema: Router,
-	steps: SelectorStep[],
-): SelectorMatch[] {
+export function matchSchemaSelector(schema: Router, steps: SelectorStep[]): SelectorMatch[] {
 	if (steps.length === 0) {
 		return [{ path: [], node: schema }]
 	}
@@ -115,11 +113,7 @@ export function matchSchemaSelector(
 	return current
 }
 
-export function buildSchemaSubset(
-	schema: Router,
-	matches: SelectorMatch[],
-	depth: number,
-): Router {
+export function buildSchemaSubset(schema: Router, matches: SelectorMatch[], depth: number): Router {
 	if (matches.length === 0) return {}
 	if (matches.some((match) => match.path.length === 0)) {
 		return sliceRouter(schema, depth)
@@ -154,7 +148,10 @@ export function sliceRouter(router: Router, depth: number): Router {
 	return children
 }
 
-function parseSegment(input: string, start: number): {
+function parseSegment(
+	input: string,
+	start: number,
+): {
 	step: SelectorStep
 	nextIndex: number
 } {

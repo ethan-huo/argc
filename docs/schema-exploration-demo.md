@@ -2,6 +2,7 @@
 
 This document explores proposed `--schema` behavior for agents using the schema in `examples/demo.ts`.
 It assumes:
+
 - `--schema` stays as-is when output <= `maxLines` (default 100).
 - If output > `maxLines`, `--schema` prints a compact outline + hints.
 - `--schema=<selector>` uses jq-like selectors and returns one level under the selected node.
@@ -33,6 +34,7 @@ hint: use --schema=.user.create
 ```
 
 Notes:
+
 - This outline is intentionally single-line per group to keep line count low.
 - Hidden commands (e.g. `config.debug`) are still shown here (current behavior).
 
@@ -221,4 +223,3 @@ type Demo = {
 - The examples above assume selector output is still in TS-like format and scoped to the selected node.
 - The compact DSL outline is optimized for low line count and low width to avoid tool truncation.
 - If a selector matches multiple branches, output includes only those branches (no unrelated siblings).
-

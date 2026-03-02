@@ -22,4 +22,3 @@ export default async function main(argc: any) {
 
 	await argc.call['db.migrate']({ step: 1, dryRun: true })
 }
-

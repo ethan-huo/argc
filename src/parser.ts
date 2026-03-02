@@ -90,11 +90,7 @@ export function parseArgv(argv: string[]): ParsedArgs {
 	return result
 }
 
-function setFlag(
-	flags: Record<string, unknown>,
-	key: string,
-	value: unknown,
-): void {
+function setFlag(flags: Record<string, unknown>, key: string, value: unknown): void {
 	// Handle dot notation: --user.name john -> { user: { name: 'john' } }
 	if (key.includes('.')) {
 		setNestedFlag(flags, key.split('.'), value)
@@ -114,11 +110,7 @@ function setFlag(
 	}
 }
 
-function setNestedFlag(
-	obj: Record<string, unknown>,
-	path: string[],
-	value: unknown,
-): void {
+function setNestedFlag(obj: Record<string, unknown>, path: string[], value: unknown): void {
 	const key = path[0]!
 
 	if (path.length === 1) {

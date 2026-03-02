@@ -1,29 +1,34 @@
-import { describe, expect, test } from 'bun:test'
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
+import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
 
 import { c, group } from './command'
-import {
-	buildSchemaSubset,
-	matchSchemaSelector,
-	parseSchemaSelector,
-} from './schema-selector'
+import { buildSchemaSubset, matchSchemaSelector, parseSchemaSelector } from './schema-selector'
 import { isGroup, isCommand } from './types'
 
 const s = toStandardJsonSchema
 
 const schema = {
-	user: group({ description: 'User' }, {
-		list: c.input(s(v.object({}))),
-		create: c.input(s(v.object({}))),
-	}),
-	deploy: group({ description: 'Deploy' }, {
-		aws: group({ description: 'AWS' }, {
-			lambda: c.input(s(v.object({}))),
-			s3: c.input(s(v.object({}))),
-		}),
-		vercel: c.input(s(v.object({}))),
-	}),
+	user: group(
+		{ description: 'User' },
+		{
+			list: c.input(s(v.object({}))),
+			create: c.input(s(v.object({}))),
+		},
+	),
+	deploy: group(
+		{ description: 'Deploy' },
+		{
+			aws: group(
+				{ description: 'AWS' },
+				{
+					lambda: c.input(s(v.object({}))),
+					s3: c.input(s(v.object({}))),
+				},
+			),
+			vercel: c.input(s(v.object({}))),
+		},
+	),
 	plain: {
 		alpha: c.input(s(v.object({}))),
 		beta: c.input(s(v.object({}))),
@@ -38,12 +43,11 @@ describe('buildSchemaSubset', () => {
 		expect(deploy).toBeDefined()
 		expect(isGroup(deploy)).toBe(true)
 		const children = (deploy as ReturnType<typeof group>)['~argc.group']
-			expect(Object.keys(children.children)).toEqual(['aws', 'vercel'])
+		expect(Object.keys(children.children)).toEqual(['aws', 'vercel'])
 		const aws = children.children['aws']
 		const vercel = children.children['vercel']
 		expect(isGroup(aws)).toBe(true)
-		expect(Object.keys((aws as ReturnType<typeof group>)['~argc.group'].children))
-			.toEqual([])
+		expect(Object.keys((aws as ReturnType<typeof group>)['~argc.group'].children)).toEqual([])
 		expect(isCommand(vercel)).toBe(true)
 	})
 

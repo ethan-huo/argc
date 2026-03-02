@@ -1,7 +1,8 @@
 import type { Router, Schema } from './types'
-import { isCommand, isGroup } from './types'
-import { extractInputParamsDetailed, type ParamInfo } from './schema'
+
 import { getRouterChildren } from './router'
+import { extractInputParamsDetailed, type ParamInfo } from './schema'
+import { isCommand, isGroup } from './types'
 
 export type CompletionContext = {
 	words: string[]
@@ -16,10 +17,7 @@ function camelCase(str: string): string {
 	return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
 }
 
-function findByAlias(
-	children: { [key: string]: Router },
-	alias: string,
-): Router | null {
+function findByAlias(children: { [key: string]: Router }, alias: string): Router | null {
 	for (const [, router] of Object.entries(children)) {
 		if (isCommand(router)) {
 			if (router['~argc'].meta.aliases?.includes(alias)) return router
@@ -39,11 +37,7 @@ function walkRouter(router: Router, words: string[]): Router {
 			i++
 			// Peek: if next word exists, doesn't start with -, and isn't a valid
 			// child of the current router, treat it as the flag's value and skip it.
-			if (
-				i < words.length &&
-				!words[i]!.startsWith('-') &&
-				!isCommand(current)
-			) {
+			if (i < words.length && !words[i]!.startsWith('-') && !isCommand(current)) {
 				const children = getRouterChildren(current)
 				const next = words[i]!
 				if (!(next in children) && !findByAlias(children, next)) {
@@ -90,10 +84,7 @@ function extractEnumValues(typeStr: string): string[] {
 	return values.length === parts.length ? values : []
 }
 
-function collectParams(
-	router: Router,
-	globals: Schema | undefined,
-): ParamInfo[] {
+function collectParams(router: Router, globals: Schema | undefined): ParamInfo[] {
 	const params: ParamInfo[] = []
 
 	if (isCommand(router) && router['~argc'].input) {
@@ -129,10 +120,7 @@ const BUILTIN_FLAGS = [
 	'--completions',
 ]
 
-function getFlagCandidates(
-	router: Router,
-	globals: Schema | undefined,
-): string[] {
+function getFlagCandidates(router: Router, globals: Schema | undefined): string[] {
 	const flags = [...BUILTIN_FLAGS]
 	const params = collectParams(router, globals)
 	for (const p of params) {
@@ -152,8 +140,7 @@ export function complete(
 	ctx: CompletionContext,
 ): string[] {
 	const { words, current } = ctx
-	const currentWord =
-		current >= 0 && current < words.length ? (words[current] ?? '') : ''
+	const currentWord = current >= 0 && current < words.length ? (words[current] ?? '') : ''
 	const preceding = words.slice(0, Math.max(0, current))
 
 	const resolved = walkRouter(router, preceding)
@@ -205,10 +192,7 @@ function sanitizeName(name: string): string {
 	return name.replace(/[^a-zA-Z0-9_]/g, '_')
 }
 
-export function generateCompletionScript(
-	shell: string,
-	programName: string,
-): string | null {
+export function generateCompletionScript(shell: string, programName: string): string | null {
 	switch (shell) {
 		case 'bash':
 			return generateBashScript(programName)

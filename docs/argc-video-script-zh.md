@@ -56,21 +56,23 @@ import { c, cli } from 'argc'
 const s = toStandardJsonSchema
 
 const schema = {
-  greet: c
-    .meta({ description: 'Greet someone' })
-    .input(s(v.object({
-      name: v.string(),
-      loud: v.optional(v.boolean(), false),
-    }))),
+	greet: c.meta({ description: 'Greet someone' }).input(
+		s(
+			v.object({
+				name: v.string(),
+				loud: v.optional(v.boolean(), false),
+			}),
+		),
+	),
 }
 
 cli(schema, { name: 'hello', version: '1.0.0' }).run({
-  handlers: {
-    greet: ({ input }) => {
-      const msg = `Hello, ${input.name}!`
-      console.log(input.loud ? msg.toUpperCase() : msg)
-    },
-  },
+	handlers: {
+		greet: ({ input }) => {
+			const msg = `Hello, ${input.name}!`
+			console.log(input.loud ? msg.toUpperCase() : msg)
+		},
+	},
 })
 ```
 
@@ -81,6 +83,7 @@ hello greet --name World --loud
 ```
 
 argc 会自动：
+
 - 解析参数
 - 应用默认值
 - 进行类型校验
@@ -104,6 +107,7 @@ argc 会自动：
 
 argc 的核心是 **Schema-first**。
 Schema 不是文档，而是命令本身：
+
 - schema 决定了 CLI 的参数结构
 - schema 决定了输入校验
 - schema 还能生成 AI-friendly 输出
@@ -117,6 +121,7 @@ Schema 不是文档，而是命令本身：
 这里是 argc 的重点：**让 agent 探索和使用 CLI**。
 
 #### 4.1 `--schema` 输出
+
 直接运行：
 
 ```
@@ -135,6 +140,7 @@ storage{...}
 并提示你用 selector 深入探索。
 
 #### 4.2 selector 语法（jq-like）
+
 selector 是 jq 风格的路径语法，用来逐级探索命令树：
 
 - `.a.b` 路径
@@ -153,6 +159,7 @@ selector 是 jq 风格的路径语法，用来逐级探索命令树：
 这样 agent 就能像“浏览文件夹”一样逐级探索。
 
 #### 4.3 用 large.ts 演示
+
 我们看 `examples/large.ts`，这里有 120 个命令，模拟复杂 CLI：
 
 ```
@@ -176,6 +183,7 @@ bun examples/large.ts --schema=.compute.alpha.create
 这个过程非常 agent-friendly。
 
 #### 4.4 JSON 输入（--input）
+
 agent 往往会生成 JSON，argc 支持直接输入：
 
 ```
@@ -197,6 +205,7 @@ cli user set --input @payload.json
 注意：使用 `--input` 时，不能再混用其他 flags/positionals。
 
 #### 4.5 Input 摘要显示
+
 在 `-h` 里，Input 会显示“顶层摘要”，比如：
 
 ```
@@ -214,6 +223,7 @@ Input:
 ### 5) 结尾（30s）
 
 总结一下：
+
 - argc 把 CLI 设计成 schema-first
 - 对开发者友好，对 agent 更友好
 - `--schema` + selector 让 agent 可以逐级探索复杂工具集

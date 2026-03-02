@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import * as v from 'valibot'
 
 import { c, cli, group } from './index'
@@ -64,10 +64,13 @@ describe('cli', () => {
 		test('routes nested command', async () => {
 			let called = ''
 			const schema = {
-				user: group({ description: 'Users' }, {
-					list: c.input(s(v.object({}))),
-					create: c.input(s(v.object({ name: v.string() }))),
-				}),
+				user: group(
+					{ description: 'Users' },
+					{
+						list: c.input(s(v.object({}))),
+						create: c.input(s(v.object({ name: v.string() }))),
+					},
+				),
 			}
 
 			process.argv = ['bun', 'cli', 'user', 'list']
@@ -115,7 +118,12 @@ describe('cli', () => {
 			let receivedInput: unknown
 			const schema = {
 				greet: c.input(
-					s(v.object({ name: v.string(), loud: v.optional(v.boolean(), false) })),
+					s(
+						v.object({
+							name: v.string(),
+							loud: v.optional(v.boolean(), false),
+						}),
+					),
 				),
 			}
 
@@ -176,9 +184,7 @@ describe('cli', () => {
 		test('handles variadic positional args', async () => {
 			let receivedInput: unknown
 			const schema = {
-				join: c
-					.args('files...')
-					.input(s(v.object({ files: v.array(v.string()) }))),
+				join: c.args('files...').input(s(v.object({ files: v.array(v.string()) }))),
 			}
 
 			process.argv = ['bun', 'cli', 'join', 'a.txt', 'b.txt', 'c.txt']
@@ -215,9 +221,7 @@ describe('cli', () => {
 				// expected
 			}
 
-			expect(consoleOutput.join('\n')).toContain(
-				'Invalid args: variadic argument must be last',
-			)
+			expect(consoleOutput.join('\n')).toContain('Invalid args: variadic argument must be last')
 		})
 
 		test('parses JSON input', async () => {
@@ -226,13 +230,7 @@ describe('cli', () => {
 				update: c.input(s(v.object({ name: v.string() }))),
 			}
 
-			process.argv = [
-				'bun',
-				'cli',
-				'update',
-				'--input',
-				'{"name":"Alice"}',
-			]
+			process.argv = ['bun', 'cli', 'update', '--input', '{"name":"Alice"}']
 
 			const app = cli(schema, { name: 'test', version: '1.0.0' })
 			await app.run({
@@ -251,15 +249,15 @@ describe('cli', () => {
 			const schema = {
 				update: c.input(
 					s(
-							v.object({
-								name: v.string(),
-								count: v.number(),
-								big: v.number(),
-								inf: v.number(),
-								tags: v.array(v.string()),
-							}),
-						),
+						v.object({
+							name: v.string(),
+							count: v.number(),
+							big: v.number(),
+							inf: v.number(),
+							tags: v.array(v.string()),
+						}),
 					),
+				),
 			}
 
 			process.argv = [
@@ -372,15 +370,7 @@ describe('cli', () => {
 				greet: c.input(s(v.object({ name: v.string() }))),
 			}
 
-			process.argv = [
-				'bun',
-				'cli',
-				'greet',
-				'--input',
-				'{"name":"Alice"}',
-				'--name',
-				'Bob',
-			]
+			process.argv = ['bun', 'cli', 'greet', '--input', '{"name":"Alice"}', '--name', 'Bob']
 
 			const app = cli(schema, { name: 'test', version: '1.0.0' })
 			try {
@@ -398,19 +388,10 @@ describe('cli', () => {
 
 		test('rejects positionals with --input', async () => {
 			const schema = {
-				greet: c
-					.args('name')
-					.input(s(v.object({ name: v.string() }))),
+				greet: c.args('name').input(s(v.object({ name: v.string() }))),
 			}
 
-			process.argv = [
-				'bun',
-				'cli',
-				'greet',
-				'World',
-				'--input',
-				'{"name":"Alice"}',
-			]
+			process.argv = ['bun', 'cli', 'greet', 'World', '--input', '{"name":"Alice"}']
 
 			const app = cli(schema, { name: 'test', version: '1.0.0' })
 			try {
@@ -432,15 +413,7 @@ describe('cli', () => {
 				run: c.input(s(v.object({ input: v.string(), model: v.string() }))),
 			}
 
-			process.argv = [
-				'bun',
-				'cli',
-				'run',
-				'--input',
-				'payload',
-				'--model',
-				'x',
-			]
+			process.argv = ['bun', 'cli', 'run', '--input', 'payload', '--model', 'x']
 
 			const app = cli(schema, { name: 'test', version: '1.0.0' })
 			await app.run({
@@ -485,7 +458,10 @@ describe('cli', () => {
 				},
 			})
 
-			expect(received).toEqual({ input: { name: 'EvalUser' }, context: { secret: 'x' } })
+			expect(received).toEqual({
+				input: { name: 'EvalUser' },
+				context: { secret: 'x' },
+			})
 		})
 
 		test('--script runs a TS module with default export', async () => {
@@ -726,7 +702,11 @@ describe('cli', () => {
 						examples: ['app greet --name John'],
 					})
 					.input(
-						s(v.object({ name: v.pipe(v.string(), v.description('Person name')) })),
+						s(
+							v.object({
+								name: v.pipe(v.string(), v.description('Person name')),
+							}),
+						),
 					),
 			}
 
@@ -805,9 +785,7 @@ describe('cli', () => {
 
 		test('shows error for invalid value', async () => {
 			const schema = {
-				greet: c.input(
-					s(v.object({ name: v.pipe(v.string(), v.minLength(3)) })),
-				),
+				greet: c.input(s(v.object({ name: v.pipe(v.string(), v.minLength(3)) }))),
 			}
 
 			process.argv = ['bun', 'cli', 'greet', '--name', 'ab']
@@ -842,9 +820,7 @@ describe('cli', () => {
 		test('--completions with subcommand falls through to handler', async () => {
 			let receivedInput: unknown
 			const schema = {
-				run: c.input(
-					s(v.object({ completions: v.optional(v.string()) })),
-				),
+				run: c.input(s(v.object({ completions: v.optional(v.string()) }))),
 			}
 
 			process.argv = ['bun', 'cli', 'run', '--completions', 'abc']

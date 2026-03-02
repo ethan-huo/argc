@@ -31,21 +31,23 @@ import { c, cli } from 'argc'
 const s = toStandardJsonSchema
 
 const schema = {
-  greet: c
-    .meta({ description: 'Greet someone' })
-    .input(s(v.object({
-      name: v.pipe(v.string(), v.minLength(2)),
-      loud: v.optional(v.boolean(), false),
-    }))),
+	greet: c.meta({ description: 'Greet someone' }).input(
+		s(
+			v.object({
+				name: v.pipe(v.string(), v.minLength(2)),
+				loud: v.optional(v.boolean(), false),
+			}),
+		),
+	),
 }
 
 cli(schema, { name: 'hello', version: '1.0.0' }).run({
-  handlers: {
-    greet: ({ input }) => {
-      const msg = `Hello, ${input.name}!`
-      console.log(input.loud ? msg.toUpperCase() : msg)
-    },
-  },
+	handlers: {
+		greet: ({ input }) => {
+			const msg = `Hello, ${input.name}!`
+			console.log(input.loud ? msg.toUpperCase() : msg)
+		},
+	},
 })
 ```
 
@@ -60,13 +62,17 @@ Prefer `input()` flags for agent-friendly schemas. Use positional args only when
 
 ```typescript
 const schema = {
-  env: c
-    .meta({ description: 'Set an env var' })
-    .args('key', 'value')
-    .input(s(v.object({
-      key: v.string(),
-      value: v.string(),
-    }))),
+	env: c
+		.meta({ description: 'Set an env var' })
+		.args('key', 'value')
+		.input(
+			s(
+				v.object({
+					key: v.string(),
+					value: v.string(),
+				}),
+			),
+		),
 }
 ```
 
@@ -78,10 +84,10 @@ Variadic positional args are supported by adding `...` to the last arg name:
 
 ```typescript
 const schema = {
-  join: c
-    .meta({ description: 'Join files' })
-    .args('files...')
-    .input(s(v.object({ files: v.array(v.string()) }))),
+	join: c
+		.meta({ description: 'Join files' })
+		.args('files...')
+		.input(s(v.object({ files: v.array(v.string()) }))),
 }
 ```
 
@@ -126,13 +132,23 @@ More transform examples:
 
 ```typescript
 // String → Date
-startDate: v.pipe(v.string(), v.transform((s) => new Date(s)))
+startDate: v.pipe(
+	v.string(),
+	v.transform((s) => new Date(s)),
+)
 
 // String → URL with validation
-endpoint: v.pipe(v.string(), v.url(), v.transform((s) => new URL(s)))
+endpoint: v.pipe(
+	v.string(),
+	v.url(),
+	v.transform((s) => new URL(s)),
+)
 
 // String → Glob patterns
-pattern: v.pipe(v.string(), v.transform((p) => new Bun.Glob(p)))
+pattern: v.pipe(
+	v.string(),
+	v.transform((p) => new Bun.Glob(p)),
+)
 ```
 
 ## Arrays & Nested Objects
@@ -142,9 +158,13 @@ Define complex types in your schema - argc handles the CLI input automatically.
 **Arrays** - repeat the flag:
 
 ```typescript
-c.input(s(v.object({
-  tags: v.array(v.string()),
-})))
+c.input(
+	s(
+		v.object({
+			tags: v.array(v.string()),
+		}),
+	),
+)
 ```
 
 ```bash
@@ -155,12 +175,16 @@ $ myapp create --tags admin --tags dev
 **Nested objects** - use dot notation:
 
 ```typescript
-c.input(s(v.object({
-  db: v.object({
-    host: v.string(),
-    port: v.number(),
-  }),
-})))
+c.input(
+	s(
+		v.object({
+			db: v.object({
+				host: v.string(),
+				port: v.number(),
+			}),
+		}),
+	),
+)
 ```
 
 ```bash
@@ -169,6 +193,7 @@ $ myapp connect --db.host localhost --db.port 5432
 ```
 
 Help output shows usage hints:
+
 ```
 --tags <string[]>                    (repeatable)
 --db <{ host: string, port: number }>  (use --db.<key>)
@@ -272,12 +297,12 @@ If the schema is large (>`schemaMaxLines`, default 100), `--schema` prints a com
 
 Use jq-like selectors to narrow the output:
 
-| Pattern | Meaning | Example |
-|---------|---------|---------|
-| `.name` | Navigate to child | `--schema=.user.create` |
-| `.*` | All children | `--schema=.user.*` |
+| Pattern  | Meaning           | Example                   |
+| -------- | ----------------- | ------------------------- |
+| `.name`  | Navigate to child | `--schema=.user.create`   |
+| `.*`     | All children      | `--schema=.user.*`        |
 | `.{a,b}` | Specific children | `--schema=.{user,deploy}` |
-| `..name` | Recursive search | `--schema=..create` |
+| `..name` | Recursive search  | `--schema=..create`       |
 
 Patterns compose: `--schema=.deploy..lambda`, `--schema=.*.list`
 
@@ -299,6 +324,7 @@ Commands:
 ```
 
 Routing works automatically:
+
 ```bash
 $ myapp user ls      # routes to 'list' handler
 $ myapp user l       # routes to 'list' handler
@@ -331,28 +357,28 @@ Transform global options into a typed context available in all handlers:
 
 ```typescript
 const app = cli(schema, {
-  name: 'myapp',
-  version: '1.0.0',
-  globals: s(v.object({
-    env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),
-    verbose: v.optional(v.boolean(), false),
-  })),
-  // Transform globals into context (type inferred from return value)
-  context: (globals) => ({
-    env: globals.env,
-    log: globals.verbose
-      ? (msg: string) => console.log(`[${globals.env}]`, msg)
-      : () => {},
-  }),
+	name: 'myapp',
+	version: '1.0.0',
+	globals: s(
+		v.object({
+			env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),
+			verbose: v.optional(v.boolean(), false),
+		}),
+	),
+	// Transform globals into context (type inferred from return value)
+	context: (globals) => ({
+		env: globals.env,
+		log: globals.verbose ? (msg: string) => console.log(`[${globals.env}]`, msg) : () => {},
+	}),
 })
 
 app.run({
-  handlers: {
-    deploy: ({ input, context }) => {
-      context.log('Starting deployment...')  // Only logs if --verbose
-      // context.env is typed as 'dev' | 'staging' | 'prod'
-    },
-  },
+	handlers: {
+		deploy: ({ input, context }) => {
+			context.log('Starting deployment...') // Only logs if --verbose
+			// context.env is typed as 'dev' | 'staging' | 'prod'
+		},
+	},
 })
 ```
 
@@ -379,14 +405,14 @@ The most similar command is
 
 ```typescript
 c.meta({
-  description: 'Command description',
-  aliases: ['alias1', 'alias2'],
-  examples: ['myapp cmd --flag value'],
-  deprecated: true,   // shows warning
-  hidden: true,       // hides from help
+	description: 'Command description',
+	aliases: ['alias1', 'alias2'],
+	examples: ['myapp cmd --flag value'],
+	deprecated: true, // shows warning
+	hidden: true, // hides from help
 })
-.args('positional1', 'positional2')  // positional arguments (in order)
-.input(schema)                        // Standard JSON Schema (still required)
+	.args('positional1', 'positional2') // positional arguments (in order)
+	.input(schema) // Standard JSON Schema (still required)
 ```
 
 ### `group()` - Command Group
@@ -449,15 +475,15 @@ app.run({
 
 ## Built-in Flags
 
-| Flag | Scope | Description |
-|------|-------|-------------|
-| `-h, --help` | Everywhere | Show help |
-| `-v, --version` | Root only | Show version |
-| `--schema[=selector]` | Root only | Typed CLI spec for AI agents |
+| Flag                    | Scope         | Description                                     |
+| ----------------------- | ------------- | ----------------------------------------------- |
+| `-h, --help`            | Everywhere    | Show help                                       |
+| `-v, --version`         | Root only     | Show version                                    |
+| `--schema[=selector]`   | Root only     | Typed CLI spec for AI agents                    |
 | `--input <json\|@file>` | Command level | Pass input as JSON/JSON5 string, file, or stdin |
-| `--eval <code>` | Root only | Run inline script with handler API |
-| `--script <file>` | Root only | Run script file with handler API |
-| `--completions <shell>` | Root only | Generate shell completion script |
+| `--eval <code>`         | Root only     | Run inline script with handler API              |
+| `--script <file>`       | Root only     | Run script file with handler API                |
+| `--completions <shell>` | Root only     | Generate shell completion script                |
 
 ## Shell Completions
 
@@ -485,7 +511,7 @@ argc requires schemas that implement both `StandardSchemaV1` (validation) and `S
 import { z } from 'zod'
 c.input(z.object({ name: z.string() }))
 
-// arktype - works directly  
+// arktype - works directly
 import { type } from 'arktype'
 c.input(type({ name: 'string' }))
 ```
@@ -579,49 +605,67 @@ import * as tables from './db/schema'
 const s = toStandardJsonSchema
 
 const schema = {
-  user: group({ description: 'User management' }, {
-    list: c
-      .meta({ description: 'List users', aliases: ['ls'] })
-      .input(s(v.object({
-        format: v.optional(v.picklist(['json', 'table']), 'table'),
-      }))),
+	user: group(
+		{ description: 'User management' },
+		{
+			list: c.meta({ description: 'List users', aliases: ['ls'] }).input(
+				s(
+					v.object({
+						format: v.optional(v.picklist(['json', 'table']), 'table'),
+					}),
+				),
+			),
 
-    create: c
-      .meta({
-        description: 'Create user',
-        examples: ['myapp user create --name john --email john@example.com'],
-      })
-      .input(s(v.object({
-        name: v.pipe(v.string(), v.minLength(3)),
-        email: v.optional(v.pipe(v.string(), v.email())),
-      }))),
-  }),
+			create: c
+				.meta({
+					description: 'Create user',
+					examples: ['myapp user create --name john --email john@example.com'],
+				})
+				.input(
+					s(
+						v.object({
+							name: v.pipe(v.string(), v.minLength(3)),
+							email: v.optional(v.pipe(v.string(), v.email())),
+						}),
+					),
+				),
+		},
+	),
 
-  db: group({ description: 'Database operations' }, {
-    seed: c
-      .meta({ description: 'Seed from JSON file' })
-      .args('file')
-      .input(s(v.object({
-        file: v.pipe(
-          v.string(),
-          v.endsWith('.json'),
-          v.transform((path) => Bun.file(path).json()),
-        ),
-      }))),
-  }),
+	db: group(
+		{ description: 'Database operations' },
+		{
+			seed: c
+				.meta({ description: 'Seed from JSON file' })
+				.args('file')
+				.input(
+					s(
+						v.object({
+							file: v.pipe(
+								v.string(),
+								v.endsWith('.json'),
+								v.transform((path) => Bun.file(path).json()),
+							),
+						}),
+					),
+				),
+		},
+	),
 }
 
 // Create app with context (type inferred from return value)
 const app = cli(schema, {
-  name: 'myapp',
-  version: '1.0.0',
-  globals: s(v.object({
-    verbose: v.optional(v.boolean(), false),
-  })),
-  context: (globals) => ({
-    db: drizzle(postgres(process.env.DATABASE_URL!)),
-    log: globals.verbose ? console.log : () => {},
-  }),
+	name: 'myapp',
+	version: '1.0.0',
+	globals: s(
+		v.object({
+			verbose: v.optional(v.boolean(), false),
+		}),
+	),
+	context: (globals) => ({
+		db: drizzle(postgres(process.env.DATABASE_URL!)),
+		log: globals.verbose ? console.log : () => {},
+	}),
 })
 
 // Handler types include context
@@ -629,31 +673,31 @@ export type AppHandlers = typeof app.Handlers
 
 // Run with handlers only
 app.run({
-  handlers: {
-    user: {
-      list: async ({ input, context }) => {
-        context.log('Listing users...')
-        const users = await context.db.select().from(tables.users)
-        console.log(input.format === 'json' ? JSON.stringify(users) : users)
-      },
-      create: async ({ input, context }) => {
-        context.log('Creating user...')
-        await context.db.insert(tables.users).values({
-          name: input.name,
-          email: input.email,
-        })
-        console.log('Created:', input.name)
-      },
-    },
-    db: {
-      seed: async ({ input, context }) => {
-        const data = await input.file
-        context.log('Seeding database...')
-        await context.db.insert(tables.users).values(data.users)
-        console.log('Seeded:', data.users.length, 'users')
-      },
-    },
-  },
+	handlers: {
+		user: {
+			list: async ({ input, context }) => {
+				context.log('Listing users...')
+				const users = await context.db.select().from(tables.users)
+				console.log(input.format === 'json' ? JSON.stringify(users) : users)
+			},
+			create: async ({ input, context }) => {
+				context.log('Creating user...')
+				await context.db.insert(tables.users).values({
+					name: input.name,
+					email: input.email,
+				})
+				console.log('Created:', input.name)
+			},
+		},
+		db: {
+			seed: async ({ input, context }) => {
+				const data = await input.file
+				context.log('Seeding database...')
+				await context.db.insert(tables.users).values(data.users)
+				console.log('Seeded:', data.users.length, 'users')
+			},
+		},
+	},
 })
 ```
 

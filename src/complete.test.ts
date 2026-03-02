@@ -1,39 +1,35 @@
-import { describe, expect, test } from 'bun:test'
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
+import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
 
-import { c, group } from './index'
 import { complete, generateCompletionScript } from './complete'
+import { c, group } from './index'
 
 const s = toStandardJsonSchema
 
 const schema = {
-	user: group({ description: 'User management' }, {
-		list: c
-			.meta({ aliases: ['ls'] })
-			.input(
+	user: group(
+		{ description: 'User management' },
+		{
+			list: c.meta({ aliases: ['ls'] }).input(
 				s(
 					v.object({
-						format: v.optional(
-							v.picklist(['json', 'table', 'csv']),
-							'table',
-						),
+						format: v.optional(v.picklist(['json', 'table', 'csv']), 'table'),
 						verbose: v.optional(v.boolean(), false),
 					}),
 				),
 			),
-		create: c.input(
-			s(
-				v.object({
-					name: v.string(),
-					email: v.optional(v.string()),
-				}),
+			create: c.input(
+				s(
+					v.object({
+						name: v.string(),
+						email: v.optional(v.string()),
+					}),
+				),
 			),
-		),
-		delete: c
-			.meta({ hidden: true })
-			.input(s(v.object({ id: v.string() }))),
-	}),
+			delete: c.meta({ hidden: true }).input(s(v.object({ id: v.string() }))),
+		},
+	),
 	config: c
 		.meta({ description: 'Show config' })
 		.args('key')
@@ -185,9 +181,12 @@ describe('complete', () => {
 	test('skips flag values during tree walk', () => {
 		// --env dev should be skipped as flag+value, then resolve "user" as subcommand
 		const schema2 = {
-			user: group({ description: 'Users' }, {
-				list: c.input(s(v.object({}))),
-			}),
+			user: group(
+				{ description: 'Users' },
+				{
+					list: c.input(s(v.object({}))),
+				},
+			),
 		}
 		const g = s(v.object({ env: v.optional(v.string()) }))
 
@@ -203,9 +202,12 @@ describe('complete', () => {
 	test('does not skip flag value when it matches a subcommand', () => {
 		// --verbose is boolean, next word "user" IS a valid subcommand
 		const schema2 = {
-			user: group({ description: 'Users' }, {
-				list: c.input(s(v.object({}))),
-			}),
+			user: group(
+				{ description: 'Users' },
+				{
+					list: c.input(s(v.object({}))),
+				},
+			),
 		}
 
 		// Simulates: mycli --verbose user <TAB>

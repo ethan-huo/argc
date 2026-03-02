@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+
 import { parseSchemaSelector } from './schema-selector'
 
 describe('parseSchemaSelector', () => {
@@ -47,9 +48,7 @@ describe('parseSchemaSelector', () => {
 	})
 
 	test('rejects missing dot', () => {
-		expect(() => parseSchemaSelector('user.create')).toThrow(
-			'Selector must start with "."',
-		)
+		expect(() => parseSchemaSelector('user.create')).toThrow('Selector must start with "."')
 	})
 
 	test('rejects empty selector', () => {
@@ -57,14 +56,10 @@ describe('parseSchemaSelector', () => {
 	})
 
 	test('rejects trailing dot', () => {
-		expect(() => parseSchemaSelector('.user.')).toThrow(
-			'Expected identifier',
-		)
+		expect(() => parseSchemaSelector('.user.')).toThrow('Expected identifier')
 	})
 
 	test('rejects empty set', () => {
-		expect(() => parseSchemaSelector('.{}')).toThrow(
-			'Selector set cannot be empty',
-		)
+		expect(() => parseSchemaSelector('.{}')).toThrow('Selector set cannot be empty')
 	})
 })

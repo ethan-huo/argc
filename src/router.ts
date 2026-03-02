@@ -1,4 +1,5 @@
 import type { Router } from './types'
+
 import { isCommand, isGroup } from './types'
 
 export function getRouterChildren(router: Router): { [key: string]: Router } {
@@ -19,11 +20,7 @@ export function findHandler(
 	let current: unknown = handlers
 
 	for (const segment of path) {
-		if (
-			typeof current === 'object' &&
-			current !== null &&
-			segment in current
-		) {
+		if (typeof current === 'object' && current !== null && segment in current) {
 			current = (current as Record<string, unknown>)[segment]
 		} else {
 			return null

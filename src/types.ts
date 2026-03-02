@@ -1,17 +1,11 @@
-import type {
-	StandardJSONSchemaV1,
-	StandardSchemaV1,
-} from '@standard-schema/spec'
+import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
 
 // Re-export Standard Schema types
 export type { StandardJSONSchemaV1, StandardSchemaV1 }
 
 // Schema type: validation + JSON Schema generation
 // This is what argc requires - a schema that can both validate AND generate JSON Schema
-export type Schema<TInput = unknown, TOutput = TInput> = StandardSchemaV1<
-	TInput,
-	TOutput
-> &
+export type Schema<TInput = unknown, TOutput = TInput> = StandardSchemaV1<TInput, TOutput> &
 	StandardJSONSchemaV1<TInput, TOutput>
 
 // ============ Command Types ============
@@ -46,9 +40,7 @@ export type GroupMeta = {
 	hidden?: boolean
 }
 
-export type GroupDef<
-	TChildren extends { [key: string]: Router } = { [key: string]: Router },
-> = {
+export type GroupDef<TChildren extends { [key: string]: Router } = { [key: string]: Router }> = {
 	'~argc.group': {
 		meta: GroupMeta
 		children: TChildren
@@ -67,18 +59,13 @@ export type Router = AnyCommand | AnyGroup | { [key: string]: Router }
 
 // ============ CLI Options ============
 
-export type CLIOptions<
-	TGlobals extends Schema = Schema,
-	TContext = undefined,
-> = {
+export type CLIOptions<TGlobals extends Schema = Schema, TContext = undefined> = {
 	name: string
 	version: string
 	description?: string
 	schemaMaxLines?: number
 	globals?: TGlobals
-	context?: (
-		globals: StandardSchemaV1.InferOutput<TGlobals>,
-	) => TContext | Promise<TContext>
+	context?: (globals: StandardSchemaV1.InferOutput<TGlobals>) => TContext | Promise<TContext>
 }
 
 // ============ Handler Types ============
@@ -142,10 +129,7 @@ export function isCommand(x: unknown): x is AnyCommand {
  * export const runGet: AppHandlers['get'] = ({ input }) => { ... }
  * ```
  */
-export type InferHandlers<
-	TSchema extends Router,
-	TContext = unknown,
-> = Handlers<TSchema, TContext>
+export type InferHandlers<TSchema extends Router, TContext = unknown> = Handlers<TSchema, TContext>
 
 /**
  * Infer the input type for a specific command path.
@@ -156,18 +140,16 @@ export type InferHandlers<
  * type UserCreateInput = InferInput<typeof schema, 'user.create'>
  * ```
  */
-export type InferInput<
-	TSchema extends Router,
-	TPath extends string,
-> = TSchema extends GroupDef<infer TChildren>
-	? InferInputFromRouter<TChildren, TPath>
-	: TSchema extends CommandDef<infer TInput>
-		? TPath extends ''
-			? StandardSchemaV1.InferOutput<TInput>
-			: never
-		: TSchema extends { [key: string]: Router }
-			? InferInputFromRouter<TSchema, TPath>
-			: never
+export type InferInput<TSchema extends Router, TPath extends string> =
+	TSchema extends GroupDef<infer TChildren>
+		? InferInputFromRouter<TChildren, TPath>
+		: TSchema extends CommandDef<infer TInput>
+			? TPath extends ''
+				? StandardSchemaV1.InferOutput<TInput>
+				: never
+			: TSchema extends { [key: string]: Router }
+				? InferInputFromRouter<TSchema, TPath>
+				: never
 
 // Helper: navigate through a plain router object
 type InferInputFromRouter<
@@ -211,22 +193,17 @@ export type InferHandler<
  * const runGet: AppHandlers['user.get'] = ...  // instead of ['user']['get']
  * ```
  */
-export type FlatHandlers<T, Prefix extends string = ''> = T extends Handler<
-	infer I,
-	infer C
->
-	? { [K in Prefix]: Handler<I, C> }
-	: {
-			[K in keyof T & string]: FlatHandlers<
-				T[K],
-				Prefix extends '' ? K : `${Prefix}.${K}`
-			>
-		}[keyof T & string]
+export type FlatHandlers<T, Prefix extends string = ''> =
+	T extends Handler<infer I, infer C>
+		? { [K in Prefix]: Handler<I, C> }
+		: {
+				[K in keyof T & string]: FlatHandlers<T[K], Prefix extends '' ? K : `${Prefix}.${K}`>
+			}[keyof T & string]
 
 // Convert union to intersection: { a: 1 } | { b: 2 } → { a: 1 } & { b: 2 }
-type UnionToIntersection<U> = (
-	U extends unknown ? (k: U) => void : never
-) extends (k: infer I) => void
+type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
+	k: infer I,
+) => void
 	? I
 	: never
 

@@ -2,8 +2,9 @@
 // Uses Standard JSON Schema (StandardJSONSchemaV1) for schema introspection
 
 import type { Router, Schema } from './types'
-import { isCommand, isGroup } from './types'
+
 import { getRouterChildren } from './router'
+import { isCommand, isGroup } from './types'
 
 type SchemaOptions = {
 	name: string
@@ -62,9 +63,7 @@ function jsonSchemaToTypeString(schema: JSONSchema): string {
 			return 'unknown[]'
 		}
 		case 'object': {
-			const properties = schema.properties as
-				| Record<string, JSONSchema>
-				| undefined
+			const properties = schema.properties as Record<string, JSONSchema> | undefined
 			if (!properties) return 'object'
 
 			const required = new Set((schema.required as string[]) ?? [])
@@ -104,9 +103,7 @@ function extractInputParamsDetailed(schema: Schema): ParamInfo[] {
 	}
 
 	const params: ParamInfo[] = []
-	const properties = jsonSchema.properties as
-		| Record<string, JSONSchema>
-		| undefined
+	const properties = jsonSchema.properties as Record<string, JSONSchema> | undefined
 	if (!properties) return []
 
 	const required = new Set((jsonSchema.required as string[]) ?? [])
@@ -164,11 +161,7 @@ export function getInputTypeHint(schema: Schema): string {
 // Export for cli.ts help display
 export { extractInputParamsDetailed, type ParamInfo }
 
-function generateCommandSchema(
-	name: string,
-	router: Router,
-	indent: string,
-): string[] {
+function generateCommandSchema(name: string, router: Router, indent: string): string[] {
 	const lines: string[] = []
 
 	if (isCommand(router)) {
@@ -264,10 +257,7 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 	return lines.join('\n')
 }
 
-export function generateSchemaOutline(
-	schema: Router,
-	depth: number = 2,
-): string[] {
+export function generateSchemaOutline(schema: Router, depth: number = 2): string[] {
 	const children = getRouterChildren(schema)
 	const lines: string[] = []
 	for (const [name, child] of Object.entries(children)) {
@@ -309,11 +299,7 @@ function renderOutlineNode(name: string, router: Router, depth: number): string 
 	return `${name}{${parts.join(',')}}`
 }
 
-function findDeepPath(
-	router: Router,
-	path: string[],
-	minDepth: number,
-): string[] | null {
+function findDeepPath(router: Router, path: string[], minDepth: number): string[] | null {
 	if (minDepth <= 1) return path
 	if (isCommand(router)) return null
 	const children = getRouterChildren(router)

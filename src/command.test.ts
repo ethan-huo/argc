@@ -53,10 +53,7 @@ describe('CommandBuilder', () => {
 		})
 
 		test('sets positional args as objects', () => {
-			const cmd = c.args(
-				{ name: 'file', description: 'Input file' },
-				{ name: 'dest' },
-			)
+			const cmd = c.args({ name: 'file', description: 'Input file' }, { name: 'dest' })
 			expect(cmd['~argc'].args).toEqual([
 				{ name: 'file', description: 'Input file' },
 				{ name: 'dest' },
@@ -137,10 +134,13 @@ describe('GroupBuilder', () => {
 
 describe('group() function', () => {
 	test('creates GroupDef', () => {
-		const grp = group({ description: 'User commands' }, {
-			list: c.meta({ description: 'List users' }),
-			create: c.meta({ description: 'Create user' }),
-		})
+		const grp = group(
+			{ description: 'User commands' },
+			{
+				list: c.meta({ description: 'List users' }),
+				create: c.meta({ description: 'Create user' }),
+			},
+		)
 
 		expect(isGroup(grp)).toBe(true)
 		expect(grp['~argc.group'].meta.description).toBe('User commands')
@@ -148,11 +148,17 @@ describe('group() function', () => {
 	})
 
 	test('nested groups', () => {
-		const grp = group({ description: 'Deploy' }, {
-			aws: group({ description: 'AWS' }, {
-				lambda: c.meta({ description: 'Lambda' }),
-			}),
-		})
+		const grp = group(
+			{ description: 'Deploy' },
+			{
+				aws: group(
+					{ description: 'AWS' },
+					{
+						lambda: c.meta({ description: 'Lambda' }),
+					},
+				),
+			},
+		)
 
 		expect(isGroup(grp)).toBe(true)
 		expect(isGroup(grp['~argc.group'].children.aws)).toBe(true)

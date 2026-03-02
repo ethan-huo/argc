@@ -1,18 +1,21 @@
-import { describe, expect, test } from 'bun:test'
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
+import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
 
 import { c, group } from './command'
-import { generateSchema, generateSchemaHintExample, generateSchemaOutline, getInputTypeHint } from './schema'
+import {
+	generateSchema,
+	generateSchemaHintExample,
+	generateSchemaOutline,
+	getInputTypeHint,
+} from './schema'
 
 const s = toStandardJsonSchema
 
 describe('generateSchema', () => {
 	test('simple command', () => {
 		const schema = {
-			greet: c.meta({ description: 'Say hello' }).input(
-				s(v.object({ name: v.string() })),
-			),
+			greet: c.meta({ description: 'Say hello' }).input(s(v.object({ name: v.string() }))),
 		}
 
 		const output = generateSchema(schema, { name: 'app' })
@@ -40,9 +43,7 @@ describe('generateSchema', () => {
 
 	test('command with defaults', () => {
 		const schema = {
-			run: c.input(
-				s(v.object({ port: v.optional(v.number(), 3000) })),
-			),
+			run: c.input(s(v.object({ port: v.optional(v.number(), 3000) }))),
 		}
 
 		const output = generateSchema(schema, { name: 'server' })
@@ -51,12 +52,13 @@ describe('generateSchema', () => {
 
 	test('grouped commands', () => {
 		const schema = {
-			user: group({ description: 'User management' }, {
-				list: c.meta({ description: 'List users' }).input(s(v.object({}))),
-				create: c.meta({ description: 'Create user' }).input(
-					s(v.object({ name: v.string() })),
-				),
-			}),
+			user: group(
+				{ description: 'User management' },
+				{
+					list: c.meta({ description: 'List users' }).input(s(v.object({}))),
+					create: c.meta({ description: 'Create user' }).input(s(v.object({ name: v.string() }))),
+				},
+			),
 		}
 
 		const output = generateSchema(schema, { name: 'admin' })
@@ -70,11 +72,17 @@ describe('generateSchema', () => {
 
 	test('nested groups', () => {
 		const schema = {
-			deploy: group({ description: 'Deployment' }, {
-				aws: group({ description: 'AWS' }, {
-					lambda: c.input(s(v.object({}))),
-				}),
-			}),
+			deploy: group(
+				{ description: 'Deployment' },
+				{
+					aws: group(
+						{ description: 'AWS' },
+						{
+							lambda: c.input(s(v.object({}))),
+						},
+					),
+				},
+			),
 		}
 
 		const output = generateSchema(schema, { name: 'cli' })
@@ -121,9 +129,7 @@ describe('generateSchema', () => {
 
 	test('deprecated command', () => {
 		const schema = {
-			old: c.meta({ description: 'Old command', deprecated: true }).input(
-				s(v.object({})),
-			),
+			old: c.meta({ description: 'Old command', deprecated: true }).input(s(v.object({}))),
 		}
 
 		const output = generateSchema(schema, { name: 'app' })
@@ -156,9 +162,7 @@ describe('generateSchema', () => {
 
 	test('enum/picklist type', () => {
 		const schema = {
-			cmd: c.input(
-				s(v.object({ env: v.picklist(['dev', 'prod']) })),
-			),
+			cmd: c.input(s(v.object({ env: v.picklist(['dev', 'prod']) }))),
 		}
 
 		const output = generateSchema(schema, { name: 'app' })
@@ -182,13 +186,19 @@ describe('generateSchema', () => {
 
 	test('compact outline', () => {
 		const schema = {
-			deploy: group({ description: 'Deploy' }, {
-				aws: group({ description: 'AWS' }, {
-					lambda: c.input(s(v.object({}))),
-					s3: c.input(s(v.object({}))),
-				}),
-				vercel: c.input(s(v.object({}))),
-			}),
+			deploy: group(
+				{ description: 'Deploy' },
+				{
+					aws: group(
+						{ description: 'AWS' },
+						{
+							lambda: c.input(s(v.object({}))),
+							s3: c.input(s(v.object({}))),
+						},
+					),
+					vercel: c.input(s(v.object({}))),
+				},
+			),
 		}
 
 		const lines = generateSchemaOutline(schema, 2)
@@ -197,13 +207,19 @@ describe('generateSchema', () => {
 
 	test('outline hints', () => {
 		const schema = {
-			user: group({ description: 'User' }, {
-				list: c.input(s(v.object({}))),
-				create: c.input(s(v.object({}))),
-			}),
-			config: group({ description: 'Config' }, {
-				get: c.input(s(v.object({}))),
-			}),
+			user: group(
+				{ description: 'User' },
+				{
+					list: c.input(s(v.object({}))),
+					create: c.input(s(v.object({}))),
+				},
+			),
+			config: group(
+				{ description: 'Config' },
+				{
+					get: c.input(s(v.object({}))),
+				},
+			),
 		}
 
 		const hint = generateSchemaHintExample(schema)

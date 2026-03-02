@@ -32,17 +32,15 @@ const subGroups = ['alpha', 'beta', 'gamma', 'delta']
 const commands = ['list', 'get', 'create', 'update', 'delete']
 
 function makeCommand(description: string) {
-	return c
-		.meta({ description })
-		.input(
-			s(
-				v.object({
-					region: v.optional(v.string()),
-					name: v.optional(v.string()),
-					dryRun: v.optional(v.boolean(), false),
-				}),
-			),
-		)
+	return c.meta({ description }).input(
+		s(
+			v.object({
+				region: v.optional(v.string()),
+				name: v.optional(v.string()),
+				dryRun: v.optional(v.boolean(), false),
+			}),
+		),
+	)
 }
 
 function makeSubGroup(parent: string, sub: string): Router {

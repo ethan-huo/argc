@@ -1,3 +1,5 @@
+import { JSON5 } from 'bun'
+
 import type {
 	AnyCommand,
 	CLIOptions,
@@ -9,27 +11,21 @@ import type {
 	StandardSchemaV1,
 } from './types'
 
-import { fmt as colors } from './terminal'
+import { complete, generateCompletionScript } from './complete'
+import { normalizeArgName, showHelp, showValidationError } from './help'
 import { parseArgv } from './parser'
+import { getRouterChildren, findHandler } from './router'
 import {
 	extractInputParamsDetailed,
 	generateSchema,
 	generateSchemaHintExample,
 	generateSchemaOutline,
 } from './schema'
-import { formatSuggestion, suggestSimilar } from './suggest'
-import { complete, generateCompletionScript } from './complete'
-import { isCommand } from './types'
-import {
-	buildSchemaSubset,
-	matchSchemaSelector,
-	parseSchemaSelector,
-} from './schema-selector'
-import { JSON5 } from 'bun'
-
-import { getRouterChildren, findHandler } from './router'
-import { normalizeArgName, showHelp, showValidationError } from './help'
+import { buildSchemaSubset, matchSchemaSelector, parseSchemaSelector } from './schema-selector'
 import { expandHome, readStdin, formatRuntimeError, runScriptMode } from './script'
+import { formatSuggestion, suggestSimilar } from './suggest'
+import { fmt as colors } from './terminal'
+import { isCommand } from './types'
 
 // Reserved global option names that conflict with built-in flags
 const RESERVED_GLOBALS = new Set([
@@ -45,11 +41,7 @@ const RESERVED_GLOBALS = new Set([
 	'_complete',
 ])
 
-export class CLI<
-	TSchema extends Router,
-	TGlobals extends Schema = Schema,
-	TContext = undefined,
-> {
+export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TContext = undefined> {
 	// Phantom type for external inference (e.g., typeof app.Handlers)
 	// Combined: both nested ['user']['get'] and flat ['user.get'] access
 	declare Handlers: CombinedHandlers<Handlers<TSchema, Awaited<TContext>>>
@@ -64,9 +56,7 @@ export class CLI<
 		// Check for reserved global option names
 		if (options.globals) {
 			const globalParams = extractInputParamsDetailed(options.globals)
-			const conflicts = globalParams
-				.map((p) => p.name)
-				.filter((name) => RESERVED_GLOBALS.has(name))
+			const conflicts = globalParams.map((p) => p.name).filter((name) => RESERVED_GLOBALS.has(name))
 			if (conflicts.length > 0) {
 				console.error(colors.error('Invalid global options configuration'))
 				console.error()
@@ -74,7 +64,9 @@ export class CLI<
 					`  Reserved names: ${conflicts.map((n) => colors.option(`--${n}`)).join(', ')}`,
 				)
 				console.error(
-					colors.dim('  These conflict with built-in flags (-h, -v, --help, --version, --schema, --input, --eval, --script, --completions, --_complete)'),
+					colors.dim(
+						'  These conflict with built-in flags (-h, -v, --help, --version, --schema, --input, --eval, --script, --completions, --_complete)',
+					),
 				)
 				process.exit(1)
 			}
@@ -89,10 +81,7 @@ export class CLI<
 
 		// Handle shell completion (must be before all other flag handling)
 		if (parsed.flags._complete !== undefined) {
-			const cword =
-				typeof parsed.flags._complete === 'number'
-					? parsed.flags._complete
-					: 0
+			const cword = typeof parsed.flags._complete === 'number' ? parsed.flags._complete : 0
 			const results = complete(this.schema, this.options.globals, {
 				words: parsed.positionals,
 				current: cword,
@@ -124,7 +113,10 @@ export class CLI<
 			}
 			await runScriptMode(
 				this.schema,
-				this.options as { globals?: Schema; context?: (globals: unknown) => unknown | Promise<unknown> },
+				this.options as {
+					globals?: Schema
+					context?: (globals: unknown) => unknown | Promise<unknown>
+				},
 				runOptions.handlers as Record<string, unknown>,
 				parsed,
 				this.options.name,
@@ -138,28 +130,14 @@ export class CLI<
 		// Handle --completions (root only)
 		if (parsed.flags.completions !== undefined) {
 			if (isRootLevel) {
-				const shell =
-					typeof parsed.flags.completions === 'string'
-						? parsed.flags.completions
-						: null
+				const shell = typeof parsed.flags.completions === 'string' ? parsed.flags.completions : null
 				if (!shell) {
-					console.error(
-						colors.error(
-							'--completions requires a shell name (bash, zsh, fish)',
-						),
-					)
+					console.error(colors.error('--completions requires a shell name (bash, zsh, fish)'))
 					process.exit(1)
 				}
-				const script = generateCompletionScript(
-					shell,
-					this.options.name,
-				)
+				const script = generateCompletionScript(shell, this.options.name)
 				if (!script) {
-					console.error(
-						colors.error(
-							`Unknown shell: ${shell}. Supported: bash, zsh, fish`,
-						),
-					)
+					console.error(colors.error(`Unknown shell: ${shell}. Supported: bash, zsh, fish`))
 					process.exit(1)
 				}
 				console.log(script)
@@ -180,30 +158,25 @@ export class CLI<
 		// Handle --schema (root only, for AI agents)
 		if (parsed.flags.schema) {
 			if (isRootLevel) {
-				let selectorMatches: ReturnType<typeof matchSchemaSelector> | null =
-					null
+				let selectorMatches: ReturnType<typeof matchSchemaSelector> | null = null
 				let schemaOutput = generateSchema(this.schema, {
 					name: this.options.name,
 					description: this.options.description,
 					globals: this.options.globals,
 				})
-				const selectorValue =
-					typeof parsed.flags.schema === 'string'
-						? parsed.flags.schema
-						: null
-					if (selectorValue) {
-						try {
-							const steps = parseSchemaSelector(selectorValue)
-							selectorMatches = matchSchemaSelector(this.schema, steps)
-							const subset = buildSchemaSubset(this.schema, selectorMatches, 1)
-							schemaOutput = generateSchema(subset, {
-								name: this.options.name,
-								description: this.options.description,
-								globals: this.options.globals,
-							})
+				const selectorValue = typeof parsed.flags.schema === 'string' ? parsed.flags.schema : null
+				if (selectorValue) {
+					try {
+						const steps = parseSchemaSelector(selectorValue)
+						selectorMatches = matchSchemaSelector(this.schema, steps)
+						const subset = buildSchemaSubset(this.schema, selectorMatches, 1)
+						schemaOutput = generateSchema(subset, {
+							name: this.options.name,
+							description: this.options.description,
+							globals: this.options.globals,
+						})
 					} catch (error) {
-						const message =
-							error instanceof Error ? error.message : String(error)
+						const message = error instanceof Error ? error.message : String(error)
 						console.log(colors.error(`Invalid schema selector: ${message}`))
 						process.exit(1)
 					}
@@ -211,26 +184,22 @@ export class CLI<
 				const maxLines = this.options.schemaMaxLines ?? 100
 				const lines = schemaOutput.split('\n')
 
-					if (lines.length > maxLines) {
-						console.log(
-							`Schema too large (${lines.length} lines). Showing compact outline.`,
-						)
-						console.log()
-						const outlineSchema =
-							selectorMatches === null
-								? this.schema
-								: buildSchemaSubset(this.schema, selectorMatches, 2)
-						for (const line of generateSchemaOutline(outlineSchema, 2)) {
-							console.log(line)
-						}
+				if (lines.length > maxLines) {
+					console.log(`Schema too large (${lines.length} lines). Showing compact outline.`)
+					console.log()
+					const outlineSchema =
+						selectorMatches === null
+							? this.schema
+							: buildSchemaSubset(this.schema, selectorMatches, 2)
+					for (const line of generateSchemaOutline(outlineSchema, 2)) {
+						console.log(line)
+					}
 					console.log()
 					const hintExample = generateSchemaHintExample(outlineSchema)
 					if (hintExample) {
 						console.log(`hint: use --schema=.${hintExample}`)
 					}
-					console.log(
-						'hint: selector is jq-like (path, *, {a,b}, ..name)',
-					)
+					console.log('hint: selector is jq-like (path, *, {a,b}, ..name)')
 					return
 				}
 
@@ -253,8 +222,9 @@ export class CLI<
 		}
 
 		// Extract command from positionals
-		const { commandPath, command, remaining, router, failedAt } =
-			this.extractCommand(parsed.positionals)
+		const { commandPath, command, remaining, router, failedAt } = this.extractCommand(
+			parsed.positionals,
+		)
 
 		// Check for invalid root-only flags used with subcommands
 		if (commandPath.length > 0) {
@@ -296,10 +266,7 @@ export class CLI<
 		}
 
 		// Find handler
-		const handler = findHandler(
-			commandPath,
-			runOptions.handlers as Record<string, unknown>,
-		)
+		const handler = findHandler(commandPath, runOptions.handlers as Record<string, unknown>)
 		if (!handler) {
 			console.error(
 				colors.error(`No handler for command: ${colors.command(commandPath.join(' '))}`),
@@ -308,9 +275,7 @@ export class CLI<
 		}
 
 		const commandDef = command['~argc']
-		const inputParams = commandDef.input
-			? extractInputParamsDetailed(commandDef.input)
-			: []
+		const inputParams = commandDef.input ? extractInputParamsDetailed(commandDef.input) : []
 		const inputFieldNames = new Set(inputParams.map((p) => p.name))
 		const allowSystemInput = !inputFieldNames.has('input')
 
@@ -335,9 +300,7 @@ export class CLI<
 				const errorMessages: Record<string, string> = {}
 				for (const issue of result.issues) {
 					const field = issue.path
-						?.map((p: { key: PropertyKey } | PropertyKey) =>
-							typeof p === 'object' ? p.key : p,
-						)
+						?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
 						?.join('.')
 					if (field) {
 						errorFields.add(field)
@@ -357,20 +320,14 @@ export class CLI<
 		// Parse and validate globals
 		let globals = flagsWithoutInput as StandardSchemaV1.InferOutput<TGlobals>
 		if (this.options.globals) {
-			const result = await this.options.globals['~standard'].validate(
-				flagsWithoutInput,
-			)
+			const result = await this.options.globals['~standard'].validate(flagsWithoutInput)
 			if (result.issues) {
 				console.error(colors.error('Global options validation failed'))
 				for (const issue of result.issues) {
 					const path = issue.path
-						?.map((p: { key: PropertyKey } | PropertyKey) =>
-							typeof p === 'object' ? p.key : p,
-						)
+						?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
 						?.join('.')
-					console.error(
-						`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
-					)
+					console.error(`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`)
 				}
 				process.exit(1)
 			}
@@ -510,9 +467,7 @@ export class CLI<
 
 				if (isVariadic) {
 					if (i !== argDefs.length - 1) {
-						console.log(
-							colors.error('Invalid args: variadic argument must be last'),
-						)
+						console.log(colors.error('Invalid args: variadic argument must be last'))
 						process.exit(1)
 					}
 					input[normalized] = positionals.slice(i)
@@ -545,9 +500,7 @@ export class CLI<
 		positionals: string[],
 	): void {
 		const globalNames = this.getGlobalOptionNames()
-		const nonGlobalFlags = Object.keys(flagsWithoutInput).filter(
-			(name) => !globalNames.has(name),
-		)
+		const nonGlobalFlags = Object.keys(flagsWithoutInput).filter((name) => !globalNames.has(name))
 
 		if (positionals.length === 0 && nonGlobalFlags.length === 0) return
 
@@ -578,11 +531,7 @@ export class CLI<
 					? await this.readInputString(flag)
 					: null
 		if (raw === null) {
-			console.log(
-				colors.error(
-					'Invalid --input value (expected JSON string, @file, or stdin)',
-				),
-			)
+			console.log(colors.error('Invalid --input value (expected JSON string, @file, or stdin)'))
 			process.exit(1)
 		}
 
@@ -590,9 +539,7 @@ export class CLI<
 		try {
 			parsed = JSON5.parse(raw)
 		} catch {
-			console.log(
-				colors.error('Invalid JSON input (supports JSON/JSONC/JSON5)'),
-			)
+			console.log(colors.error('Invalid JSON input (supports JSON/JSONC/JSON5)'))
 			process.exit(1)
 		}
 
@@ -632,11 +579,7 @@ export class CLI<
 	}
 }
 
-export function cli<
-	TSchema extends Router,
-	TGlobals extends Schema = Schema,
-	TContext = undefined,
->(
+export function cli<TSchema extends Router, TGlobals extends Schema = Schema, TContext = undefined>(
 	schema: TSchema,
 	options: CLIOptions<TGlobals, TContext>,
 ): CLI<TSchema, TGlobals, TContext> {

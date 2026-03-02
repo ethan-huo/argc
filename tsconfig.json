@@ -13,8 +13,5 @@
 		"noUncheckedIndexedAccess": true,
 		"noFallthroughCasesInSwitch": true
 	},
-	"include": [
-		"src/**/*",
-		"examples/**/*"
-	]
+	"include": ["src/**/*", "examples/**/*"]
 }

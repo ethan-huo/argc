@@ -156,9 +156,7 @@ export function printTable(columns: TableColumn[], rows: TableRow[]): void {
 	})
 
 	// Print header
-	const header = columns
-		.map((col, i) => fmt.dim(padEnd(col.label, colWidths[i]!)))
-		.join('  ')
+	const header = columns.map((col, i) => fmt.dim(padEnd(col.label, colWidths[i]!))).join('  ')
 	console.log(header)
 
 	// Print separator
@@ -167,9 +165,7 @@ export function printTable(columns: TableColumn[], rows: TableRow[]): void {
 
 	// Print rows
 	for (const row of rows) {
-		const line = columns
-			.map((col, i) => padEnd(row[col.key] ?? '', colWidths[i]!))
-			.join('  ')
+		const line = columns.map((col, i) => padEnd(row[col.key] ?? '', colWidths[i]!)).join('  ')
 		console.log(line)
 	}
 }

@@ -1,11 +1,13 @@
-import type { Router, Schema } from './types'
-import { isCommand } from './types'
-import { fmt as colors } from './terminal'
-import { getRouterChildren, findHandler } from './router'
-import { showValidationError } from './help'
-import type { parseArgv } from './parser'
-import { pathToFileURL } from 'node:url'
 import { resolve as resolvePath } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+import type { parseArgv } from './parser'
+import type { Router, Schema } from './types'
+
+import { showValidationError } from './help'
+import { getRouterChildren, findHandler } from './router'
+import { fmt as colors } from './terminal'
+import { isCommand } from './types'
 
 export function expandHome(path: string): string {
 	if (path.startsWith('~/')) {
@@ -56,9 +58,7 @@ const BUILTIN_FLAG_KEYS = new Set([
 	'_complete',
 ])
 
-function stripBuiltinFlags(
-	flags: Record<string, unknown>,
-): Record<string, unknown> {
+function stripBuiltinFlags(flags: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {}
 	for (const [k, v] of Object.entries(flags)) {
 		if (BUILTIN_FLAG_KEYS.has(k)) continue
@@ -90,10 +90,9 @@ async function readEvalCode(flag: unknown): Promise<string> {
 }
 
 async function runEval(code: string, api: ScriptAPI): Promise<void> {
-	const fn = new Function(
-		'argc',
-		`"use strict"; return (async () => {\n${code}\n})();`,
-	) as (argc: ScriptAPI) => Promise<unknown>
+	const fn = new Function('argc', `"use strict"; return (async () => {\n${code}\n})();`) as (
+		argc: ScriptAPI,
+	) => Promise<unknown>
 	await fn(api)
 }
 
@@ -137,8 +136,7 @@ function buildScriptHandlerTree(
 				throw new Error(`No handler for command: ${commandName}`)
 			}
 
-			const providedInput =
-				input === undefined ? ({} as Record<string, unknown>) : input
+			const providedInput = input === undefined ? ({} as Record<string, unknown>) : input
 
 			let validatedInput = providedInput
 			const def = command['~argc']
@@ -149,9 +147,7 @@ function buildScriptHandlerTree(
 					const errorMessages: Record<string, string> = {}
 					for (const issue of result.issues) {
 						const field = issue.path
-							?.map((p: { key: PropertyKey } | PropertyKey) =>
-								typeof p === 'object' ? p.key : p,
-							)
+							?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
 							?.join('.')
 						if (field) {
 							errorFields.add(field)
@@ -182,14 +178,7 @@ function buildScriptHandlerTree(
 
 	const out: Record<string, ScriptHandlers> = {}
 	for (const [key, child] of Object.entries(getRouterChildren(router))) {
-		out[key] = buildScriptHandlerTree(
-			[...path, key],
-			child,
-			handlers,
-			getContext,
-			rawArgv,
-			appName,
-		)
+		out[key] = buildScriptHandlerTree([...path, key], child, handlers, getContext, rawArgv, appName)
 	}
 	return out
 }
@@ -203,21 +192,17 @@ function buildScriptApi(
 	args: string[],
 	appName: string,
 ): ScriptAPI {
-	const handlerTree = buildScriptHandlerTree(
-		[],
-		router,
-		handlers,
-		getContext,
-		rawArgv,
-		appName,
-	)
+	const handlerTree = buildScriptHandlerTree([], router, handlers, getContext, rawArgv, appName)
 	const call = flattenHandlerTree(handlerTree)
 	return { handlers: handlerTree, call, globals, args, raw: rawArgv }
 }
 
 export async function runScriptMode(
 	schema: Router,
-	options: { globals?: Schema; context?: (globals: unknown) => unknown | Promise<unknown> },
+	options: {
+		globals?: Schema
+		context?: (globals: unknown) => unknown | Promise<unknown>
+	},
 	handlers: Record<string, unknown>,
 	parsed: ReturnType<typeof parseArgv>,
 	appName: string,
@@ -227,20 +212,14 @@ export async function runScriptMode(
 	// Parse + validate globals (same behavior as normal mode)
 	let globals: unknown = flagsWithoutBuiltins
 	if (options.globals) {
-		const result = await options.globals['~standard'].validate(
-			flagsWithoutBuiltins,
-		)
+		const result = await options.globals['~standard'].validate(flagsWithoutBuiltins)
 		if (result.issues) {
 			console.error(colors.error('Global options validation failed'))
 			for (const issue of result.issues) {
 				const path = issue.path
-					?.map((p: { key: PropertyKey } | PropertyKey) =>
-						typeof p === 'object' ? p.key : p,
-					)
+					?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
 					?.join('.')
-				console.error(
-					`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
-				)
+				console.error(`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`)
 			}
 			process.exit(1)
 		}
@@ -271,8 +250,7 @@ export async function runScriptMode(
 			return
 		}
 		if (parsed.flags.script !== undefined) {
-			const scriptPath =
-				typeof parsed.flags.script === 'string' ? parsed.flags.script : null
+			const scriptPath = typeof parsed.flags.script === 'string' ? parsed.flags.script : null
 			if (!scriptPath) {
 				console.log(colors.error('Invalid --script value (expected file path)'))
 				process.exit(1)

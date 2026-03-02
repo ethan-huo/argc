@@ -94,12 +94,7 @@ describe('parseArgv', () => {
 		})
 
 		test('multiple nested values', () => {
-			const result = parseArgv([
-				'--db.host',
-				'localhost',
-				'--db.port',
-				'5432',
-			])
+			const result = parseArgv(['--db.host', 'localhost', '--db.port', '5432'])
 			expect(result.flags).toEqual({ db: { host: 'localhost', port: 5432 } })
 		})
 

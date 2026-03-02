@@ -1,16 +1,18 @@
 import type { AnyCommand, Router, Schema } from './types'
-import { isCommand, isGroup } from './types'
-import { fmt as colors, padEnd } from './terminal'
-import { extractInputParamsDetailed, getInputTypeHint } from './schema'
+
 import { getRouterChildren } from './router'
+import { extractInputParamsDetailed, getInputTypeHint } from './schema'
+import { fmt as colors, padEnd } from './terminal'
+import { isCommand, isGroup } from './types'
 
 export function normalizeArgName(name: string): string {
 	return name.endsWith('...') ? name.slice(0, -3) : name
 }
 
-export function getArgInfo(
-	args?: { name: string }[],
-): { names: Set<string>; display: Map<string, string> } {
+export function getArgInfo(args?: { name: string }[]): {
+	names: Set<string>
+	display: Map<string, string>
+} {
 	const names = new Set<string>()
 	const display = new Map<string, string>()
 	for (const arg of args ?? []) {
@@ -49,13 +51,17 @@ function getRouterDescription(router: Router): string {
 }
 
 export function showHelp(
-	options: { name: string; version: string; description?: string; globals?: Schema },
+	options: {
+		name: string
+		version: string
+		description?: string
+		globals?: Schema
+	},
 	commandPath: string[],
 	router: Router,
 ): void {
 	const { name, version, description } = options
-	const fullCommand =
-		commandPath.length > 0 ? `${name} ${commandPath.join(' ')}` : name
+	const fullCommand = commandPath.length > 0 ? `${name} ${commandPath.join(' ')}` : name
 
 	console.log(`${colors.bold(name)} ${colors.dim(`v${version}`)}`)
 	if (commandPath.length === 0 && description) {
@@ -93,13 +99,9 @@ export function showHelp(
 			console.log(colors.bold('Arguments:'))
 			for (const arg of args) {
 				// Find description from input params
-				const paramInfo = inputParams.find(
-					(p) => p.name === normalizeArgName(arg.name),
-				)
+				const paramInfo = inputParams.find((p) => p.name === normalizeArgName(arg.name))
 				const desc = arg.description ?? paramInfo?.description ?? ''
-				console.log(
-					`  ${colors.arg(arg.name.padEnd(16))} ${colors.dim(desc)}`,
-				)
+				console.log(`  ${colors.arg(arg.name.padEnd(16))} ${colors.dim(desc)}`)
 			}
 		}
 
@@ -109,14 +111,10 @@ export function showHelp(
 			console.log()
 			console.log(colors.bold('Options:'))
 			for (const opt of optionsList) {
-				const flag = opt.optional
-					? `--${opt.name}`
-					: `--${opt.name} (required)`
+				const flag = opt.optional ? `--${opt.name}` : `--${opt.name} (required)`
 				const typeHint = opt.type !== 'boolean' ? ` <${opt.type}>` : ''
 				const defaultHint =
-					opt.default !== undefined
-						? ` (default: ${JSON.stringify(opt.default)})`
-						: ''
+					opt.default !== undefined ? ` (default: ${JSON.stringify(opt.default)})` : ''
 				const usageHint = getTypeUsageHint(opt.type, opt.name)
 				const desc = opt.description ?? ''
 				console.log(
@@ -166,29 +164,19 @@ export function showHelp(
 				: isGroup(value)
 					? value['~argc.group'].meta.hidden
 					: false
-			const deprecated = isCommand(value)
-				? value['~argc'].meta.deprecated
-				: false
+			const deprecated = isCommand(value) ? value['~argc'].meta.deprecated : false
 			if (!hidden) {
 				// Format: "alias, command" like pnpm style
-				const aliases = isCommand(value)
-					? value['~argc'].meta.aliases
-					: undefined
-				const cmdName = aliases?.length
-					? `${aliases.join(', ')}, ${key}`
-					: key
+				const aliases = isCommand(value) ? value['~argc'].meta.aliases : undefined
+				const cmdName = aliases?.length ? `${aliases.join(', ')}, ${key}` : key
 				const deprecatedTag = deprecated ? colors.yellow(' [deprecated]') : ''
-				console.log(
-					`  ${colors.command(cmdName.padEnd(20))}  ${colors.dim(desc)}${deprecatedTag}`,
-				)
+				console.log(`  ${colors.command(cmdName.padEnd(20))}  ${colors.dim(desc)}${deprecatedTag}`)
 			}
 		}
 
 		console.log()
 		console.log(
-			colors.dim(
-				`Run '${fullCommand} <command> --help' for more information on a command.`,
-			),
+			colors.dim(`Run '${fullCommand} <command> --help' for more information on a command.`),
 		)
 	}
 
@@ -202,9 +190,7 @@ export function showHelp(
 			const flag = `--${opt.name}`
 			const typeHint = opt.type !== 'boolean' ? ` <${opt.type}>` : ''
 			const defaultHint =
-				opt.default !== undefined
-					? ` (default: ${JSON.stringify(opt.default)})`
-					: ''
+				opt.default !== undefined ? ` (default: ${JSON.stringify(opt.default)})` : ''
 			const desc = opt.description ?? ''
 			console.log(
 				`  ${colors.option(`${flag}${typeHint}`.padEnd(24))} ${colors.dim(`${desc}${defaultHint}`)}`,
@@ -213,12 +199,8 @@ export function showHelp(
 	}
 
 	// Built-in options
-	console.log(
-		`  ${colors.option('-h, --help'.padEnd(24))} ${colors.dim('Show help')}`,
-	)
-	console.log(
-		`  ${colors.option('-v, --version'.padEnd(24))} ${colors.dim('Show version')}`,
-	)
+	console.log(`  ${colors.option('-h, --help'.padEnd(24))} ${colors.dim('Show help')}`)
+	console.log(`  ${colors.option('-v, --version'.padEnd(24))} ${colors.dim('Show version')}`)
 	console.log(
 		`  ${colors.option('--schema'.padEnd(24))} ${colors.dim('Typed CLI spec for AI agents')}`,
 	)
@@ -246,23 +228,17 @@ export function showValidationError(
 	const inputParams = input ? extractInputParamsDetailed(input) : []
 
 	// Build usage line
-	const cmdName =
-		commandPath.length > 0
-			? `${appName} ${commandPath.join(' ')}`
-			: appName
+	const cmdName = commandPath.length > 0 ? `${appName} ${commandPath.join(' ')}` : appName
 	const argParts = args.map((a) => `<${a.name}>`)
 	const hasOptions = inputParams.some((p) => !argInfo.names.has(p.name))
 	const optionsPart = hasOptions ? '[options]' : ''
-	const usageLine = [cmdName, ...argParts, optionsPart]
-		.filter(Boolean)
-		.join(' ')
+	const usageLine = [cmdName, ...argParts, optionsPart].filter(Boolean).join(' ')
 
 	console.error(`${colors.bold('Usage:')} ${colors.command(usageLine)}`)
 	console.error()
 
 	const orderedFields: string[] = []
-	for (const arg of args)
-		orderedFields.push(normalizeArgName(arg.name))
+	for (const arg of args) orderedFields.push(normalizeArgName(arg.name))
 	for (const param of inputParams) {
 		if (!argInfo.names.has(param.name)) orderedFields.push(param.name)
 	}
@@ -297,9 +273,7 @@ export function showValidationError(
 
 	const missing = errors.filter((e) => e.required).map((e) => e.label)
 	if (missing.length > 0) {
-		console.error(
-			`${colors.bold('Missing required:')} ${missing.join(', ')}`,
-		)
+		console.error(`${colors.bold('Missing required:')} ${missing.join(', ')}`)
 		console.error()
 	}
 
@@ -307,9 +281,7 @@ export function showValidationError(
 		console.error(colors.bold('Details:'))
 		const maxLabelLen = Math.max(...errors.map((e) => e.label.length))
 		for (const err of errors) {
-			console.error(
-				`  ${colors.red(padEnd(err.label, maxLabelLen))}  ${err.message}`,
-			)
+			console.error(`  ${colors.red(padEnd(err.label, maxLabelLen))}  ${err.message}`)
 		}
 	}
 
@@ -321,7 +293,5 @@ export function showValidationError(
 	}
 
 	console.error()
-	console.error(
-		colors.dim(`Run '${cmdName} --help' for full usage.`),
-	)
+	console.error(colors.dim(`Run '${cmdName} --help' for full usage.`))
 }

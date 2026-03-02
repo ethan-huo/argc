@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test'
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
+import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
 
 import { c, group } from './command'
