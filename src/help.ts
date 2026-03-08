@@ -6,7 +6,10 @@ import { fmt as colors, padEnd } from './terminal'
 import { isCommand, isGroup } from './types'
 
 export function normalizeArgName(name: string): string {
-	return name.endsWith('...') ? name.slice(0, -3) : name
+	let n = name
+	if (n.endsWith('...')) n = n.slice(0, -3)
+	if (n.endsWith('?')) n = n.slice(0, -1)
+	return n
 }
 
 export function getArgInfo(args?: { name: string }[]): {
