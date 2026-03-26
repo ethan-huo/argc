@@ -231,6 +231,10 @@ When using `--input`, do not pass other command flags or positionals (global opt
 
 You can run code against your CLI handlers via a global flag:
 
+- `--run "..."` treats the value as inline code
+- `--run @./file.ts` treats the value as a module file
+- `--run` or `--run -` reads code from stdin
+
 ```bash
 # Inline block
 $ myapp --run "await argc.handlers.user.create({ name: 'alice' })"
