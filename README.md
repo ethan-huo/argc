@@ -229,17 +229,20 @@ When using `--input`, do not pass other command flags or positionals (global opt
 
 ## Scripting Mode
 
-You can run scripts against your CLI handlers via global flags:
+You can run code against your CLI handlers via a global flag:
 
 ```bash
 # Inline block
-$ myapp --eval "await argc.handlers.user.create({ name: 'alice' })"
+$ myapp --run "await argc.handlers.user.create({ name: 'alice' })"
 
-# File (TS/JS)
-$ myapp --script ./scripts/seed.ts
+# Module file (TS/JS)
+$ myapp --run @./scripts/seed.ts
 
-# Read --eval code from stdin
-$ cat ./scripts/seed-snippet.js | myapp --eval
+# Read code from stdin
+$ cat ./scripts/seed-snippet.js | myapp --run
+
+# Explicit stdin
+$ myapp --run -
 ```
 
 The script receives an `argc` object with:
@@ -252,15 +255,15 @@ The script receives an `argc` object with:
 Notes:
 
 - Scripts do not receive `context` directly; they can only call handlers.
-- `--script` modules can export either `default` or `main`:
+- `--run @file` modules can export either `default` or `main`:
   - `export default async function (argc) { ... }`
   - `export async function main(argc) { ... }`
-- For `--script`, `argc` is also available as `globalThis.__argcScript` for modules that run via side effects.
+- For `--run @file`, `argc` is also available as `globalThis.__argcRun` for modules that run via side effects.
 
 Example passing args:
 
 ```bash
-$ myapp --script ./scripts/batch.ts -- user1 user2 user3
+$ myapp --run @./scripts/batch.ts -- user1 user2 user3
 ```
 
 ## AI Agent Integration
@@ -481,8 +484,7 @@ app.run({
 | `-v, --version`         | Root only     | Show version                                    |
 | `--schema[=selector]`   | Root only     | Typed CLI spec for AI agents                    |
 | `--input <json\|@file>` | Command level | Pass input as JSON/JSON5 string, file, or stdin |
-| `--eval <code>`         | Root only     | Run inline script with handler API              |
-| `--script <file>`       | Root only     | Run script file with handler API                |
+| `--run <code\|@file\|->` | Root only    | Run inline code, stdin, or a module file        |
 | `--completions <shell>` | Root only     | Generate shell completion script                |
 
 ## Shell Completions

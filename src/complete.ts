@@ -115,8 +115,7 @@ const BUILTIN_FLAGS = [
 	'-v',
 	'--schema',
 	'--input',
-	'--eval',
-	'--script',
+	'--run',
 	'--completions',
 ]
 

@@ -45,6 +45,11 @@ type ScriptAPI = {
 	raw: string[]
 }
 
+type RunSource =
+	| { kind: 'stdin' }
+	| { kind: 'inline'; code: string }
+	| { kind: 'module'; path: string }
+
 const BUILTIN_FLAG_KEYS = new Set([
 	'help',
 	'h',
@@ -52,8 +57,7 @@ const BUILTIN_FLAG_KEYS = new Set([
 	'v',
 	'schema',
 	'input',
-	'eval',
-	'script',
+	'run',
 	'completions',
 	'_complete',
 ])
@@ -82,10 +86,20 @@ function flattenHandlerTree(handlers: ScriptHandlers): Record<string, ScriptFn> 
 	return out
 }
 
-async function readEvalCode(flag: unknown): Promise<string> {
-	if (flag === true) return await readStdin()
-	if (typeof flag === 'string') return flag
-	console.log(colors.error('Invalid --eval value (expected code string or stdin)'))
+function parseRunSource(flag: unknown): RunSource {
+	if (flag === true || flag === '-') return { kind: 'stdin' }
+	if (typeof flag === 'string') {
+		if (flag.startsWith('@')) {
+			const path = flag.slice(1)
+			if (!path) {
+				console.log(colors.error('Invalid --run value (expected @<file> after @)'))
+				process.exit(1)
+			}
+			return { kind: 'module', path }
+		}
+		return { kind: 'inline', code: flag }
+	}
+	console.log(colors.error('Invalid --run value (expected code, -, stdin, or @<file>)'))
 	process.exit(1)
 }
 
@@ -101,7 +115,7 @@ async function runScriptFile(path: string, api: ScriptAPI): Promise<void> {
 	const fullPath = resolvePath(process.cwd(), expanded)
 	const url = pathToFileURL(fullPath).href
 
-	;(globalThis as Record<string, unknown>).__argcScript = api
+	;(globalThis as Record<string, unknown>).__argcRun = api
 	try {
 		const mod = (await import(url)) as Record<string, unknown>
 		const maybeDefault = mod.default
@@ -114,7 +128,7 @@ async function runScriptFile(path: string, api: ScriptAPI): Promise<void> {
 			await (maybeMain as (argc: ScriptAPI) => unknown)(api)
 		}
 	} finally {
-		delete (globalThis as Record<string, unknown>).__argcScript
+		delete (globalThis as Record<string, unknown>).__argcRun
 	}
 }
 
@@ -244,18 +258,17 @@ export async function runScriptMode(
 	)
 
 	try {
-		if (parsed.flags.eval !== undefined) {
-			const code = await readEvalCode(parsed.flags.eval)
-			await runEval(code, api)
-			return
-		}
-		if (parsed.flags.script !== undefined) {
-			const scriptPath = typeof parsed.flags.script === 'string' ? parsed.flags.script : null
-			if (!scriptPath) {
-				console.log(colors.error('Invalid --script value (expected file path)'))
-				process.exit(1)
+		if (parsed.flags.run !== undefined) {
+			const source = parseRunSource(parsed.flags.run)
+			if (source.kind === 'stdin') {
+				await runEval(await readStdin(), api)
+				return
 			}
-			await runScriptFile(scriptPath, api)
+			if (source.kind === 'inline') {
+				await runEval(source.code, api)
+				return
+			}
+			await runScriptFile(source.path, api)
 			return
 		}
 	} catch (error) {

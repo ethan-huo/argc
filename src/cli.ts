@@ -35,8 +35,7 @@ const RESERVED_GLOBALS = new Set([
 	'v',
 	'schema',
 	'input',
-	'eval',
-	'script',
+	'run',
 	'completions',
 	'_complete',
 ])
@@ -65,7 +64,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 				)
 				console.error(
 					colors.dim(
-						'  These conflict with built-in flags (-h, -v, --help, --version, --schema, --input, --eval, --script, --completions, --_complete)',
+						'  These conflict with built-in flags (-h, -v, --help, --version, --schema, --input, --run, --completions, --_complete)',
 					),
 				)
 				process.exit(1)
@@ -97,12 +96,8 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 			return
 		}
 
-		// Handle scripting mode (global): --eval / --script
-		if (parsed.flags.eval !== undefined || parsed.flags.script !== undefined) {
-			if (parsed.flags.eval !== undefined && parsed.flags.script !== undefined) {
-				console.log(colors.error('Cannot use --eval and --script together'))
-				process.exit(1)
-			}
+		// Handle scripting mode (global): --run
+		if (parsed.flags.run !== undefined) {
 			if (parsed.flags.schema) {
 				console.log(colors.error("Invalid argument '--schema'"))
 				process.exit(1)

@@ -208,10 +208,7 @@ export function showHelp(
 		`  ${colors.option('--schema'.padEnd(24))} ${colors.dim('Typed CLI spec for AI agents')}`,
 	)
 	console.log(
-		`  ${colors.option('--eval <code>'.padEnd(24))} ${colors.dim('Run a script block (gets handlers API)')}`,
-	)
-	console.log(
-		`  ${colors.option('--script <file>'.padEnd(24))} ${colors.dim('Run a script file (gets handlers API)')}`,
+		`  ${colors.option('--run <code|@file|->'.padEnd(24))} ${colors.dim('Run inline code, stdin, or a module file (gets handlers API)')}`,
 	)
 	console.log(
 		`  ${colors.option('--completions <shell>'.padEnd(24))} ${colors.dim('Generate shell completion script (bash, zsh, fish)')}`,

@@ -1,7 +1,7 @@
 // Example script for argc scripting mode.
 //
 // Run:
-//   bun examples/demo.ts --script examples/demo.script.ts -- alice
+//   bun examples/demo.ts --run @examples/demo.script.ts -- alice
 //
 // Notes:
 // - `argc.handlers` mirrors your schema structure, but every command is a function you can call.

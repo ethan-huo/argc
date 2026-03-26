@@ -429,7 +429,7 @@ describe('cli', () => {
 	})
 
 	describe('scripting mode', () => {
-		test('--eval runs with handler-only API', async () => {
+		test('--run executes inline code with handler-only API', async () => {
 			let received: unknown
 			const schema = {
 				update: c.input(s(v.object({ name: v.string() }))),
@@ -438,7 +438,7 @@ describe('cli', () => {
 			process.argv = [
 				'bun',
 				'cli',
-				'--eval',
+				'--run',
 				`
 				if ('context' in argc) throw new Error('context leaked')
 				await argc.handlers.update({ name: 'EvalUser' })
@@ -464,7 +464,7 @@ describe('cli', () => {
 			})
 		})
 
-		test('--script runs a TS module with default export', async () => {
+		test('--run executes a TS module from @file', async () => {
 			let received: unknown
 			const schema = {
 				update: c.input(s(v.object({ name: v.string() }))),
@@ -482,7 +482,7 @@ describe('cli', () => {
 			)
 
 			try {
-				process.argv = ['bun', 'cli', '--script', filePath]
+				process.argv = ['bun', 'cli', '--run', `@${filePath}`]
 
 				const app = cli(schema, { name: 'test', version: '1.0.0' })
 				await app.run({
@@ -503,7 +503,7 @@ describe('cli', () => {
 			}
 		})
 
-		test('--script exposes argc as globalThis.__argcScript for side-effect modules', async () => {
+		test('--run exposes argc as globalThis.__argcRun for side-effect modules', async () => {
 			let received: unknown
 			const schema = {
 				update: c.input(s(v.object({ name: v.string() }))),
@@ -513,14 +513,14 @@ describe('cli', () => {
 			await Bun.write(
 				filePath,
 				`
-				const argc: any = (globalThis as any).__argcScript
-				if (!argc) throw new Error('missing __argcScript')
+				const argc: any = (globalThis as any).__argcRun
+				if (!argc) throw new Error('missing __argcRun')
 				await argc.handlers.update({ name: 'SideEffectUser' })
 				`,
 			)
 
 			try {
-				process.argv = ['bun', 'cli', '--script', filePath]
+				process.argv = ['bun', 'cli', '--run', `@${filePath}`]
 
 				const app = cli(schema, { name: 'test', version: '1.0.0' })
 				await app.run({
