@@ -141,6 +141,68 @@ describe('cli', () => {
 			expect(receivedInput).toEqual({ name: 'World', loud: true })
 		})
 
+		test('preserves large numeric-like strings for schema validation', async () => {
+			let receivedInput: unknown
+			const schema = {
+				connect: c.input(
+					s(
+						v.object({
+							server: v.string(),
+						}),
+					),
+				),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'connect',
+				'--server',
+				'1490703101852778639',
+			]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					connect: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ server: '1490703101852778639' })
+		})
+
+		test('lets schema transforms opt into numeric conversion', async () => {
+			let receivedInput: unknown
+			const schema = {
+				connect: c.input(
+					s(
+						v.object({
+							port: v.pipe(
+								v.string(),
+								v.transform((value) => Number(value)),
+								v.number(),
+							),
+						}),
+					),
+				),
+			}
+
+			process.argv = ['bun', 'cli', 'connect', '--port', '3000']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					connect: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ port: 3000 })
+		})
+
 		test('handles positional args', async () => {
 			let receivedInput: unknown
 			const schema = {
@@ -184,7 +246,9 @@ describe('cli', () => {
 		test('handles variadic positional args', async () => {
 			let receivedInput: unknown
 			const schema = {
-				join: c.args('files...').input(s(v.object({ files: v.array(v.string()) }))),
+				join: c
+					.args('files...')
+					.input(s(v.object({ files: v.array(v.string()) }))),
 			}
 
 			process.argv = ['bun', 'cli', 'join', 'a.txt', 'b.txt', 'c.txt']
@@ -221,7 +285,9 @@ describe('cli', () => {
 				// expected
 			}
 
-			expect(consoleOutput.join('\n')).toContain('Invalid args: variadic argument must be last')
+			expect(consoleOutput.join('\n')).toContain(
+				'Invalid args: variadic argument must be last',
+			)
 		})
 
 		test('parses JSON input', async () => {
@@ -370,7 +436,15 @@ describe('cli', () => {
 				greet: c.input(s(v.object({ name: v.string() }))),
 			}
 
-			process.argv = ['bun', 'cli', 'greet', '--input', '{"name":"Alice"}', '--name', 'Bob']
+			process.argv = [
+				'bun',
+				'cli',
+				'greet',
+				'--input',
+				'{"name":"Alice"}',
+				'--name',
+				'Bob',
+			]
 
 			const app = cli(schema, { name: 'test', version: '1.0.0' })
 			try {
@@ -391,7 +465,14 @@ describe('cli', () => {
 				greet: c.args('name').input(s(v.object({ name: v.string() }))),
 			}
 
-			process.argv = ['bun', 'cli', 'greet', 'World', '--input', '{"name":"Alice"}']
+			process.argv = [
+				'bun',
+				'cli',
+				'greet',
+				'World',
+				'--input',
+				'{"name":"Alice"}',
+			]
 
 			const app = cli(schema, { name: 'test', version: '1.0.0' })
 			try {
@@ -785,7 +866,9 @@ describe('cli', () => {
 
 		test('shows error for invalid value', async () => {
 			const schema = {
-				greet: c.input(s(v.object({ name: v.pipe(v.string(), v.minLength(3)) }))),
+				greet: c.input(
+					s(v.object({ name: v.pipe(v.string(), v.minLength(3)) })),
+				),
 			}
 
 			process.argv = ['bun', 'cli', 'greet', '--name', 'ab']

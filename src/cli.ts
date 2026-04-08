@@ -21,8 +21,17 @@ import {
 	generateSchemaHintExample,
 	generateSchemaOutline,
 } from './schema'
-import { buildSchemaSubset, matchSchemaSelector, parseSchemaSelector } from './schema-selector'
-import { expandHome, readStdin, formatRuntimeError, runScriptMode } from './script'
+import {
+	buildSchemaSubset,
+	matchSchemaSelector,
+	parseSchemaSelector,
+} from './schema-selector'
+import {
+	expandHome,
+	readStdin,
+	formatRuntimeError,
+	runScriptMode,
+} from './script'
 import { formatSuggestion, suggestSimilar } from './suggest'
 import { fmt as colors } from './terminal'
 import { isCommand } from './types'
@@ -40,7 +49,28 @@ const RESERVED_GLOBALS = new Set([
 	'_complete',
 ])
 
-export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TContext = undefined> {
+function parseCompletionIndex(flag: unknown): number {
+	if (typeof flag === 'number' && Number.isInteger(flag)) {
+		return flag
+	}
+
+	if (typeof flag === 'string') {
+		// The argv parser preserves explicit values as strings, so CLI internals
+		// that need numeric semantics must opt into that conversion explicitly.
+		const parsed = Number.parseInt(flag, 10)
+		if (!Number.isNaN(parsed)) {
+			return parsed
+		}
+	}
+
+	return 0
+}
+
+export class CLI<
+	TSchema extends Router,
+	TGlobals extends Schema = Schema,
+	TContext = undefined,
+> {
 	// Phantom type for external inference (e.g., typeof app.Handlers)
 	// Combined: both nested ['user']['get'] and flat ['user.get'] access
 	declare Handlers: CombinedHandlers<Handlers<TSchema, Awaited<TContext>>>
@@ -55,7 +85,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		// Check for reserved global option names
 		if (options.globals) {
 			const globalParams = extractInputParamsDetailed(options.globals)
-			const conflicts = globalParams.map((p) => p.name).filter((name) => RESERVED_GLOBALS.has(name))
+			const conflicts = globalParams
+				.map((p) => p.name)
+				.filter((name) => RESERVED_GLOBALS.has(name))
 			if (conflicts.length > 0) {
 				console.error(colors.error('Invalid global options configuration'))
 				console.error()
@@ -80,7 +112,7 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 
 		// Handle shell completion (must be before all other flag handling)
 		if (parsed.flags._complete !== undefined) {
-			const cword = typeof parsed.flags._complete === 'number' ? parsed.flags._complete : 0
+			const cword = parseCompletionIndex(parsed.flags._complete)
 			const results = complete(this.schema, this.options.globals, {
 				words: parsed.positionals,
 				current: cword,
@@ -125,14 +157,23 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		// Handle --completions (root only)
 		if (parsed.flags.completions !== undefined) {
 			if (isRootLevel) {
-				const shell = typeof parsed.flags.completions === 'string' ? parsed.flags.completions : null
+				const shell =
+					typeof parsed.flags.completions === 'string'
+						? parsed.flags.completions
+						: null
 				if (!shell) {
-					console.error(colors.error('--completions requires a shell name (bash, zsh, fish)'))
+					console.error(
+						colors.error(
+							'--completions requires a shell name (bash, zsh, fish)',
+						),
+					)
 					process.exit(1)
 				}
 				const script = generateCompletionScript(shell, this.options.name)
 				if (!script) {
-					console.error(colors.error(`Unknown shell: ${shell}. Supported: bash, zsh, fish`))
+					console.error(
+						colors.error(`Unknown shell: ${shell}. Supported: bash, zsh, fish`),
+					)
 					process.exit(1)
 				}
 				console.log(script)
@@ -153,13 +194,15 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		// Handle --schema (root only, for AI agents)
 		if (parsed.flags.schema) {
 			if (isRootLevel) {
-				let selectorMatches: ReturnType<typeof matchSchemaSelector> | null = null
+				let selectorMatches: ReturnType<typeof matchSchemaSelector> | null =
+					null
 				let schemaOutput = generateSchema(this.schema, {
 					name: this.options.name,
 					description: this.options.description,
 					globals: this.options.globals,
 				})
-				const selectorValue = typeof parsed.flags.schema === 'string' ? parsed.flags.schema : null
+				const selectorValue =
+					typeof parsed.flags.schema === 'string' ? parsed.flags.schema : null
 				if (selectorValue) {
 					try {
 						const steps = parseSchemaSelector(selectorValue)
@@ -171,7 +214,8 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 							globals: this.options.globals,
 						})
 					} catch (error) {
-						const message = error instanceof Error ? error.message : String(error)
+						const message =
+							error instanceof Error ? error.message : String(error)
 						console.log(colors.error(`Invalid schema selector: ${message}`))
 						process.exit(1)
 					}
@@ -180,7 +224,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 				const lines = schemaOutput.split('\n')
 
 				if (lines.length > maxLines) {
-					console.log(`Schema too large (${lines.length} lines). Showing compact outline.`)
+					console.log(
+						`Schema too large (${lines.length} lines). Showing compact outline.`,
+					)
 					console.log()
 					const outlineSchema =
 						selectorMatches === null
@@ -217,9 +263,8 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		}
 
 		// Extract command from positionals
-		const { commandPath, command, remaining, router, failedAt } = this.extractCommand(
-			parsed.positionals,
-		)
+		const { commandPath, command, remaining, router, failedAt } =
+			this.extractCommand(parsed.positionals)
 
 		// Check for invalid root-only flags used with subcommands
 		if (commandPath.length > 0) {
@@ -261,16 +306,23 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		}
 
 		// Find handler
-		const handler = findHandler(commandPath, runOptions.handlers as Record<string, unknown>)
+		const handler = findHandler(
+			commandPath,
+			runOptions.handlers as Record<string, unknown>,
+		)
 		if (!handler) {
 			console.error(
-				colors.error(`No handler for command: ${colors.command(commandPath.join(' '))}`),
+				colors.error(
+					`No handler for command: ${colors.command(commandPath.join(' '))}`,
+				),
 			)
 			process.exit(1)
 		}
 
 		const commandDef = command['~argc']
-		const inputParams = commandDef.input ? extractInputParamsDetailed(commandDef.input) : []
+		const inputParams = commandDef.input
+			? extractInputParamsDetailed(commandDef.input)
+			: []
 		const inputFieldNames = new Set(inputParams.map((p) => p.name))
 		const allowSystemInput = !inputFieldNames.has('input')
 
@@ -295,7 +347,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 				const errorMessages: Record<string, string> = {}
 				for (const issue of result.issues) {
 					const field = issue.path
-						?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
+						?.map((p: { key: PropertyKey } | PropertyKey) =>
+							typeof p === 'object' ? p.key : p,
+						)
 						?.join('.')
 					if (field) {
 						errorFields.add(field)
@@ -306,7 +360,13 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 				// Show validation error summary + details
 				console.error(colors.error('invalid arguments'))
 				console.error()
-				showValidationError(this.options.name, commandPath, command, errorFields, errorMessages)
+				showValidationError(
+					this.options.name,
+					commandPath,
+					command,
+					errorFields,
+					errorMessages,
+				)
 				process.exit(1)
 			}
 			validatedInput = result.value as Record<string, unknown>
@@ -315,14 +375,19 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		// Parse and validate globals
 		let globals = flagsWithoutInput as StandardSchemaV1.InferOutput<TGlobals>
 		if (this.options.globals) {
-			const result = await this.options.globals['~standard'].validate(flagsWithoutInput)
+			const result =
+				await this.options.globals['~standard'].validate(flagsWithoutInput)
 			if (result.issues) {
 				console.error(colors.error('Global options validation failed'))
 				for (const issue of result.issues) {
 					const path = issue.path
-						?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
+						?.map((p: { key: PropertyKey } | PropertyKey) =>
+							typeof p === 'object' ? p.key : p,
+						)
 						?.join('.')
-					console.error(`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`)
+					console.error(
+						`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
+					)
 				}
 				process.exit(1)
 			}
@@ -462,7 +527,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 
 				if (isVariadic) {
 					if (i !== argDefs.length - 1) {
-						console.log(colors.error('Invalid args: variadic argument must be last'))
+						console.log(
+							colors.error('Invalid args: variadic argument must be last'),
+						)
 						process.exit(1)
 					}
 					input[normalized] = positionals.slice(i)
@@ -495,7 +562,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		positionals: string[],
 	): void {
 		const globalNames = this.getGlobalOptionNames()
-		const nonGlobalFlags = Object.keys(flagsWithoutInput).filter((name) => !globalNames.has(name))
+		const nonGlobalFlags = Object.keys(flagsWithoutInput).filter(
+			(name) => !globalNames.has(name),
+		)
 
 		if (positionals.length === 0 && nonGlobalFlags.length === 0) return
 
@@ -518,7 +587,9 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		return new Set(params.map((p) => p.name))
 	}
 
-	private async parseJsonInput(flag: unknown): Promise<Record<string, unknown>> {
+	private async parseJsonInput(
+		flag: unknown,
+	): Promise<Record<string, unknown>> {
 		const raw =
 			flag === true
 				? await readStdin()
@@ -526,7 +597,11 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 					? await this.readInputString(flag)
 					: null
 		if (raw === null) {
-			console.log(colors.error('Invalid --input value (expected JSON string, @file, or stdin)'))
+			console.log(
+				colors.error(
+					'Invalid --input value (expected JSON string, @file, or stdin)',
+				),
+			)
 			process.exit(1)
 		}
 
@@ -534,11 +609,17 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 		try {
 			parsed = JSON5.parse(raw)
 		} catch {
-			console.log(colors.error('Invalid JSON input (supports JSON/JSONC/JSON5)'))
+			console.log(
+				colors.error('Invalid JSON input (supports JSON/JSONC/JSON5)'),
+			)
 			process.exit(1)
 		}
 
-		if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+		if (
+			parsed === null ||
+			typeof parsed !== 'object' ||
+			Array.isArray(parsed)
+		) {
 			console.log(colors.error('JSON input must be an object'))
 			process.exit(1)
 		}
@@ -574,7 +655,11 @@ export class CLI<TSchema extends Router, TGlobals extends Schema = Schema, TCont
 	}
 }
 
-export function cli<TSchema extends Router, TGlobals extends Schema = Schema, TContext = undefined>(
+export function cli<
+	TSchema extends Router,
+	TGlobals extends Schema = Schema,
+	TContext = undefined,
+>(
 	schema: TSchema,
 	options: CLIOptions<TGlobals, TContext>,
 ): CLI<TSchema, TGlobals, TContext> {

@@ -95,7 +95,7 @@ describe('parseArgv', () => {
 
 		test('multiple nested values', () => {
 			const result = parseArgv(['--db.host', 'localhost', '--db.port', '5432'])
-			expect(result.flags).toEqual({ db: { host: 'localhost', port: 5432 } })
+			expect(result.flags).toEqual({ db: { host: 'localhost', port: '5432' } })
 		})
 
 		test('deeply nested', () => {
@@ -116,21 +116,26 @@ describe('parseArgv', () => {
 		})
 	})
 
-	describe('type coercion', () => {
-		test('numbers', () => {
+	describe('explicit values remain strings', () => {
+		test('numeric-looking values', () => {
 			const result = parseArgv(['--port', '3000', '--timeout', '1.5'])
-			expect(result.flags).toEqual({ port: 3000, timeout: 1.5 })
+			expect(result.flags).toEqual({ port: '3000', timeout: '1.5' })
 		})
 
-		test('boolean strings', () => {
+		test('boolean-looking values', () => {
 			const result = parseArgv(['--enabled', 'true', '--disabled', 'false'])
-			expect(result.flags).toEqual({ enabled: true, disabled: false })
+			expect(result.flags).toEqual({ enabled: 'true', disabled: 'false' })
 		})
 
-		test('negative numbers via equals', () => {
+		test('large numeric identifiers keep precision', () => {
+			const result = parseArgv(['--server', '1490703101852778639'])
+			expect(result.flags).toEqual({ server: '1490703101852778639' })
+		})
+
+		test('values passed via equals syntax', () => {
 			// Negative numbers must use = syntax to avoid being parsed as flags
 			const result = parseArgv(['--offset=-10'])
-			expect(result.flags).toEqual({ offset: -10 })
+			expect(result.flags).toEqual({ offset: '-10' })
 		})
 
 		test('negative number without equals is parsed as flags', () => {
@@ -141,9 +146,9 @@ describe('parseArgv', () => {
 			expect(result.flags['0']).toBe(true)
 		})
 
-		test('string that looks like number but is not', () => {
-			const result = parseArgv(['--version', '1.0.0'])
-			expect(result.flags).toEqual({ version: '1.0.0' })
+		test('equals syntax preserves large numeric identifiers', () => {
+			const result = parseArgv(['--server=1490703101852778639'])
+			expect(result.flags).toEqual({ server: '1490703101852778639' })
 		})
 	})
 

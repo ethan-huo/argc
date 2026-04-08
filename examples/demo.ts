@@ -33,7 +33,9 @@ const schema = {
 					s(
 						v.object({
 							name: v.pipe(v.string(), v.minLength(3), v.maxLength(8)),
-							email: v.optional(v.pipe(v.string(), v.email(), v.description('user email'))),
+							email: v.optional(
+								v.pipe(v.string(), v.email(), v.description('user email')),
+							),
 							// Array: use --tags admin --tags dev
 							tags: v.optional(v.array(v.string()), []),
 						}),
@@ -73,14 +75,20 @@ const schema = {
 			connect: c
 				.meta({
 					description: 'Connect to database',
-					examples: ['demo config connect --db.host localhost --db.port 5432 --db.name mydb'],
+					examples: [
+						'demo config connect --db.host localhost --db.port 5432 --db.name mydb',
+					],
 				})
 				.input(
 					s(
 						v.object({
 							db: v.object({
 								host: v.string(),
-								port: v.number(),
+								port: v.pipe(
+									v.string(),
+									v.transform((value) => Number(value)),
+									v.number(),
+								),
 								name: v.string(),
 							}),
 						}),
@@ -123,7 +131,15 @@ const schema = {
 				.input(
 					s(
 						v.object({
-							step: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
+							step: v.optional(
+								v.pipe(
+									v.string(),
+									v.transform((value) => Number(value)),
+									v.number(),
+									v.minValue(1),
+								),
+								'1', // Defaults live on the input side so the pipe can transform them too.
+							),
 							dryRun: v.optional(v.boolean(), false),
 						}),
 					),
@@ -162,7 +178,16 @@ const schema = {
 									v.picklist(['us-east-1', 'us-west-2', 'eu-west-1']),
 									'us-east-1',
 								),
-								memory: v.optional(v.pipe(v.number(), v.minValue(128), v.maxValue(10240)), 512),
+								memory: v.optional(
+									v.pipe(
+										v.string(),
+										v.transform((value) => Number(value)),
+										v.number(),
+										v.minValue(128),
+										v.maxValue(10240),
+									),
+									'512',
+								),
 							}),
 						),
 					),

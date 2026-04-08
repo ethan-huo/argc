@@ -1,4 +1,4 @@
-// Argv parser - converts string[] to structured data
+// Argv parser - performs lexical parsing and leaves explicit values as strings.
 
 export type ParsedArgs = {
 	flags: Record<string, unknown>
@@ -41,14 +41,14 @@ export function parseArgv(argv: string[]): ParsedArgs {
 			if (eqIndex !== -1) {
 				// --key=value
 				const key = camelCase(arg.slice(2, eqIndex))
-				const value = parseValue(arg.slice(eqIndex + 1))
+				const value = arg.slice(eqIndex + 1)
 				setFlag(result.flags, key, value)
 			} else {
 				// --key or --key value
 				const key = camelCase(arg.slice(2))
 				const next = argv[i + 1]
 				if (next !== undefined && !next.startsWith('-')) {
-					setFlag(result.flags, key, parseValue(next))
+					setFlag(result.flags, key, next)
 					i++
 				} else {
 					// Boolean flag
@@ -64,7 +64,7 @@ export function parseArgv(argv: string[]): ParsedArgs {
 			const key = arg[1]!
 			const next = argv[i + 1]
 			if (next !== undefined && !next.startsWith('-')) {
-				setFlag(result.flags, key, parseValue(next))
+				setFlag(result.flags, key, next)
 				i++
 			} else {
 				result.flags[key] = true
@@ -90,7 +90,11 @@ export function parseArgv(argv: string[]): ParsedArgs {
 	return result
 }
 
-function setFlag(flags: Record<string, unknown>, key: string, value: unknown): void {
+function setFlag(
+	flags: Record<string, unknown>,
+	key: string,
+	value: unknown,
+): void {
 	// Handle dot notation: --user.name john -> { user: { name: 'john' } }
 	if (key.includes('.')) {
 		setNestedFlag(flags, key.split('.'), value)
@@ -110,7 +114,11 @@ function setFlag(flags: Record<string, unknown>, key: string, value: unknown): v
 	}
 }
 
-function setNestedFlag(obj: Record<string, unknown>, path: string[], value: unknown): void {
+function setNestedFlag(
+	obj: Record<string, unknown>,
+	path: string[],
+	value: unknown,
+): void {
 	const key = path[0]!
 
 	if (path.length === 1) {
@@ -134,21 +142,6 @@ function setNestedFlag(obj: Record<string, unknown>, path: string[], value: unkn
 	}
 
 	setNestedFlag(obj[key] as Record<string, unknown>, path.slice(1), value)
-}
-
-function parseValue(str: string): unknown {
-	// Try to parse as number
-	const num = Number(str)
-	if (!Number.isNaN(num) && str.trim() !== '') {
-		return num
-	}
-
-	// Try to parse as boolean
-	if (str === 'true') return true
-	if (str === 'false') return false
-
-	// Return as string
-	return str
 }
 
 function camelCase(str: string): string {

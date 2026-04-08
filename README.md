@@ -101,6 +101,8 @@ Note: `...` must be used on the last positional argument.
 
 The killer feature. Your schema transforms CLI strings into rich objects:
 
+Explicit flag values stay as strings until your schema transforms them. The only built-in exception is boolean flag presence: `--flag` becomes `true`, and `--no-flag` becomes `false`.
+
 ```typescript
 const schema = {
   seed: c
@@ -131,6 +133,13 @@ Seeding: { users: [...], products: [...] }
 More transform examples:
 
 ```typescript
+// String → number for CLI flags
+port: v.pipe(
+	v.string(),
+	v.transform((s) => Number(s)),
+	v.number(),
+)
+
 // String → Date
 startDate: v.pipe(
 	v.string(),
@@ -180,7 +189,11 @@ c.input(
 		v.object({
 			db: v.object({
 				host: v.string(),
-				port: v.number(),
+				port: v.pipe(
+					v.string(),
+					v.transform((s) => Number(s)),
+					v.number(),
+				),
 			}),
 		}),
 	),
@@ -196,7 +209,7 @@ Help output shows usage hints:
 
 ```
 --tags <string[]>                    (repeatable)
---db <{ host: string, port: number }>  (use --db.<key>)
+--db <{ host: string, port: string }>  (use --db.<key>)
 ```
 
 ## JSON Input
@@ -375,7 +388,9 @@ const app = cli(schema, {
 	// Transform globals into context (type inferred from return value)
 	context: (globals) => ({
 		env: globals.env,
-		log: globals.verbose ? (msg: string) => console.log(`[${globals.env}]`, msg) : () => {},
+		log: globals.verbose
+			? (msg: string) => console.log(`[${globals.env}]`, msg)
+			: () => {},
 	}),
 })
 
@@ -482,14 +497,14 @@ app.run({
 
 ## Built-in Flags
 
-| Flag                    | Scope         | Description                                     |
-| ----------------------- | ------------- | ----------------------------------------------- |
-| `-h, --help`            | Everywhere    | Show help                                       |
-| `-v, --version`         | Root only     | Show version                                    |
-| `--schema[=selector]`   | Root only     | Typed CLI spec for AI agents                    |
-| `--input <json\|@file>` | Command level | Pass input as JSON/JSON5 string, file, or stdin |
-| `--run <code\|@file\|->` | Root only    | Run inline code, stdin, or a module file        |
-| `--completions <shell>` | Root only     | Generate shell completion script                |
+| Flag                     | Scope         | Description                                     |
+| ------------------------ | ------------- | ----------------------------------------------- |
+| `-h, --help`             | Everywhere    | Show help                                       |
+| `-v, --version`          | Root only     | Show version                                    |
+| `--schema[=selector]`    | Root only     | Typed CLI spec for AI agents                    |
+| `--input <json\|@file>`  | Command level | Pass input as JSON/JSON5 string, file, or stdin |
+| `--run <code\|@file\|->` | Root only     | Run inline code, stdin, or a module file        |
+| `--completions <shell>`  | Root only     | Generate shell completion script                |
 
 ## Shell Completions
 
