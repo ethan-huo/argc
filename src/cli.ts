@@ -13,6 +13,7 @@ import type {
 
 import { complete, generateCompletionScript } from './complete'
 import { normalizeArgName, showHelp, showValidationError } from './help'
+import { createHookDispatcher } from './hook'
 import { parseArgv } from './parser'
 import { getRouterChildren, findHandler } from './router'
 import {
@@ -147,6 +148,7 @@ export class CLI<
 				runOptions.handlers as Record<string, unknown>,
 				parsed,
 				this.options.name,
+				this.createHookDispatcher(),
 			)
 			return
 		}
@@ -394,6 +396,13 @@ export class CLI<
 			globals = result.value as StandardSchemaV1.InferOutput<TGlobals>
 		}
 
+		const hookDispatcher = this.createHookDispatcher()
+		const hookCall = hookDispatcher.createCall(
+			commandPath,
+			commandPath.join(' '),
+		)
+		let ok = false
+		let shouldExit = false
 		try {
 			// Build context from options
 			let context: unknown = undefined
@@ -409,10 +418,21 @@ export class CLI<
 					path: commandPath,
 					command: commandPath.join(' '),
 					raw: parsed.raw,
+					callId: hookCall.callId,
 				},
+				emit: hookCall.emit,
 			})
+			ok = true
 		} catch (error) {
+			hookCall.error(error)
 			console.error(colors.error(formatRuntimeError(error)))
+			shouldExit = true
+		} finally {
+			hookCall.end(ok)
+			await hookDispatcher.drain()
+		}
+
+		if (shouldExit) {
 			process.exit(1)
 		}
 	}
@@ -652,6 +672,15 @@ export class CLI<
 			}
 		}
 		return null
+	}
+
+	private createHookDispatcher() {
+		return createHookDispatcher({
+			app: this.options.name,
+			hook: this.options.hook,
+			hookUrl: process.env.ARGC_HOOK_URL,
+			timeoutMs: this.options.hookTimeoutMs ?? 2000,
+		})
 	}
 }
 

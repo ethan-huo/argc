@@ -1,6 +1,7 @@
 import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import type { HookDispatcher } from './hook'
 import type { parseArgv } from './parser'
 import type { Router, Schema } from './types'
 
@@ -139,6 +140,7 @@ function buildScriptHandlerTree(
 	getContext: () => Promise<unknown>,
 	rawArgv: string[],
 	appName: string,
+	hookDispatcher: HookDispatcher,
 ): ScriptHandlers {
 	if (isCommand(router)) {
 		const command = router
@@ -177,22 +179,35 @@ function buildScriptHandlerTree(
 				validatedInput = result.value as Record<string, unknown>
 			}
 
-			const context = await getContext()
-			return await handler({
-				input: validatedInput,
-				context,
-				meta: {
-					path,
-					command: commandName,
-					raw: rawArgv,
-				},
-			})
+			const hookCall = hookDispatcher.createCall(path, commandName)
+			let ok = false
+			try {
+				const context = await getContext()
+				const result = await handler({
+					input: validatedInput,
+					context,
+					meta: {
+						path,
+						command: commandName,
+						raw: rawArgv,
+						callId: hookCall.callId,
+					},
+					emit: hookCall.emit,
+				})
+				ok = true
+				return result
+			} catch (error) {
+				hookCall.error(error)
+				throw error
+			} finally {
+				hookCall.end(ok)
+			}
 		}) as ScriptHandlers
 	}
 
 	const out: Record<string, ScriptHandlers> = {}
 	for (const [key, child] of Object.entries(getRouterChildren(router))) {
-		out[key] = buildScriptHandlerTree([...path, key], child, handlers, getContext, rawArgv, appName)
+		out[key] = buildScriptHandlerTree([...path, key], child, handlers, getContext, rawArgv, appName, hookDispatcher)
 	}
 	return out
 }
@@ -205,8 +220,9 @@ function buildScriptApi(
 	globals: unknown,
 	args: string[],
 	appName: string,
+	hookDispatcher: HookDispatcher,
 ): ScriptAPI {
-	const handlerTree = buildScriptHandlerTree([], router, handlers, getContext, rawArgv, appName)
+	const handlerTree = buildScriptHandlerTree([], router, handlers, getContext, rawArgv, appName, hookDispatcher)
 	const call = flattenHandlerTree(handlerTree)
 	return { handlers: handlerTree, call, globals, args, raw: rawArgv }
 }
@@ -220,6 +236,7 @@ export async function runScriptMode(
 	handlers: Record<string, unknown>,
 	parsed: ReturnType<typeof parseArgv>,
 	appName: string,
+	hookDispatcher: HookDispatcher,
 ): Promise<void> {
 	const flagsWithoutBuiltins = stripBuiltinFlags(parsed.flags)
 
@@ -255,8 +272,10 @@ export async function runScriptMode(
 		globals,
 		parsed.positionals,
 		appName,
+		hookDispatcher,
 	)
 
+	let shouldExit = false
 	try {
 		if (parsed.flags.run !== undefined) {
 			const source = parseRunSource(parsed.flags.run)
@@ -273,6 +292,12 @@ export async function runScriptMode(
 		}
 	} catch (error) {
 		console.error(colors.error(formatRuntimeError(error)))
+		shouldExit = true
+	} finally {
+		await hookDispatcher.drain()
+	}
+
+	if (shouldExit) {
 		process.exit(1)
 	}
 }

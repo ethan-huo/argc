@@ -8,6 +8,7 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 - **Transform inputs** - Convert strings to rich objects (`Bun.file()`, dates, etc.)
 - **Arrays & Objects** - `--tag a --tag b` and `--db.host localhost` syntax
 - **AI-native schema** - `--schema` outputs TypeScript-like types, compact outlines, and jq-like selectors
+- **Hook events** - Handlers can emit structured events for agent runtimes and UIs
 - **Command aliases** - `ls, list` style display
 - **Nested groups** - Unlimited depth (`deploy aws lambda`)
 - **Lazy validation** - Transform only runs for executed command
@@ -326,6 +327,101 @@ Use jq-like selectors to narrow the output:
 
 Patterns compose: `--schema=.deploy..lambda`, `--schema=.*.list`
 
+## Hook Events for Agent Runtimes
+
+CLI stdout is for the agent reading the command result. Hook events are for the system around the agent: runtime logs, UI rendering, progress panels, audit trails, or tool-call replay.
+
+Handlers receive an `emit(data)` function and a generated `meta.callId`:
+
+```typescript
+app.run({
+	handlers: {
+		migrate: async ({ input, emit, meta }) => {
+			emit({ step: 'running', current: 0, total: input.steps })
+
+			await runMigrations(input.steps)
+
+			emit({ step: 'done', applied: input.steps, callId: meta.callId })
+			console.log(`Migrated ${input.steps} steps`) // stdout is still for the agent
+		},
+	},
+})
+```
+
+`emit()` is always available. If no hook transport is configured, it is a no-op. Use it when the handler knows something structured that stdout should not have to encode, such as progress, generated asset metadata, IDs, or preview payloads.
+
+argc does **not** automatically send command input. Tool authors decide what is safe and useful to expose:
+
+```typescript
+// Good: explicit, minimal, safe
+emit({ artifact: 'image', path: outputPath, width, height })
+
+// Avoid: may leak prompts, tokens, file paths, or customer data
+emit(input)
+```
+
+### Receiving Events
+
+Agent runtimes can enable zero-config delivery with an env var:
+
+```bash
+ARGC_HOOK_URL=http://localhost:9090/events myapp image generate --prompt "..."
+```
+
+argc sends JSON batches with events like:
+
+```json
+[
+	{
+		"callId": "01JSD9Y7N4J3W2V5Z8QK6M1R0A",
+		"seq": 1,
+		"app": "myapp",
+		"command": "image generate",
+		"path": ["image", "generate"],
+		"kind": "call",
+		"data": null,
+		"at": 1760000000000
+	},
+	{
+		"callId": "01JSD9Y7N4J3W2V5Z8QK6M1R0A",
+		"seq": 2,
+		"app": "myapp",
+		"command": "image generate",
+		"path": ["image", "generate"],
+		"kind": "call.emit",
+		"data": { "artifact": "image", "path": "./out.png" },
+		"at": 1760000000015
+	},
+	{
+		"callId": "01JSD9Y7N4J3W2V5Z8QK6M1R0A",
+		"seq": 3,
+		"app": "myapp",
+		"command": "image generate",
+		"path": ["image", "generate"],
+		"kind": "call.end",
+		"data": { "duration": 128, "ok": true },
+		"at": 1760000000128
+	}
+]
+```
+
+Events are batched and delivered fire-and-forget. `seq` is monotonic within one `CLI.run()` dispatcher; consumers should group by `callId` and sort by `seq`.
+
+You can override the env var with `CLIOptions.hook`:
+
+```typescript
+const app = cli(schema, {
+	name: 'myapp',
+	version: '1.0.0',
+	hook: async (events) => {
+		await sendToRuntime(events)
+	},
+	hookTimeoutMs: 2000, // default
+})
+```
+
+Use `hook: false` to explicitly disable `ARGC_HOOK_URL` auto-observation for an app.
+
 ## Command Aliases
 
 Define command aliases:
@@ -456,6 +552,8 @@ const app = cli(schema, {
   description: 'My CLI',  // optional (shown in help)
   globals: globalsSchema, // optional (global options schema)
   context: (globals) => ({ ... }),  // optional: transform globals to context
+  hook: (events) => { ... }, // optional: batch hook event transport
+  hookTimeoutMs: 2000,    // optional: drain timeout for hook delivery (default: 2000)
   schemaMaxLines: 100,    // optional: --schema switches to outline above this (default: 100)
 })
 
@@ -471,13 +569,15 @@ app.run({
 })
 ```
 
-Each handler receives `{ input, context, meta }`:
+Each handler receives `{ input, context, meta, emit }`:
 
 - `input` - validated command input (typed from schema)
 - `context` - value returned by `context()` option (or `undefined`)
 - `meta.path` - command path as array (`['user', 'create']`)
 - `meta.command` - command path as string (`'user create'`)
 - `meta.raw` - original argv before parsing
+- `meta.callId` - generated ULID shared by hook events for this command call
+- `emit(data)` - sends a structured `call.emit` hook event, or no-ops when no hook transport is configured
 
 Handlers can be registered as nested objects or flat dot-notation:
 

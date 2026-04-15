@@ -66,6 +66,8 @@ export type CLIOptions<TGlobals extends Schema = Schema, TContext = undefined> =
 	schemaMaxLines?: number
 	globals?: TGlobals
 	context?: (globals: StandardSchemaV1.InferOutput<TGlobals>) => TContext | Promise<TContext>
+	hook?: false | HookTransport
+	hookTimeoutMs?: number
 }
 
 // ============ Handler Types ============
@@ -74,12 +76,14 @@ export type HandlerMeta = {
 	path: string[]
 	command: string
 	raw: string[]
+	callId: string
 }
 
 export type HandlerOptions<TInput, TContext> = {
 	input: TInput
 	context: TContext
 	meta: HandlerMeta
+	emit: (data: unknown) => void
 }
 
 export type Handler<TInput, TContext> = (
@@ -105,6 +109,47 @@ export type Handlers<T extends Router, TContext> =
 export type RunConfig<TSchema extends Router, TContext> = {
 	handlers: Handlers<TSchema, TContext>
 }
+
+// ============ Hook Types ============
+
+export type HookErrorData = {
+	name?: string
+	message: string
+}
+
+export type HookEndData = {
+	duration: number
+	ok: boolean
+}
+
+type HookEventBase = {
+	callId: string
+	seq: number
+	app: string
+	command: string
+	path: string[]
+	at: number
+}
+
+export type HookEvent =
+	| (HookEventBase & {
+			kind: 'call'
+			data: null
+	  })
+	| (HookEventBase & {
+			kind: 'call.emit'
+			data: unknown
+	  })
+	| (HookEventBase & {
+			kind: 'call.error'
+			data: HookErrorData
+	  })
+	| (HookEventBase & {
+			kind: 'call.end'
+			data: HookEndData
+	  })
+
+export type HookTransport = (events: HookEvent[]) => void | Promise<void>
 
 // ============ Utilities ============
 

@@ -2,7 +2,7 @@ import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import * as v from 'valibot'
 
-import { c, cli, group } from './index'
+import { c, cli, group, type HookEvent } from './index'
 
 const s = toStandardJsonSchema
 
@@ -619,6 +619,276 @@ describe('cli', () => {
 				} catch {
 					// ignore
 				}
+			}
+		})
+	})
+
+	describe('hooks', () => {
+		test('passes callId and no-op emit without transport', async () => {
+			let callId = ''
+			const schema = {
+				test: c.input(s(v.object({}))),
+			}
+
+			process.argv = ['bun', 'cli', 'test']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					test: ({ meta, emit }) => {
+						callId = meta.callId
+						emit({ ignored: true })
+					},
+				},
+			})
+
+			expect(callId).toHaveLength(26)
+		})
+
+		test('sends call, emit, and end events through programmatic hook', async () => {
+			const events: HookEvent[] = []
+			const schema = {
+				greet: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'greet', '--name', 'Ada']
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				hook: (batch) => {
+					events.push(...batch)
+				},
+			})
+			await app.run({
+				handlers: {
+					greet: ({ input, emit }) => {
+						emit({ message: `hello ${input.name}` })
+					},
+				},
+			})
+
+			const ordered = events.toSorted((a, b) => a.seq - b.seq)
+			expect(ordered.map((event) => event.kind)).toEqual([
+				'call',
+				'call.emit',
+				'call.end',
+			])
+			expect(ordered.map((event) => event.seq)).toEqual([1, 2, 3])
+			expect(ordered[0]!.data).toBeNull()
+			expect(ordered[0]!.path).toEqual(['greet'])
+			expect(ordered[0]!.command).toBe('greet')
+			expect(new Set(ordered.map((event) => event.callId)).size).toBe(1)
+		})
+
+		test('sends error and end before exiting on handler failure', async () => {
+			const events: HookEvent[] = []
+			const schema = {
+				boom: c.input(s(v.object({}))),
+			}
+
+			process.argv = ['bun', 'cli', 'boom']
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				hook: (batch) => {
+					events.push(...batch)
+				},
+			})
+			try {
+				await app.run({
+					handlers: {
+						boom: () => {
+							throw new TypeError('Boom')
+						},
+					},
+				})
+			} catch {
+				// expected (process.exit mocked)
+			}
+
+			const ordered = events.toSorted((a, b) => a.seq - b.seq)
+			const errorEvent = ordered.find((event) => event.kind === 'call.error')
+			const endEvent = ordered.find((event) => event.kind === 'call.end')
+			expect(ordered.map((event) => event.kind)).toEqual([
+				'call',
+				'call.error',
+				'call.end',
+			])
+			expect(errorEvent?.data).toEqual({ name: 'TypeError', message: 'Boom' })
+			expect(endEvent?.data).toEqual({
+				duration: expect.any(Number),
+				ok: false,
+			})
+			expect(exitCode).toBe(1)
+		})
+
+		test('does not send hook events before input validation passes', async () => {
+			const events: HookEvent[] = []
+			const schema = {
+				greet: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'greet']
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				hook: (batch) => {
+					events.push(...batch)
+				},
+			})
+			try {
+				await app.run({
+					handlers: {
+						greet: () => {},
+					},
+				})
+			} catch {
+				// expected (process.exit mocked)
+			}
+
+			expect(events).toEqual([])
+		})
+
+		test('sanitizes non-json-safe emitted data', async () => {
+			const events: HookEvent[] = []
+			const schema = {
+				test: c.input(s(v.object({}))),
+			}
+
+			process.argv = ['bun', 'cli', 'test']
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				hook: (batch) => {
+					events.push(...batch)
+				},
+			})
+			await app.run({
+				handlers: {
+					test: ({ emit }) => {
+						const shared = { ok: true }
+						emit({
+							fn: () => {},
+							sym: Symbol('x'),
+							nested: { bad: 1n },
+							arr: [undefined],
+							first: shared,
+							second: shared,
+						})
+					},
+				},
+			})
+
+			const emitEvent = events.find((event) => event.kind === 'call.emit')
+			expect(emitEvent?.data).toEqual({
+				fn: { _hookError: 'non-serializable data' },
+				sym: { _hookError: 'non-serializable data' },
+				nested: { bad: { _hookError: 'non-serializable data' } },
+				arr: [{ _hookError: 'non-serializable data' }],
+				first: { ok: true },
+				second: { ok: true },
+			})
+		})
+
+		test('does not let hostile emitted data fail the handler', async () => {
+			const events: HookEvent[] = []
+			const schema = {
+				test: c.input(s(v.object({}))),
+			}
+			const hostile = {}
+			Object.defineProperty(hostile, 'boom', {
+				enumerable: true,
+				get() {
+					throw new Error('getter failed')
+				},
+			})
+
+			process.argv = ['bun', 'cli', 'test']
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				hook: (batch) => {
+					events.push(...batch)
+				},
+			})
+			await app.run({
+				handlers: {
+					test: ({ emit }) => {
+						emit(hostile)
+					},
+				},
+			})
+
+			const ordered = events.toSorted((a, b) => a.seq - b.seq)
+			expect(ordered.map((event) => event.kind)).toEqual([
+				'call',
+				'call.emit',
+				'call.end',
+			])
+			expect(ordered[1]?.data).toEqual({
+				_hookError: 'non-serializable data',
+			})
+			expect(ordered[2]?.data).toEqual({
+				duration: expect.any(Number),
+				ok: true,
+			})
+		})
+
+		test('--run shares one dispatcher across concurrent command calls', async () => {
+			const events: HookEvent[] = []
+			const schema = {
+				update: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'--run',
+				`
+				await Promise.all([
+				  argc.call.update({ name: 'A' }),
+				  argc.call.update({ name: 'B' }),
+				])
+				`,
+			]
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				hook: (batch) => {
+					events.push(...batch)
+				},
+			})
+			await app.run({
+				handlers: {
+					update: async ({ input, emit }) => {
+						emit({ name: input.name })
+						await Promise.resolve()
+						emit({ done: input.name })
+					},
+				},
+			})
+
+			const ordered = events.toSorted((a, b) => a.seq - b.seq)
+			const callIds = new Set(
+				ordered
+					.filter((event) => event.kind === 'call')
+					.map((event) => event.callId),
+			)
+			expect(ordered.map((event) => event.seq)).toEqual([
+				1, 2, 3, 4, 5, 6, 7, 8,
+			])
+			expect(callIds.size).toBe(2)
+			for (const callId of callIds) {
+				const kinds = ordered
+					.filter((event) => event.callId === callId)
+					.map((event) => event.kind)
+				expect(kinds).toEqual(['call', 'call.emit', 'call.emit', 'call.end'])
 			}
 		})
 	})
