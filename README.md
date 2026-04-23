@@ -597,20 +597,23 @@ app.run({
 
 ## Built-in Flags
 
-| Flag                     | Scope         | Description                                     |
-| ------------------------ | ------------- | ----------------------------------------------- |
-| `-h, --help`             | Everywhere    | Show help                                       |
-| `-v, --version`          | Root only     | Show version                                    |
-| `--schema[=selector]`    | Root only     | Typed CLI spec for AI agents                    |
-| `--input <json\|@file>`  | Command level | Pass input as JSON/JSON5 string, file, or stdin |
-| `--run <code\|@file\|->` | Root only     | Run inline code, stdin, or a module file        |
-| `--completions <shell>`  | Root only     | Generate shell completion script                |
+| Flag                     | Scope         | Description                                                          |
+| ------------------------ | ------------- | -------------------------------------------------------------------- |
+| `-h, --help`             | Everywhere    | Show help                                                            |
+| `-v, --version`          | Root only     | Show version                                                         |
+| `--schema[=selector]`    | Root only     | Typed CLI spec for AI agents                                         |
+| `--input <json\|@file>`  | Command level | Pass input as JSON/JSON5 string, file, or stdin                      |
+| `--run <code\|@file\|->` | Root only     | Run inline code, stdin, or a module file                             |
+| `--completions [shell]`  | Root only     | Generate a completion script, or auto-install for the detected shell |
 
 ## Shell Completions
 
-Generate and install completion scripts:
+Generate or install completion scripts:
 
 ```bash
+# auto-detect current shell and install to the standard completion path
+myapp --completions
+
 # bash
 myapp --completions bash > ~/.local/share/bash-completion/completions/myapp
 
@@ -620,6 +623,8 @@ myapp --completions zsh > ~/.zfunc/_myapp  # ensure ~/.zfunc is in $fpath
 # fish
 myapp --completions fish > ~/.config/fish/completions/myapp.fish
 ```
+
+When `--completions` is used without a shell, `argc` detects the current shell, writes the completion file to its standard autoload directory, and prints the exact reload command for the current session.
 
 ## Schema Libraries
 

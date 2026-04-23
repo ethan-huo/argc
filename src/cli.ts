@@ -11,7 +11,13 @@ import type {
 	StandardSchemaV1,
 } from './types'
 
-import { complete, generateCompletionScript } from './complete'
+import {
+	complete,
+	detectCurrentShell,
+	generateCompletionScript,
+	getCompletionReloadHint,
+	installCompletionScript,
+} from './complete'
 import { normalizeArgName, showHelp, showValidationError } from './help'
 import { createHookDispatcher } from './hook'
 import { parseArgv } from './parser'
@@ -159,22 +165,48 @@ export class CLI<
 		// Handle --completions (root only)
 		if (parsed.flags.completions !== undefined) {
 			if (isRootLevel) {
+				if (parsed.flags.completions === true) {
+					const shell = detectCurrentShell()
+					if (!shell) {
+						console.error(
+							colors.error(
+								'Could not detect shell. Pass one explicitly: --completions bash|zsh|fish',
+							),
+						)
+						process.exit(1)
+					}
+
+					try {
+						const path = await installCompletionScript(shell, this.options.name)
+						console.log(
+							colors.success(`Installed ${shell} completions to ${path}`),
+						)
+						console.log(colors.dim(getCompletionReloadHint(shell, path)))
+						return
+					} catch (error) {
+						const message =
+							error instanceof Error ? error.message : String(error)
+						console.error(
+							colors.error(`Failed to install completions: ${message}`),
+						)
+						process.exit(1)
+					}
+				}
+
 				const shell =
 					typeof parsed.flags.completions === 'string'
 						? parsed.flags.completions
 						: null
-				if (!shell) {
-					console.error(
-						colors.error(
-							'--completions requires a shell name (bash, zsh, fish)',
-						),
-					)
-					process.exit(1)
-				}
-				const script = generateCompletionScript(shell, this.options.name)
+				const script = shell
+					? generateCompletionScript(shell, this.options.name)
+					: null
 				if (!script) {
 					console.error(
-						colors.error(`Unknown shell: ${shell}. Supported: bash, zsh, fish`),
+						colors.error(
+							shell
+								? `Unknown shell: ${shell}. Supported: bash, zsh, fish`
+								: 'Could not detect shell. Pass one explicitly: --completions bash|zsh|fish',
+						),
 					)
 					process.exit(1)
 				}

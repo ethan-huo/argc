@@ -1,5 +1,8 @@
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import * as v from 'valibot'
 
 import { c, cli, group, type HookEvent } from './index'
@@ -9,12 +12,16 @@ const s = toStandardJsonSchema
 describe('cli', () => {
 	let originalArgv: string[]
 	let originalExit: typeof process.exit
+	let originalHome: string | undefined
+	let originalShell: string | undefined
 	let exitCode: number | undefined
 	let consoleOutput: string[]
 
 	beforeEach(() => {
 		originalArgv = process.argv
 		originalExit = process.exit
+		originalHome = process.env.HOME
+		originalShell = process.env.SHELL
 		exitCode = undefined
 		consoleOutput = []
 
@@ -38,6 +45,16 @@ describe('cli', () => {
 	afterEach(() => {
 		process.argv = originalArgv
 		process.exit = originalExit
+		if (originalHome === undefined) {
+			delete process.env.HOME
+		} else {
+			process.env.HOME = originalHome
+		}
+		if (originalShell === undefined) {
+			delete process.env.SHELL
+		} else {
+			process.env.SHELL = originalShell
+		}
 	})
 
 	describe('command routing', () => {
@@ -1168,6 +1185,29 @@ describe('cli', () => {
 			const output = consoleOutput.join('\n')
 			expect(output).toContain('_app_completions')
 			expect(output).toContain('COMPREPLY')
+		})
+
+		test('--completions without value installs to detected shell path', async () => {
+			const schema = { test: c.input(s(v.object({}))) }
+			const home = mkdtempSync(join(tmpdir(), 'argc-completions-'))
+			process.env.HOME = home
+			process.env.SHELL = '/opt/homebrew/bin/fish'
+			process.argv = ['bun', 'cli', '--completions']
+
+			try {
+				const app = cli(schema, { name: 'app', version: '1.0.0' })
+				await app.run({ handlers: { test: () => {} } })
+
+				const path = join(home, '.config', 'fish', 'completions', 'app.fish')
+				expect(existsSync(path)).toBe(true)
+				expect(readFileSync(path, 'utf8')).toContain('complete -c app')
+
+				const output = consoleOutput.join('\n')
+				expect(output).toContain(`Installed fish completions to ${path}`)
+				expect(output).toContain(`source ${path}`)
+			} finally {
+				rmSync(home, { force: true, recursive: true })
+			}
 		})
 
 		test('--completions with subcommand falls through to handler', async () => {
