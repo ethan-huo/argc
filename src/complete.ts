@@ -235,7 +235,8 @@ function __${fn}_complete
   if test -z "$cur"
     command ${name} --_complete (count $tokens) -- $tokens "" 2>/dev/null
   else
-    command ${name} --_complete (math (count $tokens) - 1) -- $tokens 2>/dev/null
+    # fish keeps the current token separate from -opc, so pass it explicitly.
+    command ${name} --_complete (count $tokens) -- $tokens $cur 2>/dev/null
   end
 end
 complete -c ${name} -f -a '(__${fn}_complete)'`

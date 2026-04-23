@@ -250,6 +250,8 @@ describe('generateCompletionScript', () => {
 		expect(script).not.toBeNull()
 		expect(script!).toContain('complete -c myapp')
 		expect(script!).toContain('--_complete')
+		expect(script!).toContain('-- $tokens $cur')
+		expect(script!).not.toContain('(math (count $tokens) - 1)')
 	})
 
 	test('sanitizes program name in function names', () => {
