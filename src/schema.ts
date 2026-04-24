@@ -63,7 +63,9 @@ function jsonSchemaToTypeString(schema: JSONSchema): string {
 			return 'unknown[]'
 		}
 		case 'object': {
-			const properties = schema.properties as Record<string, JSONSchema> | undefined
+			const properties = schema.properties as
+				| Record<string, JSONSchema>
+				| undefined
 			if (!properties) return 'object'
 
 			const required = new Set((schema.required as string[]) ?? [])
@@ -103,7 +105,9 @@ function extractInputParamsDetailed(schema: Schema): ParamInfo[] {
 	}
 
 	const params: ParamInfo[] = []
-	const properties = jsonSchema.properties as Record<string, JSONSchema> | undefined
+	const properties = jsonSchema.properties as
+		| Record<string, JSONSchema>
+		| undefined
 	if (!properties) return []
 
 	const required = new Set((jsonSchema.required as string[]) ?? [])
@@ -161,7 +165,11 @@ export function getInputTypeHint(schema: Schema): string {
 // Export for cli.ts help display
 export { extractInputParamsDetailed, type ParamInfo }
 
-function generateCommandSchema(name: string, router: Router, indent: string): string[] {
+function generateCommandSchema(
+	name: string,
+	router: Router,
+	indent: string,
+): string[] {
 	const lines: string[] = []
 
 	if (isCommand(router)) {
@@ -217,8 +225,13 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 
 	// CLI syntax hint for AI agents
 	lines.push('CLI Syntax:')
+	lines.push(
+		'  flags:   --skip-build maps to skipBuild; --input uses schema field names',
+	)
 	lines.push('  arrays:  --tag a --tag b             → tag: ["a", "b"]')
-	lines.push('  objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }')
+	lines.push(
+		'  objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }',
+	)
 	lines.push('')
 
 	// Description
@@ -257,7 +270,10 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 	return lines.join('\n')
 }
 
-export function generateSchemaOutline(schema: Router, depth: number = 2): string[] {
+export function generateSchemaOutline(
+	schema: Router,
+	depth: number = 2,
+): string[] {
 	const children = getRouterChildren(schema)
 	const lines: string[] = []
 	for (const [name, child] of Object.entries(children)) {
@@ -288,7 +304,11 @@ function pascalCase(str: string): string {
 		.join('')
 }
 
-function renderOutlineNode(name: string, router: Router, depth: number): string {
+function renderOutlineNode(
+	name: string,
+	router: Router,
+	depth: number,
+): string {
 	if (depth <= 0) return name
 	if (isCommand(router)) return name
 	const children = getRouterChildren(router)
@@ -299,7 +319,11 @@ function renderOutlineNode(name: string, router: Router, depth: number): string 
 	return `${name}{${parts.join(',')}}`
 }
 
-function findDeepPath(router: Router, path: string[], minDepth: number): string[] | null {
+function findDeepPath(
+	router: Router,
+	path: string[],
+	minDepth: number,
+): string[] | null {
 	if (minDepth <= 1) return path
 	if (isCommand(router)) return null
 	const children = getRouterChildren(router)

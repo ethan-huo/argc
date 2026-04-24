@@ -15,7 +15,9 @@ const s = toStandardJsonSchema
 describe('generateSchema', () => {
 	test('simple command', () => {
 		const schema = {
-			greet: c.meta({ description: 'Say hello' }).input(s(v.object({ name: v.string() }))),
+			greet: c
+				.meta({ description: 'Say hello' })
+				.input(s(v.object({ name: v.string() }))),
 		}
 
 		const output = generateSchema(schema, { name: 'app' })
@@ -56,7 +58,9 @@ describe('generateSchema', () => {
 				{ description: 'User management' },
 				{
 					list: c.meta({ description: 'List users' }).input(s(v.object({}))),
-					create: c.meta({ description: 'Create user' }).input(s(v.object({ name: v.string() }))),
+					create: c
+						.meta({ description: 'Create user' })
+						.input(s(v.object({ name: v.string() }))),
 				},
 			),
 		}
@@ -123,13 +127,30 @@ describe('generateSchema', () => {
 		const output = generateSchema(schema, { name: 'app' })
 
 		expect(output).toContain('CLI Syntax:')
+		expect(output).toContain(
+			'flags:   --skip-build maps to skipBuild; --input uses schema field names',
+		)
 		expect(output).toContain('arrays:')
 		expect(output).toContain('objects:')
 	})
 
+	test('schema output keeps schema field names for input objects', () => {
+		const schema = {
+			release: c.input(
+				s(v.object({ skipBuild: v.optional(v.boolean(), false) })),
+			),
+		}
+
+		const output = generateSchema(schema, { name: 'app' })
+		expect(output).toContain('release(skipBuild?: boolean = false)')
+		expect(output).not.toContain('release(skip-build')
+	})
+
 	test('deprecated command', () => {
 		const schema = {
-			old: c.meta({ description: 'Old command', deprecated: true }).input(s(v.object({}))),
+			old: c
+				.meta({ description: 'Old command', deprecated: true })
+				.input(s(v.object({}))),
 		}
 
 		const output = generateSchema(schema, { name: 'app' })
@@ -282,6 +303,8 @@ describe('generateSchema', () => {
 		}
 
 		const hint = getInputTypeHint(schema.cmd['~argc'].input!)
-		expect(hint).toBe('{ name: string, email?: string, tags?: string[], role?: enum }')
+		expect(hint).toBe(
+			'{ name: string, email?: string, tags?: string[], role?: enum }',
+		)
 	})
 })

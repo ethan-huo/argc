@@ -1094,6 +1094,60 @@ describe('cli', () => {
 			expect(output).toContain('app greet --name John')
 			expect(exitCode === 0 || exitCode === undefined).toBe(true)
 		})
+
+		test('command --help displays flags as kebab-case while input hint keeps schema field names', async () => {
+			const schema = {
+				release: c.input(
+					s(
+						v.object({
+							skipBuild: v.optional(v.boolean(), false),
+						}),
+					),
+				),
+			}
+
+			process.argv = ['bun', 'cli', 'release', '--help']
+
+			const app = cli(schema, { name: 'app', version: '1.0.0' })
+
+			try {
+				await app.run({ handlers: { release: () => {} } })
+			} catch {
+				// process.exit throws
+			}
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain(
+				'Flags accept kebab-case or schema field names; --input uses schema field names.',
+			)
+			expect(output).toContain('--skip-build')
+			expect(output).not.toContain('--skipBuild')
+			expect(output).toContain('skipBuild?: boolean')
+			expect(exitCode === 0 || exitCode === undefined).toBe(true)
+		})
+
+		test('root --help displays global flags as kebab-case', async () => {
+			const schema = { test: c.input(s(v.object({}))) }
+
+			process.argv = ['bun', 'cli', '--help']
+
+			const app = cli(schema, {
+				name: 'app',
+				version: '1.0.0',
+				globals: s(v.object({ outputFormat: v.optional(v.string()) })),
+			})
+
+			try {
+				await app.run({ handlers: { test: () => {} } })
+			} catch {
+				// process.exit throws
+			}
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('--output-format')
+			expect(output).not.toContain('--outputFormat')
+			expect(exitCode === 0 || exitCode === undefined).toBe(true)
+		})
 	})
 
 	describe('version', () => {
@@ -1170,6 +1224,27 @@ describe('cli', () => {
 
 			const output = consoleOutput.join('\n')
 			expect(output).toContain('invalid arguments')
+			expect(exitCode).toBe(1)
+		})
+
+		test('shows missing required options as kebab-case', async () => {
+			const schema = {
+				release: c.input(s(v.object({ skipBuild: v.boolean() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'release']
+
+			const app = cli(schema, { name: 'app', version: '1.0.0' })
+
+			try {
+				await app.run({ handlers: { release: () => {} } })
+			} catch {
+				// process.exit throws
+			}
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('--skip-build')
+			expect(output).not.toContain('--skipBuild')
 			expect(exitCode).toBe(1)
 		})
 	})

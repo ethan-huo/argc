@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path'
 
 import type { Router, Schema } from './types'
 
+import { kebabCase } from './naming'
 import { getRouterChildren } from './router'
 import { extractInputParamsDetailed, type ParamInfo } from './schema'
 import { isCommand, isGroup } from './types'
@@ -13,10 +14,6 @@ export type CompletionContext = {
 }
 
 export type SupportedShell = 'bash' | 'zsh' | 'fish'
-
-function kebabCase(str: string): string {
-	return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)
-}
 
 function camelCase(str: string): string {
 	return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase())

@@ -1,5 +1,6 @@
 import type { AnyCommand, Router, Schema } from './types'
 
+import { kebabCase } from './naming'
 import { getRouterChildren } from './router'
 import { extractInputParamsDetailed, getInputTypeHint } from './schema'
 import { fmt as colors, padEnd } from './terminal'
@@ -35,7 +36,7 @@ function getTypeUsageHint(type: string, name: string): string {
 
 	// Object type: { ... }
 	if (type.startsWith('{') && type.endsWith('}')) {
-		return ` (use --${name}.<key>)`
+		return ` (use --${kebabCase(name)}.<key>)`
 	}
 
 	return ''
@@ -71,6 +72,11 @@ export function showHelp(
 	if (commandPath.length === 0 && description) {
 		console.log(description)
 	}
+	console.log(
+		colors.dim(
+			'Flags accept kebab-case or schema field names; --input uses schema field names.',
+		),
+	)
 	console.log()
 
 	if (isCommand(router)) {
@@ -117,7 +123,8 @@ export function showHelp(
 			console.log()
 			console.log(colors.bold('Options:'))
 			for (const opt of optionsList) {
-				const flag = opt.optional ? `--${opt.name}` : `--${opt.name} (required)`
+				const flagName = kebabCase(opt.name)
+				const flag = opt.optional ? `--${flagName}` : `--${flagName} (required)`
 				const typeHint = opt.type !== 'boolean' ? ` <${opt.type}>` : ''
 				const defaultHint =
 					opt.default !== undefined
@@ -203,7 +210,7 @@ export function showHelp(
 	if (options.globals) {
 		const globalParams = extractInputParamsDetailed(options.globals)
 		for (const opt of globalParams) {
-			const flag = `--${opt.name}`
+			const flag = `--${kebabCase(opt.name)}`
 			const typeHint = opt.type !== 'boolean' ? ` <${opt.type}>` : ''
 			const defaultHint =
 				opt.default !== undefined
@@ -289,7 +296,7 @@ export function showValidationError(
 		}
 
 		const display = argInfo.display.get(field)
-		const label = display ? `<${display}>` : `--${field}`
+		const label = display ? `<${display}>` : `--${kebabCase(field)}`
 		errors.push({ field, label, message: msg, required })
 	}
 
