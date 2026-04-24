@@ -16,6 +16,18 @@ export type SelectorMatch = {
 	node: Router
 }
 
+export type SchemaSelectionOptions = {
+	depth?: number
+}
+
+export type SchemaSelectionResult = {
+	selector: string
+	steps: SelectorStep[]
+	matches: SelectorMatch[]
+	schema: Router
+	empty: boolean
+}
+
 export function parseSchemaSelector(input: string): SelectorStep[] {
 	if (!input) {
 		throw new Error('Selector is empty')
@@ -61,7 +73,10 @@ export function parseSchemaSelector(input: string): SelectorStep[] {
 	return steps
 }
 
-export function matchSchemaSelector(schema: Router, steps: SelectorStep[]): SelectorMatch[] {
+export function matchSchemaSelector(
+	schema: Router,
+	steps: SelectorStep[],
+): SelectorMatch[] {
 	if (steps.length === 0) {
 		return [{ path: [], node: schema }]
 	}
@@ -113,7 +128,11 @@ export function matchSchemaSelector(schema: Router, steps: SelectorStep[]): Sele
 	return current
 }
 
-export function buildSchemaSubset(schema: Router, matches: SelectorMatch[], depth: number): Router {
+export function buildSchemaSubset(
+	schema: Router,
+	matches: SelectorMatch[],
+	depth: number,
+): Router {
 	if (matches.length === 0) return {}
 	if (matches.some((match) => match.path.length === 0)) {
 		return sliceRouter(schema, depth)
@@ -126,6 +145,24 @@ export function buildSchemaSubset(schema: Router, matches: SelectorMatch[], dept
 	return root
 }
 
+export function selectSchema(
+	schema: Router,
+	selector: string,
+	options: SchemaSelectionOptions = {},
+): SchemaSelectionResult {
+	const steps = parseSchemaSelector(selector)
+	const matches = matchSchemaSelector(schema, steps)
+	const depth = options.depth ?? 1
+
+	return {
+		selector,
+		steps,
+		matches,
+		schema: buildSchemaSubset(schema, matches, depth),
+		empty: matches.length === 0,
+	}
+}
+
 export function sliceRouter(router: Router, depth: number): Router {
 	if (isCommand(router)) return router
 
@@ -134,7 +171,9 @@ export function sliceRouter(router: Router, depth: number): Router {
 			return group(router['~argc.group'].meta, {})
 		}
 		const children: Record<string, Router> = {}
-		for (const [name, child] of Object.entries(router['~argc.group'].children)) {
+		for (const [name, child] of Object.entries(
+			router['~argc.group'].children,
+		)) {
 			children[name] = sliceRouter(child, depth - 1)
 		}
 		return group(router['~argc.group'].meta, children)

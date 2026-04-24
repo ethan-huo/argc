@@ -3,7 +3,24 @@ export { complete, generateCompletionScript } from './complete'
 export type { CompletionContext } from './complete'
 export { c, CommandBuilder, group, GroupBuilder } from './command'
 export { parseArgv } from './parser'
-export { generateSchema, generateSchemaHintExample, generateSchemaOutline } from './schema'
+export {
+	generateSchema,
+	generateSchemaHintExample,
+	generateSchemaOutline,
+} from './schema'
+export {
+	buildSchemaSubset,
+	matchSchemaSelector,
+	parseSchemaSelector,
+	selectSchema,
+	sliceRouter,
+} from './schema-selector'
+export type {
+	SchemaSelectionOptions,
+	SchemaSelectionResult,
+	SelectorMatch,
+	SelectorStep,
+} from './schema-selector'
 export type {
 	AnyCommand,
 	AnyGroup,

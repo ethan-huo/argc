@@ -327,6 +327,23 @@ Use jq-like selectors to narrow the output:
 
 Patterns compose: `--schema=.deploy..lambda`, `--schema=.*.list`
 
+For custom schema commands or integrations, use `selectSchema` as the stable schema discovery API:
+
+```typescript
+import { generateSchema, selectSchema } from 'argc'
+
+const selected = selectSchema(schema, '.user.create', { depth: 2 })
+
+console.log(
+	generateSchema(selected.schema, {
+		name: 'myapp',
+		description: 'My CLI app',
+	}),
+)
+```
+
+`selectSchema` owns selector parsing, router matching, subset construction, root selector behavior, and empty-match reporting. Lower-level helpers are also exported for advanced use: `parseSchemaSelector`, `matchSchemaSelector`, and `buildSchemaSubset`.
+
 ## Hook Events for Agent Runtimes
 
 CLI stdout is for the agent reading the command result. Hook events are for the system around the agent: runtime logs, UI rendering, progress panels, audit trails, or tool-call replay.
