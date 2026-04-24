@@ -28,11 +28,7 @@ import {
 	generateSchemaHintExample,
 	generateSchemaOutline,
 } from './schema'
-import {
-	buildSchemaSubset,
-	matchSchemaSelector,
-	parseSchemaSelector,
-} from './schema-selector'
+import { selectSchema, type SchemaSelectionResult } from './schema-selector'
 import {
 	expandHome,
 	readStdin,
@@ -228,8 +224,7 @@ export class CLI<
 		// Handle --schema (root only, for AI agents)
 		if (parsed.flags.schema) {
 			if (isRootLevel) {
-				let selectorMatches: ReturnType<typeof matchSchemaSelector> | null =
-					null
+				let selection: SchemaSelectionResult | null = null
 				let schemaOutput = generateSchema(this.schema, {
 					name: this.options.name,
 					description: this.options.description,
@@ -239,10 +234,8 @@ export class CLI<
 					typeof parsed.flags.schema === 'string' ? parsed.flags.schema : null
 				if (selectorValue) {
 					try {
-						const steps = parseSchemaSelector(selectorValue)
-						selectorMatches = matchSchemaSelector(this.schema, steps)
-						const subset = buildSchemaSubset(this.schema, selectorMatches, 1)
-						schemaOutput = generateSchema(subset, {
+						selection = selectSchema(this.schema, selectorValue, { depth: 1 })
+						schemaOutput = generateSchema(selection.schema, {
 							name: this.options.name,
 							description: this.options.description,
 							globals: this.options.globals,
@@ -263,9 +256,10 @@ export class CLI<
 					)
 					console.log()
 					const outlineSchema =
-						selectorMatches === null
+						selection === null
 							? this.schema
-							: buildSchemaSubset(this.schema, selectorMatches, 2)
+							: selectSchema(this.schema, selection.selector, { depth: 2 })
+									.schema
 					for (const line of generateSchemaOutline(outlineSchema, 2)) {
 						console.log(line)
 					}

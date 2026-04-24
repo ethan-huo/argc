@@ -3,7 +3,12 @@ import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
 
 import { c, group } from './command'
-import { buildSchemaSubset, matchSchemaSelector, parseSchemaSelector } from './schema-selector'
+import {
+	buildSchemaSubset,
+	matchSchemaSelector,
+	parseSchemaSelector,
+	selectSchema,
+} from './schema-selector'
 import { isGroup, isCommand } from './types'
 
 const s = toStandardJsonSchema
@@ -47,25 +52,80 @@ describe('buildSchemaSubset', () => {
 		const aws = children.children['aws']
 		const vercel = children.children['vercel']
 		expect(isGroup(aws)).toBe(true)
-		expect(Object.keys((aws as ReturnType<typeof group>)['~argc.group'].children)).toEqual([])
+		expect(
+			Object.keys((aws as ReturnType<typeof group>)['~argc.group'].children),
+		).toEqual([])
 		expect(isCommand(vercel)).toBe(true)
 	})
 
 	test('scopes to nested group with one-level children', () => {
-		const matches = matchSchemaSelector(schema, parseSchemaSelector('.deploy.aws'))
+		const matches = matchSchemaSelector(
+			schema,
+			parseSchemaSelector('.deploy.aws'),
+		)
 		const subset = buildSchemaSubset(schema, matches, 1)
 		const deploy = (subset as Record<string, unknown>)['deploy']
 		expect(isGroup(deploy)).toBe(true)
-		const deployChildren = (deploy as ReturnType<typeof group>)['~argc.group'].children
+		const deployChildren = (deploy as ReturnType<typeof group>)['~argc.group']
+			.children
 		const aws = deployChildren['aws']
 		expect(isGroup(aws)).toBe(true)
-		const awsChildren = (aws as ReturnType<typeof group>)['~argc.group'].children
+		const awsChildren = (aws as ReturnType<typeof group>)['~argc.group']
+			.children
 		expect(Object.keys(awsChildren)).toEqual(['lambda', 's3'])
 	})
 
 	test('scopes to set selection', () => {
-		const matches = matchSchemaSelector(schema, parseSchemaSelector('.{user,plain}'))
-		const subset = buildSchemaSubset(schema, matches, 1) as Record<string, unknown>
+		const matches = matchSchemaSelector(
+			schema,
+			parseSchemaSelector('.{user,plain}'),
+		)
+		const subset = buildSchemaSubset(schema, matches, 1) as Record<
+			string,
+			unknown
+		>
 		expect(Object.keys(subset)).toEqual(['user', 'plain'])
+	})
+})
+
+describe('selectSchema', () => {
+	test('returns a focused schema and match metadata', () => {
+		const result = selectSchema(schema, '.deploy.aws', { depth: 1 })
+
+		expect(result.selector).toBe('.deploy.aws')
+		expect(result.empty).toBe(false)
+		expect(result.matches.map((match) => match.path)).toEqual([
+			['deploy', 'aws'],
+		])
+
+		const deploy = (result.schema as Record<string, unknown>)['deploy']
+		expect(isGroup(deploy)).toBe(true)
+		const aws = (deploy as ReturnType<typeof group>)['~argc.group'].children[
+			'aws'
+		]
+		expect(isGroup(aws)).toBe(true)
+		expect(
+			Object.keys((aws as ReturnType<typeof group>)['~argc.group'].children),
+		).toEqual(['lambda', 's3'])
+	})
+
+	test('uses depth 1 by default', () => {
+		const result = selectSchema(schema, '.deploy')
+		const deploy = (result.schema as Record<string, unknown>)['deploy']
+		expect(isGroup(deploy)).toBe(true)
+		const aws = (deploy as ReturnType<typeof group>)['~argc.group'].children[
+			'aws'
+		]
+		expect(isGroup(aws)).toBe(true)
+		expect(
+			Object.keys((aws as ReturnType<typeof group>)['~argc.group'].children),
+		).toEqual([])
+	})
+
+	test('marks valid selectors with no matches as empty', () => {
+		const result = selectSchema(schema, '.missing')
+		expect(result.empty).toBe(true)
+		expect(result.matches).toEqual([])
+		expect(result.schema).toEqual({})
 	})
 })
