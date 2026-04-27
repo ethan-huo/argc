@@ -18,7 +18,7 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 ## Install
 
 ```bash
-bun add github:ethan-huo/argc#v0.0.1
+bun add github:ethan-huo/argc#v1.0.0
 ```
 
 Use version tags for downstream projects. `main` is the source branch and does
@@ -322,12 +322,14 @@ If the schema is large (>`schemaMaxLines`, default 100), `--schema` prints a com
 
 Use jq-like selectors to narrow the output:
 
-| Pattern  | Meaning           | Example                   |
-| -------- | ----------------- | ------------------------- |
-| `.name`  | Navigate to child | `--schema=.user.create`   |
-| `.*`     | All children      | `--schema=.user.*`        |
-| `.{a,b}` | Specific children | `--schema=.{user,deploy}` |
-| `..name` | Recursive search  | `--schema=..create`       |
+| Pattern    | Meaning           | Example                   |
+| ---------- | ----------------- | ------------------------- |
+| `.name`    | Navigate to child | `--schema=.user.create`   |
+| `."key"`   | Quoted child key  | `--schema='."@add"'`      |
+| `.["key"]` | Bracket child key | `--schema='.["@add"]'`    |
+| `.*`       | All children      | `--schema=.user.*`        |
+| `.{a,b}`   | Specific children | `--schema=.{user,deploy}` |
+| `..name`   | Recursive search  | `--schema=..create`       |
 
 Patterns compose: `--schema=.deploy..lambda`, `--schema=.*.list`
 

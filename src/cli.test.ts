@@ -1065,6 +1065,28 @@ describe('cli', () => {
 			expect(output).toContain('alert-create(name: string)')
 		})
 
+		test('--schema selects at-prefixed root commands', async () => {
+			const schema = {
+				'@add': c.input(s(v.object({ name: v.string() }))),
+				call: c.input(s(v.object({}))),
+			}
+
+			process.argv = ['bun', 'cli', '--schema=.@add']
+
+			const app = cli(schema, { name: 'mcpx', version: '1.0.0' })
+
+			await app.run({
+				handlers: {
+					'@add': () => {},
+					call: () => {},
+				},
+			})
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('@add(name: string)')
+			expect(output).not.toContain('call()')
+		})
+
 		test('--schema rejects selectors that match nothing', async () => {
 			const schema = {
 				run: c.input(s(v.object({ name: v.string() }))),

@@ -10,6 +10,24 @@ describe('parseSchemaSelector', () => {
 		])
 	})
 
+	test('parses at-prefixed key', () => {
+		expect(parseSchemaSelector('.@add')).toEqual([
+			{ type: 'key', name: '@add' },
+		])
+	})
+
+	test('parses quoted key', () => {
+		expect(parseSchemaSelector('."@add"')).toEqual([
+			{ type: 'key', name: '@add' },
+		])
+	})
+
+	test('parses bracket key', () => {
+		expect(parseSchemaSelector('.["@add"]')).toEqual([
+			{ type: 'key', name: '@add' },
+		])
+	})
+
 	test('parses wildcard', () => {
 		expect(parseSchemaSelector('.user.*')).toEqual([
 			{ type: 'key', name: 'user' },
@@ -21,6 +39,12 @@ describe('parseSchemaSelector', () => {
 		expect(parseSchemaSelector('.user.{create,delete}')).toEqual([
 			{ type: 'key', name: 'user' },
 			{ type: 'set', names: ['create', 'delete'] },
+		])
+	})
+
+	test('parses set segment with at-prefixed and quoted keys', () => {
+		expect(parseSchemaSelector('.{"@add",@remove}')).toEqual([
+			{ type: 'set', names: ['@add', '@remove'] },
 		])
 	})
 
@@ -64,6 +88,12 @@ describe('parseSchemaSelector', () => {
 	test('rejects empty set', () => {
 		expect(() => parseSchemaSelector('.{}')).toThrow(
 			'Selector set cannot be empty',
+		)
+	})
+
+	test('rejects unterminated quoted key', () => {
+		expect(() => parseSchemaSelector('."@add')).toThrow(
+			'Unterminated quoted selector key',
 		)
 	})
 })

@@ -8,6 +8,7 @@ import { matchSchemaSelector, parseSchemaSelector } from './schema-selector'
 const s = toStandardJsonSchema
 
 const schema = {
+	'@add': c.input(s(v.object({}))),
 	user: group(
 		{ description: 'User management' },
 		{
@@ -38,6 +39,24 @@ describe('matchSchemaSelector', () => {
 		expect(matches.map((m) => m.path)).toEqual([['user', 'create']])
 	})
 
+	test('matches at-prefixed path', () => {
+		const steps = parseSchemaSelector('.@add')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([['@add']])
+	})
+
+	test('matches quoted path', () => {
+		const steps = parseSchemaSelector('."@add"')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([['@add']])
+	})
+
+	test('matches bracket path', () => {
+		const steps = parseSchemaSelector('.["@add"]')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([['@add']])
+	})
+
 	test('matches wildcard', () => {
 		const steps = parseSchemaSelector('.user.*')
 		const matches = matchSchemaSelector(schema, steps)
@@ -51,6 +70,12 @@ describe('matchSchemaSelector', () => {
 		const steps = parseSchemaSelector('.{user,config}')
 		const matches = matchSchemaSelector(schema, steps)
 		expect(matches.map((m) => m.path)).toEqual([['user'], ['config']])
+	})
+
+	test('matches set with quoted key', () => {
+		const steps = parseSchemaSelector('.{"@add",config}')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([['@add'], ['config']])
 	})
 
 	test('matches recursive descent for name', () => {

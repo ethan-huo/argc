@@ -290,7 +290,9 @@ export class CLI<
 					if (hintExample) {
 						console.log(`hint: use --schema=.${hintExample}`)
 					}
-					console.log('hint: selector is jq-like (path, *, {a,b}, ..name)')
+					console.log(
+						'hint: selector is jq-like (path, ."key", .["key"], *, {a,b}, ..name)',
+					)
 					return
 				}
 

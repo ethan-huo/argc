@@ -9,7 +9,7 @@ export type SelectorStep =
 	| { type: 'set'; names: string[] }
 	| { type: 'recursive' }
 
-const IDENT_RE = /[A-Za-z0-9_-]/
+const BARE_KEY_CHAR_RE = /[A-Za-z0-9_@-]/
 
 export type SelectorMatch = {
 	path: string[]
@@ -209,12 +209,9 @@ function parseSegment(
 			throw new Error('Selector set cannot be empty')
 		}
 		while (i < input.length) {
-			const nameStart = i
-			while (i < input.length && IDENT_RE.test(charAt(input, i))) i += 1
-			if (nameStart === i) {
-				throw new Error(`Expected identifier at ${i}`)
-			}
-			names.push(input.slice(nameStart, i))
+			const parsed = parseKey(input, i)
+			names.push(parsed.name)
+			i = parsed.nextIndex
 
 			i = skipSpaces(input, i)
 			if (charAt(input, i) === ',') {
@@ -236,14 +233,93 @@ function parseSegment(
 		return { step: { type: 'set', names }, nextIndex: i }
 	}
 
-	if (!IDENT_RE.test(ch)) {
+	if (ch === '[') {
+		const parsed = parseBracketKey(input, start)
+		return {
+			step: { type: 'key', name: parsed.name },
+			nextIndex: parsed.nextIndex,
+		}
+	}
+
+	const parsed = parseKey(input, start)
+	return {
+		step: { type: 'key', name: parsed.name },
+		nextIndex: parsed.nextIndex,
+	}
+}
+
+function parseKey(
+	input: string,
+	start: number,
+): {
+	name: string
+	nextIndex: number
+} {
+	const ch = charAt(input, start)
+	if (ch === '"') {
+		return parseQuotedKey(input, start)
+	}
+
+	if (!BARE_KEY_CHAR_RE.test(ch)) {
 		throw new Error(`Expected identifier at ${start}`)
 	}
 
 	let i = start + 1
-	while (i < input.length && IDENT_RE.test(charAt(input, i))) i += 1
+	while (i < input.length && BARE_KEY_CHAR_RE.test(charAt(input, i))) i += 1
 
-	return { step: { type: 'key', name: input.slice(start, i) }, nextIndex: i }
+	return { name: input.slice(start, i), nextIndex: i }
+}
+
+function parseBracketKey(
+	input: string,
+	start: number,
+): {
+	name: string
+	nextIndex: number
+} {
+	let i = start + 1
+	i = skipSpaces(input, i)
+	if (charAt(input, i) !== '"') {
+		throw new Error(`Expected quoted selector key at ${i}`)
+	}
+	const parsed = parseQuotedKey(input, i)
+	i = skipSpaces(input, parsed.nextIndex)
+	if (charAt(input, i) !== ']') {
+		throw new Error(`Expected "]" at ${i}`)
+	}
+	return { name: parsed.name, nextIndex: i + 1 }
+}
+
+function parseQuotedKey(
+	input: string,
+	start: number,
+): {
+	name: string
+	nextIndex: number
+} {
+	let i = start + 1
+	while (i < input.length) {
+		const ch = charAt(input, i)
+		if (ch === '\\') {
+			i += 2
+			continue
+		}
+		if (ch === '"') {
+			const raw = input.slice(start, i + 1)
+			try {
+				const value = JSON.parse(raw)
+				if (typeof value !== 'string') {
+					throw new Error('not a string')
+				}
+				return { name: value, nextIndex: i + 1 }
+			} catch {
+				throw new Error(`Invalid quoted selector key at ${start}`)
+			}
+		}
+		i += 1
+	}
+
+	throw new Error(`Unterminated quoted selector key at ${start}`)
 }
 
 function skipSpaces(input: string, i: number): number {
