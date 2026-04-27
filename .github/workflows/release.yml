@@ -2,11 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag to publish, for example v0.1.0'
-        required: true
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
 
 permissions:
   contents: write
@@ -26,33 +26,51 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Validate version input
-        env:
-          VERSION: ${{ inputs.version }}
+      - name: Resolve version tag
+        id: version
         run: |
           set -euo pipefail
-          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid version: $VERSION"
-            echo "Expected a semver tag like v0.1.0"
-            exit 1
-          fi
-          PACKAGE_VERSION="$(bun -e 'console.log(await Bun.file("package.json").json().then((pkg) => pkg.version))')"
-          if [[ "$VERSION" != "v$PACKAGE_VERSION" ]]; then
-            echo "Version mismatch: package.json has $PACKAGE_VERSION but input was $VERSION"
-            exit 1
-          fi
-          if git rev-parse "$VERSION" >/dev/null 2>&1; then
-            echo "Tag already exists: $VERSION"
+
+          VERSION="$(bun -e 'const pkg = await Bun.file("package.json").json(); console.log(pkg.version)')"
+          TAG="v$VERSION"
+          export VERSION
+
+          if ! bun -e 'import { semver } from "bun"; process.exit(semver.satisfies(Bun.env.VERSION!, Bun.env.VERSION!) ? 0 : 1)' ; then
+            echo "Invalid package.json version: $VERSION"
             exit 1
           fi
 
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag already exists: $TAG"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LATEST_TAG="$(
+            git tag --list 'v[0-9]*.[0-9]*.[0-9]*' |
+              bun -e 'import { semver } from "bun"; const tags = await Bun.stdin.text(); const versions = tags.trim().split(/\s+/).filter(Boolean).map((tag) => tag.slice(1)); versions.sort(semver.order); console.log(versions.at(-1) ?? "")'
+          )"
+          export LATEST_TAG
+
+          if [[ -n "$LATEST_TAG" ]] && ! bun -e 'import { semver } from "bun"; process.exit(semver.order(Bun.env.VERSION!, Bun.env.LATEST_TAG!) === 1 ? 0 : 1)' ; then
+            echo "package.json version $VERSION must be greater than latest tag v$LATEST_TAG"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "released=true" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
+        if: steps.version.outputs.released == 'true'
         run: bun install --frozen-lockfile
 
       - name: Check source
+        if: steps.version.outputs.released == 'true'
         run: bun run check
 
       - name: Build declarations
+        if: steps.version.outputs.released == 'true'
         run: |
           rm -rf dist
           bun run build
@@ -60,13 +78,14 @@ jobs:
           test -f dist/terminal.d.ts
 
       - name: Create release snapshot tag
-        env:
-          VERSION: ${{ inputs.version }}
+        if: steps.version.outputs.released == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f dist
-          git commit -m "release: $VERSION declarations"
-          git tag -a "$VERSION" -m "$VERSION"
-          git push origin "refs/tags/$VERSION"
+          git commit -m "release: $TAG declarations"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
