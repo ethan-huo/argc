@@ -48,7 +48,9 @@ describe('parseSchemaSelector', () => {
 	})
 
 	test('rejects missing dot', () => {
-		expect(() => parseSchemaSelector('user.create')).toThrow('Selector must start with "."')
+		expect(() => parseSchemaSelector('user.create')).toThrow(
+			'Selector must start with "."',
+		)
 	})
 
 	test('rejects empty selector', () => {
@@ -60,6 +62,8 @@ describe('parseSchemaSelector', () => {
 	})
 
 	test('rejects empty set', () => {
-		expect(() => parseSchemaSelector('.{}')).toThrow('Selector set cannot be empty')
+		expect(() => parseSchemaSelector('.{}')).toThrow(
+			'Selector set cannot be empty',
+		)
 	})
 })

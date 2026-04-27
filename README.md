@@ -276,7 +276,7 @@ Notes:
 - `--run @file` modules can export either `default` or `main`:
   - `export default async function (argc) { ... }`
   - `export async function main(argc) { ... }`
-- For `--run @file`, `argc` is also available as `globalThis.__argcRun` for modules that run via side effects.
+- Modules without `default` or `main` fail fast instead of running as side-effect scripts.
 
 Example passing args:
 
@@ -342,7 +342,25 @@ console.log(
 )
 ```
 
-`selectSchema` owns selector parsing, router matching, subset construction, root selector behavior, and empty-match reporting. Lower-level helpers are also exported for advanced use: `parseSchemaSelector`, `matchSchemaSelector`, and `buildSchemaSubset`.
+`selectSchema` owns selector parsing, router matching, subset construction, root selector behavior, and empty-match reporting. The built-in `--schema=<selector>` command fails when a selector matches nothing, so agents do not mistake typos for an empty CLI. Lower-level helpers are also exported for advanced use: `parseSchemaSelector`, `matchSchemaSelector`, and `buildSchemaSubset`.
+
+If you want the built-in `--schema` flag to use different exploration behavior, provide a schema explorer:
+
+```typescript
+import { cli, createDefaultSchemaExplorer } from 'argc'
+
+const app = cli(schema, {
+	name: 'myapp',
+	version: '1.0.0',
+	schemaExplorer: createDefaultSchemaExplorer({
+		selectionDepth: 2,
+		outlineDepth: 2,
+		maxLines: 200,
+	}),
+})
+```
+
+`selectionDepth` controls how many levels are included below a selector such as `--schema=.deploy`. It can also be a function when different selectors need different depths.
 
 ## Hook Events for Agent Runtimes
 
@@ -572,6 +590,7 @@ const app = cli(schema, {
   hook: (events) => { ... }, // optional: batch hook event transport
   hookTimeoutMs: 2000,    // optional: drain timeout for hook delivery (default: 2000)
   schemaMaxLines: 100,    // optional: --schema switches to outline above this (default: 100)
+  schemaExplorer: createDefaultSchemaExplorer({ selectionDepth: 2 }), // optional: customize --schema
 })
 
 // Handler types inferred from app (includes context type)

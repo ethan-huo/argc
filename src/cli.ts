@@ -1,10 +1,12 @@
 import { JSON5 } from 'bun'
 
+import type { SchemaSelectionResult } from './schema-selector'
 import type {
 	AnyCommand,
 	CLIOptions,
 	CombinedHandlers,
 	Handlers,
+	HookTransport,
 	Router,
 	RunConfig,
 	Schema,
@@ -22,13 +24,8 @@ import { normalizeArgName, showHelp, showValidationError } from './help'
 import { createHookDispatcher } from './hook'
 import { parseArgv } from './parser'
 import { getRouterChildren, findHandler } from './router'
-import {
-	extractInputParamsDetailed,
-	generateSchema,
-	generateSchemaHintExample,
-	generateSchemaOutline,
-} from './schema'
-import { selectSchema, type SchemaSelectionResult } from './schema-selector'
+import { extractInputParamsDetailed } from './schema'
+import { createDefaultSchemaExplorer } from './schema-explorer'
 import {
 	expandHome,
 	readStdin,
@@ -111,7 +108,14 @@ export class CLI<
 		runOptions: RunConfig<TSchema, Awaited<TContext>>,
 		argv: string[] = process.argv.slice(2),
 	): Promise<void> {
-		const parsed = parseArgv(argv)
+		let parsed: ReturnType<typeof parseArgv>
+		try {
+			parsed = parseArgv(argv)
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			console.error(colors.error(`invalid arguments: ${message}`))
+			process.exit(1)
+		}
 
 		// Handle shell completion (must be before all other flag handling)
 		if (parsed.flags._complete !== undefined) {
@@ -224,22 +228,43 @@ export class CLI<
 		// Handle --schema (root only, for AI agents)
 		if (parsed.flags.schema) {
 			if (isRootLevel) {
+				const schemaExplorer =
+					this.options.schemaExplorer ??
+					createDefaultSchemaExplorer(
+						this.options.schemaMaxLines === undefined
+							? {}
+							: { maxLines: this.options.schemaMaxLines },
+					)
 				let selection: SchemaSelectionResult | null = null
-				let schemaOutput = generateSchema(this.schema, {
+				const renderOptions: {
+					name: string
+					description?: string
+					globals?: TGlobals
+				} = {
 					name: this.options.name,
-					description: this.options.description,
-					globals: this.options.globals,
-				})
+				}
+				if (this.options.description !== undefined) {
+					renderOptions.description = this.options.description
+				}
+				if (this.options.globals !== undefined) {
+					renderOptions.globals = this.options.globals
+				}
+				let schemaOutput = schemaExplorer.render(this.schema, renderOptions)
 				const selectorValue =
 					typeof parsed.flags.schema === 'string' ? parsed.flags.schema : null
 				if (selectorValue) {
 					try {
-						selection = selectSchema(this.schema, selectorValue, { depth: 1 })
-						schemaOutput = generateSchema(selection.schema, {
-							name: this.options.name,
-							description: this.options.description,
-							globals: this.options.globals,
-						})
+						selection = schemaExplorer.select(this.schema, selectorValue)
+						if (selection.empty) {
+							console.log(
+								colors.error(`No schema matches selector: ${selectorValue}`),
+							)
+							process.exit(1)
+						}
+						schemaOutput = schemaExplorer.render(
+							selection.schema,
+							renderOptions,
+						)
 					} catch (error) {
 						const message =
 							error instanceof Error ? error.message : String(error)
@@ -247,7 +272,7 @@ export class CLI<
 						process.exit(1)
 					}
 				}
-				const maxLines = this.options.schemaMaxLines ?? 100
+				const maxLines = schemaExplorer.maxLines
 				const lines = schemaOutput.split('\n')
 
 				if (lines.length > maxLines) {
@@ -256,15 +281,12 @@ export class CLI<
 					)
 					console.log()
 					const outlineSchema =
-						selection === null
-							? this.schema
-							: selectSchema(this.schema, selection.selector, { depth: 2 })
-									.schema
-					for (const line of generateSchemaOutline(outlineSchema, 2)) {
+						selection === null ? this.schema : selection.schema
+					for (const line of schemaExplorer.outline(outlineSchema)) {
 						console.log(line)
 					}
 					console.log()
-					const hintExample = generateSchemaHintExample(outlineSchema)
+					const hintExample = schemaExplorer.hint(outlineSchema)
 					if (hintExample) {
 						console.log(`hint: use --schema=.${hintExample}`)
 					}
@@ -701,12 +723,22 @@ export class CLI<
 	}
 
 	private createHookDispatcher() {
-		return createHookDispatcher({
+		const options: {
+			app: string
+			hook?: false | HookTransport
+			hookUrl?: string
+			timeoutMs: number
+		} = {
 			app: this.options.name,
-			hook: this.options.hook,
-			hookUrl: process.env.ARGC_HOOK_URL,
 			timeoutMs: this.options.hookTimeoutMs ?? 2000,
-		})
+		}
+		if (this.options.hook !== undefined) {
+			options.hook = this.options.hook
+		}
+		if (process.env.ARGC_HOOK_URL !== undefined) {
+			options.hookUrl = process.env.ARGC_HOOK_URL
+		}
+		return createHookDispatcher(options)
 	}
 }
 

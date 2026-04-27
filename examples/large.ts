@@ -27,7 +27,14 @@ import { c, cli, group, type Router } from '../src'
 
 const s = toStandardJsonSchema
 
-const topGroups = ['compute', 'storage', 'network', 'iam', 'database', 'analytics']
+const topGroups = [
+	'compute',
+	'storage',
+	'network',
+	'iam',
+	'database',
+	'analytics',
+]
 const subGroups = ['alpha', 'beta', 'gamma', 'delta']
 const commands = ['list', 'get', 'create', 'update', 'delete']
 

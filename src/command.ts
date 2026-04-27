@@ -1,8 +1,18 @@
-import type { ArgDef, CommandDef, CommandMeta, GroupDef, GroupMeta, Router, Schema } from './types'
+import type {
+	ArgDef,
+	CommandDef,
+	CommandMeta,
+	GroupDef,
+	GroupMeta,
+	Router,
+	Schema,
+} from './types'
 
 type CommandBuilderDef<TInput extends Schema> = CommandDef<TInput>['~argc']
 
-export class CommandBuilder<TInput extends Schema = Schema> implements CommandDef<TInput> {
+export class CommandBuilder<
+	TInput extends Schema = Schema,
+> implements CommandDef<TInput> {
 	'~argc': CommandBuilderDef<TInput>
 
 	constructor(def: Partial<CommandBuilderDef<TInput>> = {}) {
@@ -47,7 +57,10 @@ export class GroupBuilder<
 	}
 
 	meta(meta: GroupMeta): GroupBuilder<TChildren> {
-		return new GroupBuilder({ ...this['~argc.group'].meta, ...meta }, this['~argc.group'].children)
+		return new GroupBuilder(
+			{ ...this['~argc.group'].meta, ...meta },
+			this['~argc.group'].children,
+		)
 	}
 
 	children<T extends { [key: string]: Router }>(children: T): GroupBuilder<T> {

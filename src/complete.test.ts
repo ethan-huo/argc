@@ -258,7 +258,9 @@ describe('generateCompletionScript', () => {
 		const script = generateCompletionScript('bash', 'my-app')
 		expect(script).not.toBeNull()
 		expect(script!).toContain('_my_app_completions')
-		expect(script!).toContain('complete -o default -F _my_app_completions my-app')
+		expect(script!).toContain(
+			'complete -o default -F _my_app_completions my-app',
+		)
 	})
 
 	test('returns null for unknown shell', () => {

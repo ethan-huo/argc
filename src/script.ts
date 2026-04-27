@@ -63,7 +63,9 @@ const BUILTIN_FLAG_KEYS = new Set([
 	'_complete',
 ])
 
-function stripBuiltinFlags(flags: Record<string, unknown>): Record<string, unknown> {
+function stripBuiltinFlags(
+	flags: Record<string, unknown>,
+): Record<string, unknown> {
 	const out: Record<string, unknown> = {}
 	for (const [k, v] of Object.entries(flags)) {
 		if (BUILTIN_FLAG_KEYS.has(k)) continue
@@ -72,7 +74,9 @@ function stripBuiltinFlags(flags: Record<string, unknown>): Record<string, unkno
 	return out
 }
 
-function flattenHandlerTree(handlers: ScriptHandlers): Record<string, ScriptFn> {
+function flattenHandlerTree(
+	handlers: ScriptHandlers,
+): Record<string, ScriptFn> {
 	const out: Record<string, ScriptFn> = {}
 	const walk = (node: ScriptHandlers, prefix: string): void => {
 		if (typeof node === 'function') {
@@ -93,21 +97,26 @@ function parseRunSource(flag: unknown): RunSource {
 		if (flag.startsWith('@')) {
 			const path = flag.slice(1)
 			if (!path) {
-				console.log(colors.error('Invalid --run value (expected @<file> after @)'))
+				console.log(
+					colors.error('Invalid --run value (expected @<file> after @)'),
+				)
 				process.exit(1)
 			}
 			return { kind: 'module', path }
 		}
 		return { kind: 'inline', code: flag }
 	}
-	console.log(colors.error('Invalid --run value (expected code, -, stdin, or @<file>)'))
+	console.log(
+		colors.error('Invalid --run value (expected code, -, stdin, or @<file>)'),
+	)
 	process.exit(1)
 }
 
 async function runEval(code: string, api: ScriptAPI): Promise<void> {
-	const fn = new Function('argc', `"use strict"; return (async () => {\n${code}\n})();`) as (
-		argc: ScriptAPI,
-	) => Promise<unknown>
+	const fn = new Function(
+		'argc',
+		`"use strict"; return (async () => {\n${code}\n})();`,
+	) as (argc: ScriptAPI) => Promise<unknown>
 	await fn(api)
 }
 
@@ -116,21 +125,19 @@ async function runScriptFile(path: string, api: ScriptAPI): Promise<void> {
 	const fullPath = resolvePath(process.cwd(), expanded)
 	const url = pathToFileURL(fullPath).href
 
-	;(globalThis as Record<string, unknown>).__argcRun = api
-	try {
-		const mod = (await import(url)) as Record<string, unknown>
-		const maybeDefault = mod.default
-		if (typeof maybeDefault === 'function') {
-			await (maybeDefault as (argc: ScriptAPI) => unknown)(api)
-			return
-		}
-		const maybeMain = mod.main
-		if (typeof maybeMain === 'function') {
-			await (maybeMain as (argc: ScriptAPI) => unknown)(api)
-		}
-	} finally {
-		delete (globalThis as Record<string, unknown>).__argcRun
+	const mod = (await import(url)) as Record<string, unknown>
+	const maybeDefault = mod.default
+	if (typeof maybeDefault === 'function') {
+		await (maybeDefault as (argc: ScriptAPI) => unknown)(api)
+		return
 	}
+	const maybeMain = mod.main
+	if (typeof maybeMain === 'function') {
+		await (maybeMain as (argc: ScriptAPI) => unknown)(api)
+		return
+	}
+
+	throw new Error('--run @file module must export default or main')
 }
 
 function buildScriptHandlerTree(
@@ -152,7 +159,8 @@ function buildScriptHandlerTree(
 				throw new Error(`No handler for command: ${commandName}`)
 			}
 
-			const providedInput = input === undefined ? ({} as Record<string, unknown>) : input
+			const providedInput =
+				input === undefined ? ({} as Record<string, unknown>) : input
 
 			let validatedInput = providedInput
 			const def = command['~argc']
@@ -163,7 +171,9 @@ function buildScriptHandlerTree(
 					const errorMessages: Record<string, string> = {}
 					for (const issue of result.issues) {
 						const field = issue.path
-							?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
+							?.map((p: { key: PropertyKey } | PropertyKey) =>
+								typeof p === 'object' ? p.key : p,
+							)
 							?.join('.')
 						if (field) {
 							errorFields.add(field)
@@ -173,7 +183,13 @@ function buildScriptHandlerTree(
 
 					console.error(colors.error('invalid arguments'))
 					console.error()
-					showValidationError(appName, path, command, errorFields, errorMessages)
+					showValidationError(
+						appName,
+						path,
+						command,
+						errorFields,
+						errorMessages,
+					)
 					process.exit(1)
 				}
 				validatedInput = result.value as Record<string, unknown>
@@ -207,7 +223,15 @@ function buildScriptHandlerTree(
 
 	const out: Record<string, ScriptHandlers> = {}
 	for (const [key, child] of Object.entries(getRouterChildren(router))) {
-		out[key] = buildScriptHandlerTree([...path, key], child, handlers, getContext, rawArgv, appName, hookDispatcher)
+		out[key] = buildScriptHandlerTree(
+			[...path, key],
+			child,
+			handlers,
+			getContext,
+			rawArgv,
+			appName,
+			hookDispatcher,
+		)
 	}
 	return out
 }
@@ -222,7 +246,15 @@ function buildScriptApi(
 	appName: string,
 	hookDispatcher: HookDispatcher,
 ): ScriptAPI {
-	const handlerTree = buildScriptHandlerTree([], router, handlers, getContext, rawArgv, appName, hookDispatcher)
+	const handlerTree = buildScriptHandlerTree(
+		[],
+		router,
+		handlers,
+		getContext,
+		rawArgv,
+		appName,
+		hookDispatcher,
+	)
 	const call = flattenHandlerTree(handlerTree)
 	return { handlers: handlerTree, call, globals, args, raw: rawArgv }
 }
@@ -243,14 +275,19 @@ export async function runScriptMode(
 	// Parse + validate globals (same behavior as normal mode)
 	let globals: unknown = flagsWithoutBuiltins
 	if (options.globals) {
-		const result = await options.globals['~standard'].validate(flagsWithoutBuiltins)
+		const result =
+			await options.globals['~standard'].validate(flagsWithoutBuiltins)
 		if (result.issues) {
 			console.error(colors.error('Global options validation failed'))
 			for (const issue of result.issues) {
 				const path = issue.path
-					?.map((p: { key: PropertyKey } | PropertyKey) => (typeof p === 'object' ? p.key : p))
+					?.map((p: { key: PropertyKey } | PropertyKey) =>
+						typeof p === 'object' ? p.key : p,
+					)
 					?.join('.')
-				console.error(`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`)
+				console.error(
+					`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
+				)
 			}
 			process.exit(1)
 		}
@@ -260,7 +297,8 @@ export async function runScriptMode(
 	let contextPromise: Promise<unknown> | null = null
 	const getContext = async (): Promise<unknown> => {
 		if (!options.context) return undefined
-		if (!contextPromise) contextPromise = Promise.resolve(options.context(globals))
+		if (!contextPromise)
+			contextPromise = Promise.resolve(options.context(globals))
 		return await contextPromise
 	}
 

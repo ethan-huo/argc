@@ -53,7 +53,10 @@ describe('CommandBuilder', () => {
 		})
 
 		test('sets positional args as objects', () => {
-			const cmd = c.args({ name: 'file', description: 'Input file' }, { name: 'dest' })
+			const cmd = c.args(
+				{ name: 'file', description: 'Input file' },
+				{ name: 'dest' },
+			)
 			expect(cmd['~argc'].args).toEqual([
 				{ name: 'file', description: 'Input file' },
 				{ name: 'dest' },

@@ -102,6 +102,16 @@ describe('parseArgv', () => {
 			const result = parseArgv(['--a.b.c', 'value'])
 			expect(result.flags).toEqual({ a: { b: { c: 'value' } } })
 		})
+
+		test('rejects prototype-polluting path segments', () => {
+			expect(() => parseArgv(['--__proto__.polluted', 'yes'])).toThrow(
+				'Invalid flag path segment: __proto__',
+			)
+			expect(() =>
+				parseArgv(['--constructor.prototype.polluted', 'yes']),
+			).toThrow('Invalid flag path segment: constructor')
+			expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+		})
 	})
 
 	describe('array values (repeated flags)', () => {

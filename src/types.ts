@@ -1,11 +1,19 @@
-import type { StandardJSONSchemaV1, StandardSchemaV1 } from '@standard-schema/spec'
+import type {
+	StandardJSONSchemaV1,
+	StandardSchemaV1,
+} from '@standard-schema/spec'
+
+import type { SchemaExplorer } from './schema-explorer'
 
 // Re-export Standard Schema types
 export type { StandardJSONSchemaV1, StandardSchemaV1 }
 
 // Schema type: validation + JSON Schema generation
 // This is what argc requires - a schema that can both validate AND generate JSON Schema
-export type Schema<TInput = unknown, TOutput = TInput> = StandardSchemaV1<TInput, TOutput> &
+export type Schema<TInput = unknown, TOutput = TInput> = StandardSchemaV1<
+	TInput,
+	TOutput
+> &
 	StandardJSONSchemaV1<TInput, TOutput>
 
 // ============ Command Types ============
@@ -40,7 +48,9 @@ export type GroupMeta = {
 	hidden?: boolean
 }
 
-export type GroupDef<TChildren extends { [key: string]: Router } = { [key: string]: Router }> = {
+export type GroupDef<
+	TChildren extends { [key: string]: Router } = { [key: string]: Router },
+> = {
 	'~argc.group': {
 		meta: GroupMeta
 		children: TChildren
@@ -59,13 +69,19 @@ export type Router = AnyCommand | AnyGroup | { [key: string]: Router }
 
 // ============ CLI Options ============
 
-export type CLIOptions<TGlobals extends Schema = Schema, TContext = undefined> = {
+export type CLIOptions<
+	TGlobals extends Schema = Schema,
+	TContext = undefined,
+> = {
 	name: string
 	version: string
 	description?: string
 	schemaMaxLines?: number
+	schemaExplorer?: SchemaExplorer
 	globals?: TGlobals
-	context?: (globals: StandardSchemaV1.InferOutput<TGlobals>) => TContext | Promise<TContext>
+	context?: (
+		globals: StandardSchemaV1.InferOutput<TGlobals>,
+	) => TContext | Promise<TContext>
 	hook?: false | HookTransport
 	hookTimeoutMs?: number
 }
@@ -160,30 +176,33 @@ export function isCommand(x: unknown): x is AnyCommand {
 // ============ Inference Helpers ============
 
 /**
- * Infer all handler types from a schema.
- * Useful when handlers are split across multiple files.
+ * Infer all handler types from a schema. Useful when handlers are split across
+ * multiple files.
  *
  * @example
- * ```ts
- * // schema.ts
- * export const schema = { get: c.meta(...).input(...), ... }
- * export type AppHandlers = InferHandlers<typeof schema>
+ * 	;```ts
+ * 	// schema.ts
+ * 	export const schema = { get: c.meta(...).input(...), ... }
+ * 	export type AppHandlers = InferHandlers<typeof schema>
  *
- * // commands/get.ts
- * import type { AppHandlers } from '../schema'
- * export const runGet: AppHandlers['get'] = ({ input }) => { ... }
- * ```
+ * 	// commands/get.ts
+ * 	import type { AppHandlers } from '../schema'
+ * 	export const runGet: AppHandlers['get'] = ({ input }) => { ... }
+ * 	```
  */
-export type InferHandlers<TSchema extends Router, TContext = unknown> = Handlers<TSchema, TContext>
+export type InferHandlers<
+	TSchema extends Router,
+	TContext = unknown,
+> = Handlers<TSchema, TContext>
 
 /**
  * Infer the input type for a specific command path.
  *
  * @example
- * ```ts
- * type GetInput = InferInput<typeof schema, 'get'>
- * type UserCreateInput = InferInput<typeof schema, 'user.create'>
- * ```
+ * 	;```ts
+ * 	type GetInput = InferInput<typeof schema, 'get'>
+ * 	type UserCreateInput = InferInput<typeof schema, 'user.create'>
+ * 	```
  */
 export type InferInput<TSchema extends Router, TPath extends string> =
 	TSchema extends GroupDef<infer TChildren>
@@ -218,10 +237,10 @@ type InferInputFromRouter<
  * Infer the handler function type for a specific command path.
  *
  * @example
- * ```ts
- * type GetHandler = InferHandler<typeof schema, 'get'>
- * export const runGet: GetHandler = ({ input }) => { ... }
- * ```
+ * 	;```ts
+ * 	type GetHandler = InferHandler<typeof schema, 'get'>
+ * 	export const runGet: GetHandler = ({ input }) => { ... }
+ * 	```
  */
 export type InferHandler<
 	TSchema extends Router,
@@ -233,22 +252,25 @@ export type InferHandler<
  * Flatten nested handlers to dot-notation paths.
  *
  * @example
- * ```ts
- * type AppHandlers = FlatHandlers<typeof app.Handlers>
- * const runGet: AppHandlers['user.get'] = ...  // instead of ['user']['get']
- * ```
+ * 	;```ts
+ * 	type AppHandlers = FlatHandlers<typeof app.Handlers>
+ * 	const runGet: AppHandlers['user.get'] = ...  // instead of ['user']['get']
+ * 	```
  */
 export type FlatHandlers<T, Prefix extends string = ''> =
 	T extends Handler<infer I, infer C>
 		? { [K in Prefix]: Handler<I, C> }
 		: {
-				[K in keyof T & string]: FlatHandlers<T[K], Prefix extends '' ? K : `${Prefix}.${K}`>
+				[K in keyof T & string]: FlatHandlers<
+					T[K],
+					Prefix extends '' ? K : `${Prefix}.${K}`
+				>
 			}[keyof T & string]
 
 // Convert union to intersection: { a: 1 } | { b: 2 } → { a: 1 } & { b: 2 }
-type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
-	k: infer I,
-) => void
+type UnionToIntersection<U> = (
+	U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void
 	? I
 	: never
 
@@ -259,12 +281,12 @@ type Simplify<T> = { [K in keyof T]: T[K] } & {}
  * Flatten nested handlers to dot-notation paths (as single object type).
  *
  * @example
- * ```ts
- * export type AppHandlers = FlattenHandlers<typeof app.Handlers>
+ * 	;```ts
+ * 	export type AppHandlers = FlattenHandlers<typeof app.Handlers>
  *
- * // commands/get.ts
- * const runGet: AppHandlers['user.get'] = ({ input, context }) => { ... }
- * ```
+ * 	// commands/get.ts
+ * 	const runGet: AppHandlers['user.get'] = ({ input, context }) => { ... }
+ * 	```
  */
 export type FlattenHandlers<T> = Simplify<UnionToIntersection<FlatHandlers<T>>>
 
@@ -272,14 +294,14 @@ export type FlattenHandlers<T> = Simplify<UnionToIntersection<FlatHandlers<T>>>
  * Combined handlers: both nested access and dot-notation paths.
  *
  * @example
- * ```ts
- * type AppHandlers = typeof app.Handlers
+ * 	;```ts
+ * 	type AppHandlers = typeof app.Handlers
  *
- * // Dot-notation for single handlers
- * const runGet: AppHandlers['user.get'] = ...
+ * 	// Dot-notation for single handlers
+ * 	const runGet: AppHandlers['user.get'] = ...
  *
- * // Nested access for handler groups
- * const userHandlers: AppHandlers['user'] = { get: ..., create: ... }
- * ```
+ * 	// Nested access for handler groups
+ * 	const userHandlers: AppHandlers['user'] = { get: ..., create: ... }
+ * 	```
  */
 export type CombinedHandlers<T> = T & FlattenHandlers<T>

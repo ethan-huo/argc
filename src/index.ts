@@ -9,6 +9,11 @@ export {
 	generateSchemaOutline,
 } from './schema'
 export {
+	createDefaultSchemaExplorer,
+	type SchemaExplorer,
+	type SchemaExplorerOptions,
+} from './schema-explorer'
+export {
 	buildSchemaSubset,
 	matchSchemaSelector,
 	parseSchemaSelector,

@@ -48,13 +48,13 @@ const baseColors = {
  * Terminal formatting utilities.
  *
  * @example
- * ```ts
- * import { fmt } from 'argc/terminal'
+ * 	;```ts
+ * 	import { fmt } from 'argc/terminal'
  *
- * console.log(fmt.success('Done!'))     // ✓ Done!
- * console.log(fmt.error('Failed'))      // ✗ Failed
- * console.log(fmt.red('danger'))        // red text
- * ```
+ * 	console.log(fmt.success('Done!')) // ✓ Done!
+ * 	console.log(fmt.error('Failed')) // ✗ Failed
+ * 	console.log(fmt.red('danger')) // red text
+ * 	```
  */
 export const fmt = {
 	...baseColors,
@@ -101,7 +101,10 @@ function isWideChar(code: number): boolean {
 	)
 }
 
-/** Get visible width of string (excluding ANSI escape codes, handling wide chars) */
+/**
+ * Get visible width of string (excluding ANSI escape codes, handling wide
+ * chars)
+ */
 export function visibleWidth(str: string): number {
 	const plain = str.replace(ANSI_REGEX, '')
 	let width = 0
@@ -130,18 +133,21 @@ export type TableColumn = {
 export type TableRow = Record<string, string>
 
 /**
- * Print a table with proper ANSI color support.
- * Unlike console.table, this correctly aligns columns with colored text.
+ * Print a table with proper ANSI color support. Unlike console.table, this
+ * correctly aligns columns with colored text.
  *
  * @example
- * ```ts
- * import { printTable, fmt } from 'argc/terminal'
+ * 	;```ts
+ * 	import { printTable, fmt } from 'argc/terminal'
  *
- * printTable(
- *   [{ key: 'name', label: 'NAME' }, { key: 'status', label: 'STATUS' }],
- *   [{ name: 'foo', status: fmt.green('ok') }]
- * )
- * ```
+ * 	printTable(
+ * 		[
+ * 			{ key: 'name', label: 'NAME' },
+ * 			{ key: 'status', label: 'STATUS' },
+ * 		],
+ * 		[{ name: 'foo', status: fmt.green('ok') }],
+ * 	)
+ * 	```
  */
 export function printTable(columns: TableColumn[], rows: TableRow[]): void {
 	// Calculate column widths
@@ -156,7 +162,9 @@ export function printTable(columns: TableColumn[], rows: TableRow[]): void {
 	})
 
 	// Print header
-	const header = columns.map((col, i) => fmt.dim(padEnd(col.label, colWidths[i]!))).join('  ')
+	const header = columns
+		.map((col, i) => fmt.dim(padEnd(col.label, colWidths[i]!)))
+		.join('  ')
 	console.log(header)
 
 	// Print separator
@@ -165,7 +173,9 @@ export function printTable(columns: TableColumn[], rows: TableRow[]): void {
 
 	// Print rows
 	for (const row of rows) {
-		const line = columns.map((col, i) => padEnd(row[col.key] ?? '', colWidths[i]!)).join('  ')
+		const line = columns
+			.map((col, i) => padEnd(row[col.key] ?? '', colWidths[i]!))
+			.join('  ')
 		console.log(line)
 	}
 }

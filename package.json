@@ -2,11 +2,21 @@
 	"name": "argc",
 	"version": "0.0.1",
 	"type": "module",
+	"types": "./dist/index.d.ts",
 	"exports": {
-		".": "./src/index.ts",
-		"./terminal": "./src/terminal.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
+		"./terminal": {
+			"types": "./dist/terminal.d.ts",
+			"import": "./src/terminal.ts",
+			"default": "./src/terminal.ts"
+		}
 	},
 	"scripts": {
+		"build": "tsgo -p tsconfig.build.json",
 		"typecheck": "tsgo --noEmit",
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check"

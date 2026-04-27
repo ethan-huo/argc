@@ -5,7 +5,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as v from 'valibot'
 
-import { c, cli, group, type HookEvent } from './index'
+import {
+	c,
+	cli,
+	createDefaultSchemaExplorer,
+	group,
+	type HookEvent,
+} from './index'
 
 const s = toStandardJsonSchema
 
@@ -601,8 +607,7 @@ describe('cli', () => {
 			}
 		})
 
-		test('--run exposes argc as globalThis.__argcRun for side-effect modules', async () => {
-			let received: unknown
+		test('--run @file rejects modules without default or main', async () => {
 			const schema = {
 				update: c.input(s(v.object({ name: v.string() }))),
 			}
@@ -611,25 +616,27 @@ describe('cli', () => {
 			await Bun.write(
 				filePath,
 				`
-				const argc: any = (globalThis as any).__argcRun
-				if (!argc) throw new Error('missing __argcRun')
-				await argc.handlers.update({ name: 'SideEffectUser' })
-				`,
+					await Promise.resolve()
+					`,
 			)
 
 			try {
 				process.argv = ['bun', 'cli', '--run', `@${filePath}`]
 
 				const app = cli(schema, { name: 'test', version: '1.0.0' })
-				await app.run({
-					handlers: {
-						update: ({ input }) => {
-							received = input
+				try {
+					await app.run({
+						handlers: {
+							update: () => {},
 						},
-					},
-				})
+					})
+				} catch {
+					// expected (process.exit mocked)
+				}
 
-				expect(received).toEqual({ name: 'SideEffectUser' })
+				expect(consoleOutput.join('\n')).toContain(
+					'--run @file module must export default or main',
+				)
 			} finally {
 				try {
 					await Bun.file(filePath).delete()
@@ -1018,6 +1025,69 @@ describe('cli', () => {
 	})
 
 	describe('help output', () => {
+		test('--schema uses the configured schema explorer', async () => {
+			const schema = {
+				call: group(
+					{ description: 'Call tools' },
+					{
+						posthog: group(
+							{ description: 'PostHog' },
+							{
+								'alert-create': c.input(s(v.object({ name: v.string() }))),
+							},
+						),
+					},
+				),
+			}
+
+			process.argv = ['bun', 'cli', '--schema=.call']
+
+			const app = cli(schema, {
+				name: 'mcpx',
+				version: '1.0.0',
+				schemaExplorer: createDefaultSchemaExplorer({
+					selectionDepth: 2,
+				}),
+			})
+
+			await app.run({
+				handlers: {
+					call: {
+						posthog: {
+							'alert-create': () => {},
+						},
+					},
+				},
+			})
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('posthog: {')
+			expect(output).toContain('alert-create(name: string)')
+		})
+
+		test('--schema rejects selectors that match nothing', async () => {
+			const schema = {
+				run: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = ['bun', 'cli', '--schema=.missing']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			try {
+				await app.run({
+					handlers: {
+						run: () => {},
+					},
+				})
+			} catch {
+				// expected (process.exit mocked)
+			}
+
+			expect(consoleOutput.join('\n')).toContain(
+				'No schema matches selector: .missing',
+			)
+		})
+
 		test('--help shows help', async () => {
 			const schema = {
 				test: c.meta({ description: 'Test command' }).input(s(v.object({}))),
@@ -1265,11 +1335,18 @@ describe('cli', () => {
 		test('--completions without value installs to detected shell path', async () => {
 			const schema = { test: c.input(s(v.object({}))) }
 			const home = mkdtempSync(join(tmpdir(), 'argc-completions-'))
+			const originalSpawnSync = Bun.spawnSync
 			process.env.HOME = home
 			process.env.SHELL = '/opt/homebrew/bin/fish'
 			process.argv = ['bun', 'cli', '--completions']
 
 			try {
+				Bun.spawnSync = (() => ({
+					success: false,
+					stdout: new Uint8Array(),
+					stderr: new Uint8Array(),
+				})) as unknown as typeof Bun.spawnSync
+
 				const app = cli(schema, { name: 'app', version: '1.0.0' })
 				await app.run({ handlers: { test: () => {} } })
 
@@ -1281,6 +1358,7 @@ describe('cli', () => {
 				expect(output).toContain(`Installed fish completions to ${path}`)
 				expect(output).toContain(`source ${path}`)
 			} finally {
+				Bun.spawnSync = originalSpawnSync
 				rmSync(home, { force: true, recursive: true })
 			}
 		})

@@ -6,6 +6,8 @@ export type ParsedArgs = {
 	raw: string[]
 }
 
+const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
+
 export function parseArgv(argv: string[]): ParsedArgs {
 	const result: ParsedArgs = {
 		flags: {},
@@ -31,6 +33,7 @@ export function parseArgv(argv: string[]): ParsedArgs {
 		if (arg.startsWith('--no-')) {
 			// Boolean negation: --no-verbose -> verbose: false
 			const key = camelCase(arg.slice(5))
+			assertSafeFlagPath(key)
 			result.flags[key] = false
 			i++
 			continue
@@ -41,11 +44,13 @@ export function parseArgv(argv: string[]): ParsedArgs {
 			if (eqIndex !== -1) {
 				// --key=value
 				const key = camelCase(arg.slice(2, eqIndex))
+				assertSafeFlagPath(key)
 				const value = arg.slice(eqIndex + 1)
 				setFlag(result.flags, key, value)
 			} else {
 				// --key or --key value
 				const key = camelCase(arg.slice(2))
+				assertSafeFlagPath(key)
 				const next = argv[i + 1]
 				if (next !== undefined && !next.startsWith('-')) {
 					setFlag(result.flags, key, next)
@@ -111,6 +116,14 @@ function setFlag(
 		}
 	} else {
 		flags[key] = value
+	}
+}
+
+function assertSafeFlagPath(key: string): void {
+	for (const segment of key.split('.')) {
+		if (UNSAFE_PATH_SEGMENTS.has(segment)) {
+			throw new Error(`Invalid flag path segment: ${segment}`)
+		}
 	}
 }
 

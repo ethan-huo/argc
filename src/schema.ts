@@ -6,7 +6,7 @@ import type { Router, Schema } from './types'
 import { getRouterChildren } from './router'
 import { isCommand, isGroup } from './types'
 
-type SchemaOptions = {
+export type SchemaOptions = {
 	name: string
 	description?: string
 	globals?: Schema
@@ -118,13 +118,19 @@ function extractInputParamsDetailed(schema: Schema): ParamInfo[] {
 		const description = prop.description as string | undefined
 		const defaultVal = prop.default
 
-		params.push({
+		const param: ParamInfo = {
 			name,
 			type: typeStr,
 			optional: isOptional,
-			default: defaultVal,
-			description,
-		})
+		}
+		if (defaultVal !== undefined) {
+			param.default = defaultVal
+		}
+		if (description !== undefined) {
+			param.description = description
+		}
+
+		params.push(param)
 	}
 
 	return params
