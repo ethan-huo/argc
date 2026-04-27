@@ -18,8 +18,12 @@ Schema-first CLI framework for Bun. Define once, get type-safe handlers + AI-rea
 ## Install
 
 ```bash
-bun add github:ethan-huo/argc
+bun add github:ethan-huo/argc#v0.0.1
 ```
+
+Use version tags for downstream projects. `main` is the source branch and does
+not commit generated declaration files; release tags are consumable snapshots
+that include `dist/*.d.ts` for stable TypeScript type resolution.
 
 ## Quick Start
 

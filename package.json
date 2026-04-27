@@ -17,6 +17,8 @@
 	},
 	"scripts": {
 		"build": "tsgo -p tsconfig.build.json",
+		"check": "bun run typecheck && bun test && bun run fmt:check",
+		"test": "bun test",
 		"typecheck": "tsgo --noEmit",
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check"
