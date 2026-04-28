@@ -26,7 +26,7 @@ export function createDefaultSchemaExplorer(
 	options: SchemaExplorerOptions = {},
 ): SchemaExplorer {
 	const outlineDepth = options.outlineDepth ?? 2
-	const maxLines = options.maxLines ?? 100
+	const maxLines = options.maxLines ?? 1000
 
 	return {
 		select: (router, selector) =>

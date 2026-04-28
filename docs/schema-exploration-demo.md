@@ -3,7 +3,7 @@
 This document explores proposed `--schema` behavior for agents using the schema in `examples/demo.ts`.
 It assumes:
 
-- `--schema` stays as-is when output <= `maxLines` (default 100).
+- `--schema` stays as-is when output <= `maxLines` (default 1000).
 - If output > `maxLines`, `--schema` prints a compact outline + hints.
 - `--schema=<selector>` uses jq-like selectors and returns one level under the selected node.
 - `--schema=<selector>` can target a command node to get the full type declaration for that command.
