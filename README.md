@@ -318,7 +318,7 @@ type Myapp = {
 }
 ```
 
-If the schema is large (>`schemaMaxLines`, default 1000), `--schema` prints a compact outline and hints for exploration.
+If the schema is large (>1000 lines by default), `--schema` prints a compact outline and hints for exploration.
 
 Use jq-like selectors to narrow the output:
 
@@ -595,8 +595,7 @@ const app = cli(schema, {
   context: (globals) => ({ ... }),  // optional: transform globals to context
   hook: (events) => { ... }, // optional: batch hook event transport
   hookTimeoutMs: 2000,    // optional: drain timeout for hook delivery (default: 2000)
-  schemaMaxLines: 1000,   // optional: --schema switches to outline above this (default: 1000)
-  schemaExplorer: createDefaultSchemaExplorer({ selectionDepth: 2 }), // optional: customize --schema
+  schemaExplorer: createDefaultSchemaExplorer({ selectionDepth: 2, maxLines: 1000 }), // optional: customize --schema
 })
 
 // Handler types inferred from app (includes context type)

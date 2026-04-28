@@ -76,7 +76,6 @@ export type CLIOptions<
 	name: string
 	version: string
 	description?: string
-	schemaMaxLines?: number
 	schemaExplorer?: SchemaExplorer
 	globals?: TGlobals
 	context?: (

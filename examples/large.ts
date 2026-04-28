@@ -23,7 +23,7 @@ Input (JSON):
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
-import { c, cli, group, type Router } from '../src'
+import { c, cli, createDefaultSchemaExplorer, group, type Router } from '../src'
 
 const s = toStandardJsonSchema
 
@@ -71,7 +71,7 @@ const app = cli(schema, {
 	name: 'gclude',
 	version: '0.0.1',
 	description: 'Large demo CLI with 120 commands for agent schema exploration',
-	schemaMaxLines: 100,
+	schemaExplorer: createDefaultSchemaExplorer({ maxLines: 100 }),
 	globals: s(
 		v.object({
 			env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),

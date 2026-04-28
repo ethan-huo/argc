@@ -229,12 +229,7 @@ export class CLI<
 		if (parsed.flags.schema) {
 			if (isRootLevel) {
 				const schemaExplorer =
-					this.options.schemaExplorer ??
-					createDefaultSchemaExplorer(
-						this.options.schemaMaxLines === undefined
-							? {}
-							: { maxLines: this.options.schemaMaxLines },
-					)
+					this.options.schemaExplorer ?? createDefaultSchemaExplorer()
 				let selection: SchemaSelectionResult | null = null
 				const renderOptions: {
 					name: string
