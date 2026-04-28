@@ -414,6 +414,96 @@ describe('cli', () => {
 			expect(receivedInput).toEqual({ name: 'FileUser' })
 		})
 
+		test('parses JSON input from explicit stdin marker', async () => {
+			const scriptPath = `.tmp-argc-stdin-${Date.now()}.ts`
+			await Bun.write(
+				scriptPath,
+				`
+import { toStandardJsonSchema as s } from '@valibot/to-json-schema'
+import { c, cli } from './src/index'
+import * as v from 'valibot'
+
+const schema = { update: c.input(s(v.object({ name: v.string() }))) }
+const app = cli(schema, { name: 'test', version: '1.0.0' })
+await app.run({
+	handlers: {
+		update: ({ input }) => console.log(JSON.stringify(input)),
+	},
+})
+`,
+			)
+			try {
+				const proc = Bun.spawn(['bun', scriptPath, 'update', '--input', '@-'], {
+					stdin: 'pipe',
+					stdout: 'pipe',
+					stderr: 'pipe',
+				})
+				proc.stdin.write(`{ name: 'StdinUser', }`)
+				proc.stdin.end()
+
+				const [exitCode, stdout, stderr] = await Promise.all([
+					proc.exited,
+					new Response(proc.stdout).text(),
+					new Response(proc.stderr).text(),
+				])
+
+				expect(stderr).toBe('')
+				expect(exitCode).toBe(0)
+				expect(stdout.trim()).toBe('{"name":"StdinUser"}')
+			} finally {
+				try {
+					await Bun.file(scriptPath).delete()
+				} catch {
+					// ignore
+				}
+			}
+		})
+
+		test('reports JSON parse errors from explicit stdin marker', async () => {
+			const scriptPath = `.tmp-argc-stdin-invalid-${Date.now()}.ts`
+			await Bun.write(
+				scriptPath,
+				`
+import { toStandardJsonSchema as s } from '@valibot/to-json-schema'
+import { c, cli } from './src/index'
+import * as v from 'valibot'
+
+const schema = { update: c.input(s(v.object({ name: v.string() }))) }
+const app = cli(schema, { name: 'test', version: '1.0.0' })
+await app.run({
+	handlers: {
+		update: () => {},
+	},
+})
+`,
+			)
+			try {
+				const proc = Bun.spawn(['bun', scriptPath, 'update', '--input', '@-'], {
+					stdin: 'pipe',
+					stdout: 'pipe',
+					stderr: 'pipe',
+				})
+				proc.stdin.write('{ name: ')
+				proc.stdin.end()
+
+				const [exitCode, stdout] = await Promise.all([
+					proc.exited,
+					new Response(proc.stdout).text(),
+				])
+
+				expect(exitCode).toBe(1)
+				expect(stdout).toContain(
+					'Invalid JSON input (supports JSON/JSONC/JSON5)',
+				)
+			} finally {
+				try {
+					await Bun.file(scriptPath).delete()
+				} catch {
+					// ignore
+				}
+			}
+		})
+
 		test('parses JSON input from ~ path', async () => {
 			let receivedInput: unknown
 			const schema = {

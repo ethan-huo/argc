@@ -16,8 +16,10 @@ Selector (jq-like):
 
 Input (JSON):
   bun examples/large.ts compute alpha create --input '{"name":"x","region":"us-east-1"}'
-  echo '{"name":"x"}' | bun examples/large.ts compute alpha create --input
   bun examples/large.ts compute alpha create --input @payload.json
+  bun examples/large.ts compute alpha create --input @- <<'JSON'
+  {"name":"x"}
+  JSON
 */
 
 import { toStandardJsonSchema } from '@valibot/to-json-schema'

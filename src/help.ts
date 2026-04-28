@@ -143,7 +143,7 @@ export function showHelp(
 			console.log(colors.bold('Input:'))
 			const inputType = input ? getInputTypeHint(input) : 'object'
 			console.log(
-				`  ${colors.option(`--input <${inputType}>`.padEnd(24))} ${colors.dim('Read command input from JSON string or stdin')}`,
+				`  ${colors.option(`--input <${inputType}|@file|@->`.padEnd(24))} ${colors.dim('Read command input from JSON string, file, or stdin')}`,
 			)
 		}
 

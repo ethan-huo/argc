@@ -225,16 +225,18 @@ Commands can accept a full JSON object via `--input` (useful for agents or gener
 $ myapp user set --input '{"name":"alice","role":"admin"}'
 ```
 
-You can also load JSON from a file:
+For large input, prefer a file so the payload is inspectable and reusable:
 
 ```bash
 $ myapp user set --input @payload.json
 ```
 
-You can also pipe JSON from stdin:
+For generated one-off input, bind stdin explicitly with `@-`:
 
 ```bash
-$ echo '{"name":"alice","role":"admin"}' | myapp user set --input
+$ myapp user set --input @- <<'JSON'
+{"name":"alice","role":"admin"}
+JSON
 ```
 
 `--input` also accepts JSONC/JSON5 (comments, trailing commas, single quotes, unquoted keys, `Infinity`, `.5`, etc.):
@@ -638,14 +640,14 @@ app.run({
 
 ## Built-in Flags
 
-| Flag                     | Scope         | Description                                                          |
-| ------------------------ | ------------- | -------------------------------------------------------------------- |
-| `-h, --help`             | Everywhere    | Show help                                                            |
-| `-v, --version`          | Root only     | Show version                                                         |
-| `--schema[=selector]`    | Root only     | Typed CLI spec for AI agents                                         |
-| `--input <json\|@file>`  | Command level | Pass input as JSON/JSON5 string, file, or stdin                      |
-| `--run <code\|@file\|->` | Root only     | Run inline code, stdin, or a module file                             |
-| `--completions [shell]`  | Root only     | Generate a completion script, or auto-install for the detected shell |
+| Flag                        | Scope         | Description                                                          |
+| --------------------------- | ------------- | -------------------------------------------------------------------- |
+| `-h, --help`                | Everywhere    | Show help                                                            |
+| `-v, --version`             | Root only     | Show version                                                         |
+| `--schema[=selector]`       | Root only     | Typed CLI spec for AI agents                                         |
+| `--input <json\|@file\|@->` | Command level | Pass input as JSON/JSON5 string, file, or stdin                      |
+| `--run <code\|@file\|->`    | Root only     | Run inline code, stdin, or a module file                             |
+| `--completions [shell]`     | Root only     | Generate a completion script, or auto-install for the detected shell |
 
 ## Shell Completions
 

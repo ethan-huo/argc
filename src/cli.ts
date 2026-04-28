@@ -77,6 +77,7 @@ export class CLI<
 
 	private schema: TSchema
 	private options: CLIOptions<TGlobals, TContext>
+	private stdinTextPromise: Promise<string> | undefined
 
 	constructor(schema: TSchema, options: CLIOptions<TGlobals, TContext>) {
 		this.schema = schema
@@ -657,14 +658,14 @@ export class CLI<
 	): Promise<Record<string, unknown>> {
 		const raw =
 			flag === true
-				? await readStdin()
+				? await this.readStdinText()
 				: typeof flag === 'string'
 					? await this.readInputString(flag)
 					: null
 		if (raw === null) {
 			console.log(
 				colors.error(
-					'Invalid --input value (expected JSON string, @file, or stdin)',
+					'Invalid --input value (expected JSON string, @file, @-, or stdin)',
 				),
 			)
 			process.exit(1)
@@ -693,6 +694,9 @@ export class CLI<
 	}
 
 	private async readInputString(value: string): Promise<string> {
+		if (value === '@-') {
+			return await this.readStdinText()
+		}
 		if (value.startsWith('@')) {
 			const path = expandHome(value.slice(1))
 			if (!path) {
@@ -702,6 +706,11 @@ export class CLI<
 			return await Bun.file(path).text()
 		}
 		return value
+	}
+
+	private async readStdinText(): Promise<string> {
+		this.stdinTextPromise ??= readStdin()
+		return await this.stdinTextPromise
 	}
 
 	private findByAlias(

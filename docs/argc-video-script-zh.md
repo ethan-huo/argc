@@ -190,16 +190,18 @@ agent 往往会生成 JSON，argc 支持直接输入：
 cli user set --input '{"name":"alice","role":"admin"}'
 ```
 
-也支持 stdin：
-
-```
-echo '{"name":"alice"}' | cli user set --input
-```
-
-还可以从文件读取：
+大输入优先写入文件，便于检查和复用：
 
 ```
 cli user set --input @payload.json
+```
+
+一次性生成的输入可以用 `@-` 显式绑定 stdin：
+
+```
+cli user set --input @- <<'JSON'
+{"name":"alice"}
+JSON
 ```
 
 注意：使用 `--input` 时，不能再混用其他 flags/positionals。
@@ -252,7 +254,9 @@ bun examples/large.ts --schema=..create
 # JSON 输入
 bun examples/large.ts compute alpha create --input '{"name":"x","region":"us-east-1"}'
 
-echo '{"name":"x"}' | bun examples/large.ts compute alpha create --input
-
 bun examples/large.ts compute alpha create --input @payload.json
+
+bun examples/large.ts compute alpha create --input @- <<'JSON'
+{"name":"x"}
+JSON
 ```
