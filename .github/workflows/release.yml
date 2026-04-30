@@ -77,12 +77,31 @@ jobs:
           test -f dist/index.d.ts
           test -f dist/terminal.d.ts
 
+      - name: Prune release snapshot
+        if: steps.version.outputs.released == 'true'
+        run: |
+          set -euo pipefail
+
+          RELEASE_DIST="$RUNNER_TEMP/argc-release-dist"
+          rm -rf "$RELEASE_DIST"
+          cp -R dist "$RELEASE_DIST"
+
+          git rm -r -- .
+          rm -rf dist
+
+          # package.json exports runtime TS sources; the release tag only drops tests/tooling/docs.
+          git checkout HEAD -- package.json README.md src
+          find src -name '*.test.ts' -delete
+
+          cp -R "$RELEASE_DIST" dist
+
       - name: Create release snapshot tag
         if: steps.version.outputs.released == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A package.json README.md src
           git add -f dist
           git commit -m "release: $TAG declarations"
           git tag -a "$TAG" -m "$TAG"
