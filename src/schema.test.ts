@@ -128,7 +128,7 @@ describe('generateSchema', () => {
 
 		expect(output).toContain('CLI Syntax:')
 		expect(output).toContain(
-			'flags:   --skip-build maps to skipBuild; --input uses schema field names',
+			'flags:   --skip-build matches skip-build, or falls back to skipBuild',
 		)
 		expect(output).toContain('arrays:')
 		expect(output).toContain('objects:')

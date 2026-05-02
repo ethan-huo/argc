@@ -232,7 +232,7 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 	// CLI syntax hint for AI agents
 	lines.push('CLI Syntax:')
 	lines.push(
-		'  flags:   --skip-build maps to skipBuild; --input uses schema field names',
+		'  flags:   --skip-build matches skip-build, or falls back to skipBuild',
 	)
 	lines.push('  arrays:  --tag a --tag b             → tag: ["a", "b"]')
 	lines.push(

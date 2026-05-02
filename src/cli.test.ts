@@ -164,6 +164,50 @@ describe('cli', () => {
 			expect(receivedInput).toEqual({ name: 'World', loud: true })
 		})
 
+		test('maps kebab-case flags to camelCase schema fields as fallback', async () => {
+			let receivedInput: unknown
+			const schema = {
+				release: c.input(
+					s(v.object({ dryRun: v.optional(v.boolean(), false) })),
+				),
+			}
+
+			process.argv = ['bun', 'cli', 'release', '--dry-run']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					release: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ dryRun: true })
+		})
+
+		test('preserves kebab-case flags when schema declares kebab-case fields', async () => {
+			let receivedInput: unknown
+			const schema = {
+				release: c.input(
+					s(v.object({ 'dry-run': v.optional(v.boolean(), false) })),
+				),
+			}
+
+			process.argv = ['bun', 'cli', 'release', '--dry-run']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					release: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ 'dry-run': true })
+		})
+
 		test('preserves large numeric-like strings for schema validation', async () => {
 			let receivedInput: unknown
 			const schema = {
@@ -1111,6 +1155,33 @@ await app.run({
 			})
 
 			expect(receivedGlobals).toEqual({ verbose: true })
+		})
+
+		test('context maps kebab-case globals to camelCase schema fields', async () => {
+			let receivedGlobals: unknown
+			const schema = {
+				test: c.input(s(v.object({}))),
+			}
+
+			process.argv = ['bun', 'cli', 'test', '--output-format', 'json']
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				globals: s(v.object({ outputFormat: v.optional(v.string()) })),
+				context: (globals) => {
+					receivedGlobals = globals
+					return {}
+				},
+			})
+
+			await app.run({
+				handlers: {
+					test: () => {},
+				},
+			})
+
+			expect(receivedGlobals).toEqual({ outputFormat: 'json' })
 		})
 	})
 

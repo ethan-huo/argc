@@ -22,6 +22,7 @@ import {
 } from './complete'
 import { normalizeArgName, showHelp, showValidationError } from './help'
 import { createHookDispatcher } from './hook'
+import { camelCase } from './naming'
 import { parseArgv } from './parser'
 import { getRouterChildren, findHandler } from './router'
 import { extractInputParamsDetailed } from './schema'
@@ -64,6 +65,23 @@ function parseCompletionIndex(flag: unknown): number {
 	}
 
 	return 0
+}
+
+function mergeFlagValue(
+	flags: Record<string, unknown>,
+	key: string,
+	value: unknown,
+): void {
+	const existing = flags[key]
+	if (existing === undefined) {
+		flags[key] = value
+		return
+	}
+	if (Array.isArray(existing)) {
+		existing.push(value)
+		return
+	}
+	flags[key] = [existing, value]
 }
 
 export class CLI<
@@ -372,11 +390,19 @@ export class CLI<
 			? extractInputParamsDetailed(commandDef.input)
 			: []
 		const inputFieldNames = new Set(inputParams.map((p) => p.name))
+		const cliFieldNames = new Set([
+			...inputFieldNames,
+			...this.getGlobalOptionNames(),
+		])
 		const allowSystemInput = !inputFieldNames.has('input')
+		const commandFlags = this.normalizeFlagsForFields(
+			parsed.flags,
+			cliFieldNames,
+		)
 
 		const { flagsWithoutInput, inputFlag } = allowSystemInput
-			? this.extractInputFlag(parsed.flags)
-			: { flagsWithoutInput: parsed.flags, inputFlag: undefined }
+			? this.extractInputFlag(commandFlags)
+			: { flagsWithoutInput: commandFlags, inputFlag: undefined }
 		if (allowSystemInput && inputFlag !== undefined) {
 			this.assertJsonInputUsage(flagsWithoutInput, remaining)
 		}
@@ -423,8 +449,12 @@ export class CLI<
 		// Parse and validate globals
 		let globals = flagsWithoutInput as StandardSchemaV1.InferOutput<TGlobals>
 		if (this.options.globals) {
+			const globalFlags = this.normalizeFlagsForFields(
+				flagsWithoutInput,
+				this.getGlobalOptionNames(),
+			)
 			const result =
-				await this.options.globals['~standard'].validate(flagsWithoutInput)
+				await this.options.globals['~standard'].validate(globalFlags)
 			if (result.issues) {
 				console.error(colors.error('Global options validation failed'))
 				for (const issue of result.issues) {
@@ -613,6 +643,27 @@ export class CLI<
 		}
 
 		return input
+	}
+
+	private normalizeFlagsForFields(
+		flags: Record<string, unknown>,
+		fieldNames: Set<string>,
+	): Record<string, unknown> {
+		const normalized: Record<string, unknown> = {}
+		for (const [key, value] of Object.entries(flags)) {
+			const field = this.resolveFlagFieldName(key, fieldNames)
+			mergeFlagValue(normalized, field, value)
+		}
+		return normalized
+	}
+
+	private resolveFlagFieldName(key: string, fieldNames: Set<string>): string {
+		if (fieldNames.has(key)) return key
+
+		const camel = camelCase(key)
+		if (fieldNames.has(camel)) return camel
+
+		return key
 	}
 
 	private extractInputFlag(flags: Record<string, unknown>): {

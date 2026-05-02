@@ -31,8 +31,9 @@ export function parseArgv(argv: string[]): ParsedArgs {
 		}
 
 		if (arg.startsWith('--no-')) {
-			// Boolean negation: --no-verbose -> verbose: false
-			const key = camelCase(arg.slice(5))
+			// Boolean negation keeps the raw flag name; schema-aware normalization
+			// happens after command resolution so kebab-case schema keys can match.
+			const key = arg.slice(5)
 			assertSafeFlagPath(key)
 			result.flags[key] = false
 			i++
@@ -43,13 +44,13 @@ export function parseArgv(argv: string[]): ParsedArgs {
 			const eqIndex = arg.indexOf('=')
 			if (eqIndex !== -1) {
 				// --key=value
-				const key = camelCase(arg.slice(2, eqIndex))
+				const key = arg.slice(2, eqIndex)
 				assertSafeFlagPath(key)
 				const value = arg.slice(eqIndex + 1)
 				setFlag(result.flags, key, value)
 			} else {
 				// --key or --key value
-				const key = camelCase(arg.slice(2))
+				const key = arg.slice(2)
 				assertSafeFlagPath(key)
 				const next = argv[i + 1]
 				if (next !== undefined && !next.startsWith('-')) {
@@ -155,8 +156,4 @@ function setNestedFlag(
 	}
 
 	setNestedFlag(obj[key] as Record<string, unknown>, path.slice(1), value)
-}
-
-function camelCase(str: string): string {
-	return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
 }

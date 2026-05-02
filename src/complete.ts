@@ -3,7 +3,7 @@ import { basename, dirname, join } from 'node:path'
 
 import type { Router, Schema } from './types'
 
-import { kebabCase } from './naming'
+import { camelCase, kebabCase } from './naming'
 import { getRouterChildren } from './router'
 import { extractInputParamsDetailed, type ParamInfo } from './schema'
 import { isCommand, isGroup } from './types'
@@ -14,10 +14,6 @@ export type CompletionContext = {
 }
 
 export type SupportedShell = 'bash' | 'zsh' | 'fish'
-
-function camelCase(str: string): string {
-	return str.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
-}
 
 function findByAlias(
 	children: { [key: string]: Router },
@@ -164,9 +160,11 @@ export function complete(
 	if (current > 0 && !currentWord.startsWith('-')) {
 		const prevWord = words[current - 1]
 		if (prevWord && prevWord.startsWith('--')) {
-			const flagName = camelCase(prevWord.slice(2))
+			const rawFlagName = prevWord.slice(2)
 			const params = collectParams(resolved, globals)
-			const param = params.find((p) => p.name === flagName)
+			const param = params.find(
+				(p) => p.name === rawFlagName || p.name === camelCase(rawFlagName),
+			)
 			if (param && param.type !== 'boolean') {
 				const enumValues = extractEnumValues(param.type)
 				if (enumValues.length > 0) {

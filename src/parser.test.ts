@@ -25,14 +25,14 @@ describe('parseArgv', () => {
 			expect(result.flags).toEqual({ verbose: false })
 		})
 
-		test('kebab-case to camelCase', () => {
+		test('preserves kebab-case flag names', () => {
 			const result = parseArgv(['--dry-run'])
-			expect(result.flags).toEqual({ dryRun: true })
+			expect(result.flags).toEqual({ 'dry-run': true })
 		})
 
-		test('kebab-case with value', () => {
+		test('preserves kebab-case flag names with value', () => {
 			const result = parseArgv(['--output-dir', '/tmp'])
-			expect(result.flags).toEqual({ outputDir: '/tmp' })
+			expect(result.flags).toEqual({ 'output-dir': '/tmp' })
 		})
 	})
 
