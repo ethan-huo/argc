@@ -52,6 +52,28 @@ describe('generateSchema', () => {
 		expect(output).toContain('port?: number = 3000')
 	})
 
+	test('command signature uses transformed output types', () => {
+		const numberFromStringWithDefault = (defaultValue: number) =>
+			v.pipe(
+				v.optional(v.string(), String(defaultValue)),
+				v.transform(Number),
+				v.number(),
+			)
+		const schema = {
+			sessions: c.input(
+				s(
+					v.object({
+						count: numberFromStringWithDefault(2),
+					}),
+				),
+			),
+		}
+
+		const output = generateSchema(schema, { name: 'app' })
+		expect(output).toContain('sessions(count?: number = 2)')
+		expect(output).not.toContain('sessions(count?: string = "2")')
+	})
+
 	test('grouped commands', () => {
 		const schema = {
 			user: group(

@@ -95,15 +95,79 @@ type ParamInfo = {
 	description?: string
 }
 
-// Extract parameters from schema using JSON Schema
-function extractInputParamsDetailed(schema: Schema): ParamInfo[] {
-	let jsonSchema: JSONSchema
+function readJsonSchema(
+	schema: Schema,
+	side: 'input' | 'output',
+): JSONSchema | null {
 	try {
-		jsonSchema = schema['~standard'].jsonSchema.input({ target: 'draft-07' })
+		return schema['~standard'].jsonSchema[side]({ target: 'draft-07' })
 	} catch {
-		return []
+		return null
 	}
+}
 
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+	return (
+		value !== null &&
+		typeof value === 'object' &&
+		'then' in value &&
+		typeof (value as { then: unknown }).then === 'function'
+	)
+}
+
+function deriveOutputDefault(
+	schema: Schema,
+	name: string,
+	inputDefault: unknown,
+): unknown {
+	const result = schema['~standard'].validate({ [name]: inputDefault })
+	if (isPromiseLike(result) || result.issues) return undefined
+	const value = result.value
+	if (value === null || typeof value !== 'object' || !(name in value)) {
+		return undefined
+	}
+	return (value as Record<string, unknown>)[name]
+}
+
+// Extract CLI ingress parameters from the input side of the schema. This is
+// intentionally separate from the handler-facing contract rendered to agents.
+function extractCliInputParamsDetailed(schema: Schema): ParamInfo[] {
+	const jsonSchema = readJsonSchema(schema, 'input')
+	if (!jsonSchema) return []
+
+	return extractParamsFromJsonSchema(jsonSchema)
+}
+
+// Extract handler-facing parameters from the output side of the schema.
+function extractOutputParamsDetailed(schema: Schema): ParamInfo[] {
+	const inputJsonSchema = readJsonSchema(schema, 'input')
+	const outputJsonSchema = readJsonSchema(schema, 'output')
+	if (!outputJsonSchema) return []
+
+	const params = extractParamsFromJsonSchema(outputJsonSchema)
+	const inputProperties = inputJsonSchema?.properties as
+		| Record<string, JSONSchema>
+		| undefined
+
+	return params.map((param) => {
+		const inputProperty = inputProperties?.[param.name]
+		const inputDefault = inputProperty?.default
+		let next = param
+		if (
+			next.description === undefined &&
+			inputProperty?.description !== undefined
+		) {
+			next = { ...next, description: inputProperty.description as string }
+		}
+		if (next.default !== undefined || inputDefault === undefined) return next
+
+		const outputDefault = deriveOutputDefault(schema, param.name, inputDefault)
+		if (outputDefault === undefined) return next
+		return { ...next, default: outputDefault }
+	})
+}
+
+function extractParamsFromJsonSchema(jsonSchema: JSONSchema): ParamInfo[] {
 	const params: ParamInfo[] = []
 	const properties = jsonSchema.properties as
 		| Record<string, JSONSchema>
@@ -138,7 +202,7 @@ function extractInputParamsDetailed(schema: Schema): ParamInfo[] {
 
 // Format params as function signature
 function extractInputParams(schema: Schema): string {
-	const params = extractInputParamsDetailed(schema)
+	const params = extractOutputParamsDetailed(schema)
 	return formatParams(params)
 }
 
@@ -158,7 +222,7 @@ function formatParams(params: ParamInfo[]): string {
 }
 
 export function getInputTypeHint(schema: Schema): string {
-	const params = extractInputParamsDetailed(schema)
+	const params = extractOutputParamsDetailed(schema)
 	if (params.length === 0) return 'object'
 	const parts = params.map((p) => {
 		const typeHint = formatInputHintType(p.type)
@@ -169,7 +233,11 @@ export function getInputTypeHint(schema: Schema): string {
 }
 
 // Export for cli.ts help display
-export { extractInputParamsDetailed, type ParamInfo }
+export {
+	extractCliInputParamsDetailed,
+	extractOutputParamsDetailed,
+	type ParamInfo,
+}
 
 function generateCommandSchema(
 	name: string,

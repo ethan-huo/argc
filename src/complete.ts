@@ -5,7 +5,7 @@ import type { Router, Schema } from './types'
 
 import { camelCase, kebabCase } from './naming'
 import { getRouterChildren } from './router'
-import { extractInputParamsDetailed, type ParamInfo } from './schema'
+import { extractCliInputParamsDetailed, type ParamInfo } from './schema'
 import { isCommand, isGroup } from './types'
 
 export type CompletionContext = {
@@ -96,7 +96,7 @@ function collectParams(
 	const params: ParamInfo[] = []
 
 	if (isCommand(router) && router['~argc'].input) {
-		const inputParams = extractInputParamsDetailed(router['~argc'].input)
+		const inputParams = extractCliInputParamsDetailed(router['~argc'].input)
 		const argNames = new Set(
 			(router['~argc'].args ?? []).map((a) =>
 				a.name.endsWith('...') ? a.name.slice(0, -3) : a.name,
@@ -110,7 +110,7 @@ function collectParams(
 	}
 
 	if (globals) {
-		params.push(...extractInputParamsDetailed(globals))
+		params.push(...extractCliInputParamsDetailed(globals))
 	}
 
 	return params

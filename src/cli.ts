@@ -25,7 +25,7 @@ import { createHookDispatcher } from './hook'
 import { camelCase } from './naming'
 import { parseArgv } from './parser'
 import { getRouterChildren, findHandler } from './router'
-import { extractInputParamsDetailed } from './schema'
+import { extractCliInputParamsDetailed } from './schema'
 import { createDefaultSchemaExplorer } from './schema-explorer'
 import {
 	expandHome,
@@ -103,7 +103,7 @@ export class CLI<
 
 		// Check for reserved global option names
 		if (options.globals) {
-			const globalParams = extractInputParamsDetailed(options.globals)
+			const globalParams = extractCliInputParamsDetailed(options.globals)
 			const conflicts = globalParams
 				.map((p) => p.name)
 				.filter((name) => RESERVED_GLOBALS.has(name))
@@ -387,7 +387,7 @@ export class CLI<
 
 		const commandDef = command['~argc']
 		const inputParams = commandDef.input
-			? extractInputParamsDetailed(commandDef.input)
+			? extractCliInputParamsDetailed(commandDef.input)
 			: []
 		const inputFieldNames = new Set(inputParams.map((p) => p.name))
 		const cliFieldNames = new Set([
@@ -700,7 +700,7 @@ export class CLI<
 
 	private getGlobalOptionNames(): Set<string> {
 		if (!this.options.globals) return new Set()
-		const params = extractInputParamsDetailed(this.options.globals)
+		const params = extractCliInputParamsDetailed(this.options.globals)
 		return new Set(params.map((p) => p.name))
 	}
 

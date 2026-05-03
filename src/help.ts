@@ -2,7 +2,11 @@ import type { AnyCommand, Router, Schema } from './types'
 
 import { kebabCase } from './naming'
 import { getRouterChildren } from './router'
-import { extractInputParamsDetailed, getInputTypeHint } from './schema'
+import {
+	extractCliInputParamsDetailed,
+	extractOutputParamsDetailed,
+	getInputTypeHint,
+} from './schema'
 import { fmt as colors, padEnd } from './terminal'
 import { isCommand, isGroup } from './types'
 
@@ -87,8 +91,10 @@ export function showHelp(
 		const argInfo = getArgInfo(args)
 
 		// Extract input params with descriptions
-		const inputParams = input ? extractInputParamsDetailed(input) : []
-		const inputFieldNames = new Set(inputParams.map((p) => p.name))
+		const inputParams = input ? extractOutputParamsDetailed(input) : []
+		const inputFieldNames = new Set(
+			input ? extractCliInputParamsDetailed(input).map((p) => p.name) : [],
+		)
 
 		// Usage line
 		let usage = `${colors.bold('Usage:')} ${colors.command(fullCommand)}`
@@ -208,7 +214,7 @@ export function showHelp(
 
 	// Show user-defined global options
 	if (options.globals) {
-		const globalParams = extractInputParamsDetailed(options.globals)
+		const globalParams = extractOutputParamsDetailed(options.globals)
 		for (const opt of globalParams) {
 			const flag = `--${kebabCase(opt.name)}`
 			const typeHint = opt.type !== 'boolean' ? ` <${opt.type}>` : ''
@@ -251,7 +257,7 @@ export function showValidationError(
 	const args = command['~argc'].args ?? []
 	const input = command['~argc'].input
 	const argInfo = getArgInfo(args)
-	const inputParams = input ? extractInputParamsDetailed(input) : []
+	const inputParams = input ? extractCliInputParamsDetailed(input) : []
 
 	// Build usage line
 	const cmdName =
