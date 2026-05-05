@@ -2,6 +2,8 @@ import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
 
+import type { Schema } from './types'
+
 import { c, group } from './command'
 import {
 	generateSchema,
@@ -11,6 +13,20 @@ import {
 } from './schema'
 
 const s = toStandardJsonSchema
+
+function jsonSchema(schema: Record<string, unknown>): Schema {
+	return {
+		'~standard': {
+			version: 1,
+			vendor: 'test',
+			validate: (value) => ({ value }),
+			jsonSchema: {
+				input: () => schema,
+				output: () => schema,
+			},
+		},
+	} as Schema
+}
 
 describe('generateSchema', () => {
 	test('simple command', () => {
@@ -72,6 +88,76 @@ describe('generateSchema', () => {
 		const output = generateSchema(schema, { name: 'app' })
 		expect(output).toContain('sessions(count?: number = 2)')
 		expect(output).not.toContain('sessions(count?: string = "2")')
+	})
+
+	test('command signature canonicalizes duplicate rendered types', () => {
+		const schema = {
+			cmd: c.input(
+				jsonSchema({
+					type: 'object',
+					properties: {
+						json: {
+							anyOf: [{ type: 'boolean' }, { type: 'boolean' }],
+							default: false,
+						},
+						env: { enum: ['dev', 'dev', 'prod'] },
+						status: {
+							oneOf: [{ const: 'ready' }, { enum: ['ready', 'blocked'] }],
+						},
+						nested: {
+							anyOf: [
+								{
+									anyOf: [{ type: 'string' }, { type: 'number' }],
+								},
+								{ type: 'string' },
+							],
+						},
+						config: {
+							anyOf: [
+								{
+									type: 'object',
+									properties: {
+										mode: { enum: ['auto', 'manual'] },
+									},
+								},
+								{
+									type: 'object',
+									properties: {
+										level: { type: 'number' },
+									},
+								},
+							],
+						},
+						same: {
+							allOf: [
+								{
+									type: 'object',
+									properties: { id: { type: 'string' } },
+									required: ['id'],
+								},
+								{
+									type: 'object',
+									properties: { id: { type: 'string' } },
+									required: ['id'],
+								},
+							],
+						},
+					},
+				}),
+			),
+		}
+
+		const output = generateSchema(schema, { name: 'app' })
+		expect(output).toContain('json?: boolean = false')
+		expect(output).toContain('env?: "dev" | "prod"')
+		expect(output).toContain('status?: "ready" | "blocked"')
+		expect(output).toContain('nested?: string | number')
+		expect(output).toContain(
+			'config?: { mode?: "auto" | "manual" } | { level?: number }',
+		)
+		expect(output).toContain('same?: { id: string }')
+		expect(output).not.toContain('boolean | boolean')
+		expect(output).not.toContain('"dev" | "dev"')
 	})
 
 	test('grouped commands', () => {

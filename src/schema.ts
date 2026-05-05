@@ -14,6 +14,64 @@ export type SchemaOptions = {
 
 type JSONSchema = Record<string, unknown>
 
+function splitTopLevelTypes(type: string, operator: '|' | '&'): string[] {
+	const parts: string[] = []
+	let start = 0
+	let depth = 0
+	let quote: '"' | "'" | null = null
+	let escaped = false
+
+	for (let index = 0; index < type.length; index++) {
+		const char = type[index]
+		if (quote) {
+			if (escaped) {
+				escaped = false
+			} else if (char === '\\') {
+				escaped = true
+			} else if (char === quote) {
+				quote = null
+			}
+			continue
+		}
+
+		if (char === '"' || char === "'") {
+			quote = char
+			continue
+		}
+		if (char === '{' || char === '[' || char === '(') {
+			depth++
+			continue
+		}
+		if (char === '}' || char === ']' || char === ')') {
+			depth--
+			continue
+		}
+		if (depth === 0 && char === operator) {
+			parts.push(type.slice(start, index).trim())
+			start = index + 1
+		}
+	}
+
+	parts.push(type.slice(start).trim())
+	return parts
+}
+
+function joinUniqueTypes(types: string[], operator: '|' | '&'): string {
+	const seen = new Set<string>()
+	const unique: string[] = []
+
+	for (const type of types) {
+		// Flatten only top-level rendered variants so object field unions stay intact.
+		for (const part of splitTopLevelTypes(type, operator)) {
+			if (seen.has(part)) continue
+			seen.add(part)
+			unique.push(part)
+		}
+	}
+
+	return unique.join(` ${operator} `)
+}
+
 // Convert JSON Schema to TypeScript-like type string
 function jsonSchemaToTypeString(schema: JSONSchema): string {
 	const type = schema.type as string | undefined
@@ -25,19 +83,28 @@ function jsonSchemaToTypeString(schema: JSONSchema): string {
 
 	// Handle enum
 	if (schema.enum) {
-		return (schema.enum as unknown[]).map((v) => JSON.stringify(v)).join(' | ')
+		return joinUniqueTypes(
+			(schema.enum as unknown[]).map((v) => JSON.stringify(v)),
+			'|',
+		)
 	}
 
 	// Handle oneOf/anyOf (union types)
 	if (schema.oneOf || schema.anyOf) {
 		const variants = (schema.oneOf || schema.anyOf) as JSONSchema[]
-		return variants.map((v) => jsonSchemaToTypeString(v)).join(' | ')
+		return joinUniqueTypes(
+			variants.map((v) => jsonSchemaToTypeString(v)),
+			'|',
+		)
 	}
 
 	// Handle allOf (intersection types)
 	if (schema.allOf) {
 		const variants = schema.allOf as JSONSchema[]
-		return variants.map((v) => jsonSchemaToTypeString(v)).join(' & ')
+		return joinUniqueTypes(
+			variants.map((v) => jsonSchemaToTypeString(v)),
+			'&',
+		)
 	}
 
 	// Handle $ref (simplified - just show as unknown)
