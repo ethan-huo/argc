@@ -1,208 +1,195 @@
 import { describe, expect, test } from 'bun:test'
 
-import { directive } from './directive'
+import { directive, type ImageDirective } from './directive'
 
 test('exports directive helpers from argc/directive', async () => {
 	const mod = await import(['argc', 'directive'].join('/'))
 
-	expect(mod.directive.content.file({ url: 'file:///tmp/result.zip' })).toBe(
-		'::file{url:"file:///tmp/result.zip"}',
-	)
+	expect(
+		mod.directive.encode({
+			type: 'file',
+			url: 'file:///tmp/result.zip',
+		}),
+	).toBe('::file{url:"file:///tmp/result.zip"}')
 })
 
 test('keeps argc/result as a compatibility alias', async () => {
 	const mod = await import(['argc', 'result'].join('/'))
 
-	expect(mod.directive.content.file({ url: 'file:///tmp/result.zip' })).toBe(
-		'::file{url:"file:///tmp/result.zip"}',
-	)
-	expect(mod.content.file({ url: 'file:///tmp/result.zip' })).toBe(
-		'::file{url:"file:///tmp/result.zip"}',
-	)
+	expect(
+		mod.directive.encode({
+			type: 'file',
+			url: 'file:///tmp/result.zip',
+		}),
+	).toBe('::file{url:"file:///tmp/result.zip"}')
 })
 
 describe('directive', () => {
-	test('encodes attrs as JSON5 object literal syntax', () => {
-		expect(
-			directive.encode('image', {
-				url: 'blob://abc123',
-				mime: 'image/png',
-				width: 1024,
-				animated: false,
-				alt: 'a, "quoted" image',
-				filename: undefined,
-			}),
-		).toBe(
-			'::image{url:"blob://abc123",mime:"image/png",width:1024,animated:false,alt:"a, \\"quoted\\" image"}',
+	test('encodes a typed directive object', () => {
+		const image: ImageDirective = {
+			type: 'image',
+			url: 'blob://abc123',
+			mime: 'image/png',
+			width: 1024,
+			alt: 'a, "quoted" image',
+		}
+
+		expect(directive.encode(image)).toBe(
+			'::image{url:"blob://abc123",mime:"image/png",width:1024,alt:"a, \\"quoted\\" image"}',
 		)
 	})
 
-	test('decodes one directive with strings, commas, booleans, and numbers', () => {
+	test('encodes generic directive payloads', () => {
+		expect(
+			directive.encode({
+				type: 'review-finding',
+				'file-path': '/tmp/a.ts',
+				line: 12,
+				fixed: false,
+				meta: { rule: 'no-debugger' },
+				tags: ['lint', 'ci'],
+				note: null,
+			}),
+		).toBe(
+			'::review-finding{"file-path":"/tmp/a.ts",line:12,fixed:false,meta:{"rule":"no-debugger"},tags:["lint","ci"],note:null}',
+		)
+	})
+
+	test('rejects invalid directive values', () => {
+		expect(() =>
+			directive.encode({
+				type: 'image',
+				url: 'blob://a',
+				size: Number.NaN,
+			}),
+		).toThrow('Invalid directive attr value for: size')
+		expect(() =>
+			directive.encode({
+				type: 'bad name',
+				url: 'blob://a',
+			}),
+		).toThrow('Invalid directive type: bad name')
+	})
+
+	test('decodes one directive into an object', () => {
 		const raw =
 			'::image{url:"blob://a",mime:"image/png",width:1024,alt:"a,b",safe:true}'
-		const token = directive.decode(raw)
+		const result = directive.decode(raw)
 
-		expect(token).toEqual({
-			kind: 'directive',
-			name: 'image',
-			attrs: {
-				url: 'blob://a',
-				mime: 'image/png',
-				width: 1024,
-				alt: 'a,b',
-				safe: true,
-			},
-			raw,
-			range: {
-				start: 0,
-				end: raw.length,
-			},
+		expect(result).toEqual({
+			type: 'image',
+			url: 'blob://a',
+			mime: 'image/png',
+			width: 1024,
+			alt: 'a,b',
+			safe: true,
 		})
 	})
 
 	test('scans directives in text and keeps ranges', () => {
 		const text =
 			'generated ::image{url:"blob://a",mime:"image/png"} and ::file{url:"file:///tmp/a,b.zip",size:12}'
-		const tokens = directive.scan(text)
+		const spans = directive.scan(text)
 		const firstRaw = '::image{url:"blob://a",mime:"image/png"}'
 
-		expect(tokens).toHaveLength(2)
-		expect(tokens[0]).toMatchObject({
-			name: 'image',
-			attrs: { url: 'blob://a', mime: 'image/png' },
+		expect(spans).toHaveLength(2)
+		expect(spans[0]).toMatchObject({
+			directive: { type: 'image', url: 'blob://a', mime: 'image/png' },
+			raw: firstRaw,
 			range: { start: 10, end: 10 + firstRaw.length },
 		})
-		expect(tokens[1]).toMatchObject({
-			name: 'file',
-			attrs: { url: 'file:///tmp/a,b.zip', size: 12 },
+		expect(spans[1]).toMatchObject({
+			directive: { type: 'file', url: 'file:///tmp/a,b.zip', size: 12 },
 		})
 	})
 
 	test('ignores invalid directives without partial attrs', () => {
-		expect(directive.decode('::image{url:"blob://a",meta:{bad:true}}')).toBe(
-			null,
-		)
-		expect(directive.decode('::image{url:"blob://a",width:null}')).toBe(null)
+		expect(directive.decode('::image{url:"blob://a",width:null}')).toEqual({
+			type: 'image',
+			url: 'blob://a',
+			width: null,
+		})
+		expect(directive.decode('::image{url:"blob://a",type:"file"}')).toBe(null)
 		expect(directive.decode('::image{url:"blob://a"')).toBe(null)
-		expect(
-			directive.scan('x ::image{url:"blob://a",meta:{bad:true}} y'),
-		).toEqual([])
+		expect(directive.scan('x ::image{url:"blob://a",type:"file"} y')).toEqual(
+			[],
+		)
 	})
 })
 
-describe('content', () => {
-	test('provides media directive helpers', () => {
+describe('content types', () => {
+	test('recognizes known content directive shapes', () => {
 		expect(
-			directive.content.image({
+			directive.isContent({
+				type: 'image',
 				url: 'blob://a',
 				mime: 'image/png',
 				width: 640,
 				height: 480,
 			}),
-		).toBe('::image{url:"blob://a",mime:"image/png",width:640,height:480}')
+		).toBe(true)
 		expect(
-			directive.content.video({
+			directive.isContent({
+				type: 'video',
 				url: 'blob://v',
 				poster: 'https://x/y.jpg',
 			}),
-		).toBe('::video{url:"blob://v",poster:"https://x/y.jpg"}')
-		expect(directive.content.audio({ url: 'blob://x', duration: 2.5 })).toBe(
-			'::audio{url:"blob://x",duration:2.5}',
-		)
+		).toBe(true)
 		expect(
-			directive.content.file({
+			directive.isContent({
+				type: 'audio',
+				url: 'blob://x',
+				duration: 2.5,
+			}),
+		).toBe(true)
+		expect(
+			directive.isContent({
+				type: 'file',
 				url: 'file:///tmp/result.zip',
 				size: 12345,
 			}),
-		).toBe('::file{url:"file:///tmp/result.zip",size:12345}')
+		).toBe(true)
 	})
 
-	test('turns known directives into typed content', () => {
-		const token = directive.decode(
-			'::image{url:"blob://a",mime:"image/png",width:1024}',
-		)
-		expect(token).not.toBe(null)
-
-		const item = directive.content.from(token!)
-
-		expect(item).toEqual({
-			type: 'image',
-			url: 'blob://a',
-			mime: 'image/png',
-			width: 1024,
-		})
-	})
-
-	test('downgrades unknown or invalid semantic content explicitly', () => {
-		const unknown = directive.decode('::chart{url:"blob://chart"}')
-		const invalid = directive.decode('::image{url:"blob://a",width:"wide"}')
-		const obsoleteFormat = directive.decode(
-			'::image{url:"blob://a",format:"png"}',
-		)
-		expect(unknown).not.toBe(null)
-		expect(invalid).not.toBe(null)
-		expect(obsoleteFormat).not.toBe(null)
-
-		expect(directive.content.from(unknown!)).toEqual({
-			type: 'unknown',
-			name: 'chart',
-			attrs: { url: 'blob://chart' },
-			raw: '::chart{url:"blob://chart"}',
-		})
-		expect(directive.content.from(invalid!)).toEqual({
-			type: 'unknown',
-			name: 'image',
-			attrs: { url: 'blob://a', width: 'wide' },
-			raw: '::image{url:"blob://a",width:"wide"}',
-		})
-		expect(directive.content.from(obsoleteFormat!)).toEqual({
-			type: 'unknown',
-			name: 'image',
-			attrs: { url: 'blob://a', format: 'png' },
-			raw: '::image{url:"blob://a",format:"png"}',
-		})
-	})
-
-	test('scans content spans and supports exhaustive matching', () => {
-		const raw = '::file{url:"file:///tmp/a.zip",size:9}'
-		const [span] = directive.content.scan(`see ${raw}`)
-		expect(span).toMatchObject({
-			content: { type: 'file', url: 'file:///tmp/a.zip', size: 9 },
-			raw,
-			range: { start: 4, end: 4 + raw.length },
-		})
-
-		const label = directive.content.match(span!.content, {
-			image: (item) => `image:${item.url}`,
-			video: (item) => `video:${item.url}`,
-			audio: (item) => `audio:${item.url}`,
-			file: (item) => `file:${item.url}`,
-			unknown: (item) => `unknown:${item.name}`,
-		})
-
-		expect(label).toBe('file:file:///tmp/a.zip')
+	test('rejects unknown or invalid content directive shapes', () => {
+		expect(
+			directive.isContent({
+				type: 'chart',
+				url: 'blob://chart',
+			}),
+		).toBe(false)
+		expect(
+			directive.isContent({
+				type: 'image',
+				url: 'blob://a',
+				width: 'wide',
+			}),
+		).toBe(false)
+		expect(
+			directive.isContent({
+				type: 'image',
+				url: 'blob://a',
+				format: 'png',
+			}),
+		).toBe(false)
 	})
 })
 
 describe('hydrate', () => {
-	test('turns complete directive strings into directive tokens', () => {
-		const raw = '::image{url:"blob://a",mime:"image/png"}'
-
+	test('turns complete directive strings into directive objects', () => {
 		expect(
 			directive.hydrate({
 				a: 1,
 				b: 'plain text ::image{url:"blob://a"}',
-				c: raw,
+				c: '::image{url:"blob://a",mime:"image/png"}',
 			}),
 		).toEqual({
 			a: 1,
 			b: 'plain text ::image{url:"blob://a"}',
 			c: {
-				kind: 'directive',
-				name: 'image',
-				attrs: { url: 'blob://a', mime: 'image/png' },
-				raw,
-				range: { start: 0, end: raw.length },
+				type: 'image',
+				url: 'blob://a',
+				mime: 'image/png',
 			},
 		})
 	})
@@ -214,14 +201,20 @@ describe('hydrate', () => {
 
 		expect(
 			directive.hydrate(value, {
-				map: directive.content.from,
+				map: (item) =>
+					directive.isContent(item)
+						? { kind: 'content' as const, item }
+						: { kind: 'unknown' as const, item },
 			}),
 		).toEqual({
 			items: [
 				{
-					type: 'file',
-					url: 'file:///tmp/a.zip',
-					size: 9,
+					kind: 'content',
+					item: {
+						type: 'file',
+						url: 'file:///tmp/a.zip',
+						size: 9,
+					},
 				},
 			],
 		})

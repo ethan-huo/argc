@@ -385,7 +385,8 @@ console.log(
 		task: 't1',
 		status: 'completed',
 		outputs: [
-			directive.content.image({
+			directive.encode({
+				type: 'image',
 				url: 'blob://abc123',
 				mime: 'image/png',
 				filename: 'output-1.png',
@@ -405,24 +406,33 @@ outputs[1]: "::image{url:\"blob://abc123\",mime:\"image/png\",filename:\"output-
 inspect: pica task get t1
 ```
 
-The directive module has two layers:
+The directive module has one core object API:
 
-- `directive.encode(name, attrs)`, `directive.decode(text)`, and `directive.scan(text)` handle generic `::name{...}` tokens. Directive attrs use JSON5/JSONC object literal syntax.
-- `directive.content.image(...)`, `directive.content.video(...)`, `directive.content.audio(...)`, and `directive.content.file(...)` encode known media/file directives. `directive.content.from(token)` converts directive tokens into typed content, and invalid known content is downgraded to explicit `unknown` content instead of being partially trusted.
+- `directive.encode({ type, ...payload })` encodes a directive object.
+- `directive.decode(text)` decodes a complete directive string into an object.
+- `directive.scan(text)` scans text and returns directive spans with ranges.
+- `directive.hydrate(value)` walks parsed JSON-like data and turns complete directive strings into directive objects.
+- `directive.is(value)` and `directive.isContent(value)` narrow unknown values at runtime.
 
-After parsing a serialized payload, use `directive.hydrate(value)` to turn complete directive strings into directive tokens without extending the serializer's data model:
+After parsing a serialized payload, use `directive.hydrate(value)` to turn complete directive strings into directive objects without extending the serializer's data model:
 
 ```typescript
 const data = decode(text)
 const hydrated = directive.hydrate(data)
 ```
 
-For content directives, pass the semantic mapper:
+Known content directives are exported as types:
 
 ```typescript
-const hydrated = directive.hydrate(data, {
-	map: directive.content.from,
-})
+import type { ContentDirective, ImageDirective } from 'argc/directive'
+
+const image: ImageDirective = {
+	type: 'image',
+	url: 'blob://abc123',
+	mime: 'image/png',
+}
+
+const output: ContentDirective[] = [image]
 ```
 
 `argc/directive` intentionally does not re-export TOON. If a CLI chooses TOON, import the official `@toon-format/toon` package directly so the application owns the serializer version and standards compliance.

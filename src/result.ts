@@ -1,24 +1,20 @@
 import { directive } from './directive'
 
-const content = {
-	...directive.content,
-	fromDirective: directive.content.from,
-}
-
-export { content, directive }
+export { directive }
 export type {
-	AudioContent,
-	Content,
-	ContentHandlers,
-	ContentSpan,
-	DirectiveAttrs,
+	AudioDirective,
+	ContentDirective,
+	DirectiveEncodeInput,
 	DirectiveHydratableValue,
 	DirectiveHydratedValue,
 	DirectiveHydrateOptions,
-	DirectiveToken,
-	FileContent,
-	ImageContent,
-	PrimitiveDirectiveAttr,
-	UnknownContent,
-	VideoContent,
+	DirectiveObject,
+	DirectivePayload,
+	DirectiveSpan,
+	FileDirective,
+	ImageDirective,
+	JsonObject,
+	JsonPrimitive,
+	JsonValue,
+	VideoDirective,
 } from './directive'
