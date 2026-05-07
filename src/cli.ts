@@ -13,6 +13,7 @@ import type {
 	StandardSchemaV1,
 } from './types'
 
+import { coerceCliInput } from './coerce'
 import {
 	complete,
 	detectCurrentShell,
@@ -409,6 +410,9 @@ export class CLI<
 		let input = this.buildInput(flagsWithoutInput, remaining, commandDef.args)
 		if (allowSystemInput && inputFlag !== undefined) {
 			input = await this.parseJsonInput(inputFlag)
+		} else {
+			// Only argv tokens need adaptation; --input is already structured schema input.
+			input = coerceCliInput(commandDef.input, input)
 		}
 
 		// Validate input with schema
@@ -449,9 +453,12 @@ export class CLI<
 		// Parse and validate globals
 		let globals = flagsWithoutInput as StandardSchemaV1.InferOutput<TGlobals>
 		if (this.options.globals) {
-			const globalFlags = this.normalizeFlagsForFields(
-				flagsWithoutInput,
-				this.getGlobalOptionNames(),
+			const globalFlags = coerceCliInput(
+				this.options.globals,
+				this.normalizeFlagsForFields(
+					flagsWithoutInput,
+					this.getGlobalOptionNames(),
+				),
 			)
 			const result =
 				await this.options.globals['~standard'].validate(globalFlags)

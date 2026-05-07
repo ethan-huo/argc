@@ -240,6 +240,91 @@ describe('cli', () => {
 			expect(receivedInput).toEqual({ server: '1490703101852778639' })
 		})
 
+		test('coerces explicit flag values from schema input types', async () => {
+			let receivedInput: unknown
+			const schema = {
+				connect: c.input(
+					s(
+						v.object({
+							port: v.number(),
+							secure: v.boolean(),
+							retries: v.optional(v.number(), 2),
+						}),
+					),
+				),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'connect',
+				'--port',
+				'3000',
+				'--secure',
+				'false',
+			]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					connect: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({
+				port: 3000,
+				secure: false,
+				retries: 2,
+			})
+		})
+
+		test('coerces nested object and array flag values', async () => {
+			let receivedInput: unknown
+			const schema = {
+				connect: c.input(
+					s(
+						v.object({
+							db: v.object({
+								host: v.string(),
+								port: v.number(),
+							}),
+							score: v.array(v.number()),
+						}),
+					),
+				),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'connect',
+				'--db.host',
+				'localhost',
+				'--db.port',
+				'5432',
+				'--score',
+				'1',
+				'--score',
+				'2',
+			]
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					connect: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({
+				db: { host: 'localhost', port: 5432 },
+				score: [1, 2],
+			})
+		})
+
 		test('lets schema transforms opt into numeric conversion', async () => {
 			let receivedInput: unknown
 			const schema = {
@@ -268,6 +353,28 @@ describe('cli', () => {
 			})
 
 			expect(receivedInput).toEqual({ port: 3000 })
+		})
+
+		test('does not coerce JSON input payloads', async () => {
+			const schema = {
+				connect: c.input(s(v.object({ port: v.number() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'connect', '--input', '{"port":"3000"}']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			try {
+				await app.run({
+					handlers: {
+						connect: () => {},
+					},
+				})
+			} catch {
+				// expected
+			}
+
+			expect(consoleOutput.join('\n')).toContain('invalid arguments')
+			expect(consoleOutput.join('\n')).toContain('port')
 		})
 
 		test('handles positional args', async () => {
@@ -375,6 +482,26 @@ describe('cli', () => {
 			})
 
 			expect(receivedInput).toEqual({ name: 'Alice' })
+		})
+
+		test('applies schema defaults for JSON input', async () => {
+			let receivedInput: unknown
+			const schema = {
+				update: c.input(s(v.object({ count: v.optional(v.number(), 2) }))),
+			}
+
+			process.argv = ['bun', 'cli', 'update', '--input', '{}']
+
+			const app = cli(schema, { name: 'test', version: '1.0.0' })
+			await app.run({
+				handlers: {
+					update: ({ input }) => {
+						receivedInput = input
+					},
+				},
+			})
+
+			expect(receivedInput).toEqual({ count: 2 })
 		})
 
 		test('parses JSONC/JSON5 input', async () => {
@@ -1182,6 +1309,46 @@ await app.run({
 			})
 
 			expect(receivedGlobals).toEqual({ outputFormat: 'json' })
+		})
+
+		test('context receives coerced global values', async () => {
+			let receivedGlobals: unknown
+			const schema = {
+				test: c.input(s(v.object({}))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'test',
+				'--timeout',
+				'30',
+				'--verbose',
+				'false',
+			]
+
+			const app = cli(schema, {
+				name: 'test',
+				version: '1.0.0',
+				globals: s(
+					v.object({
+						timeout: v.number(),
+						verbose: v.optional(v.boolean(), false),
+					}),
+				),
+				context: (globals) => {
+					receivedGlobals = globals
+					return {}
+				},
+			})
+
+			await app.run({
+				handlers: {
+					test: () => {},
+				},
+			})
+
+			expect(receivedGlobals).toEqual({ timeout: 30, verbose: false })
 		})
 	})
 

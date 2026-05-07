@@ -104,9 +104,13 @@ Note: `...` must be used on the last positional argument.
 
 ## Transform: Schema Superpowers
 
-The killer feature. Your schema transforms CLI strings into rich objects:
+The killer feature. Your schema describes the logical CLI input, then transforms
+that input into richer handler values:
 
-Explicit flag values stay as strings until your schema transforms them. The only built-in exception is boolean flag presence: `--flag` becomes `true`, and `--no-flag` becomes `false`.
+Argc keeps argv parsing lexical, then adapts explicit flag values to the schema
+input type before validation. Strings stay strings, numeric fields receive
+numbers, and boolean fields accept `--flag`, `--no-flag`, `true`, or `false`.
+Use transforms for domain-specific values such as files, URLs, dates, and globs.
 
 ```typescript
 const schema = {
@@ -138,13 +142,6 @@ Seeding: { users: [...], products: [...] }
 More transform examples:
 
 ```typescript
-// String → number for CLI flags
-port: v.pipe(
-	v.string(),
-	v.transform((s) => Number(s)),
-	v.number(),
-)
-
 // String → Date
 startDate: v.pipe(
 	v.string(),
@@ -194,11 +191,7 @@ c.input(
 		v.object({
 			db: v.object({
 				host: v.string(),
-				port: v.pipe(
-					v.string(),
-					v.transform((s) => Number(s)),
-					v.number(),
-				),
+				port: v.number(),
 			}),
 		}),
 	),

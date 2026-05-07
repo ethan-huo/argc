@@ -84,11 +84,7 @@ const schema = {
 						v.object({
 							db: v.object({
 								host: v.string(),
-								port: v.pipe(
-									v.string(),
-									v.transform((value) => Number(value)),
-									v.number(),
-								),
+								port: v.number(),
 								name: v.string(),
 							}),
 						}),
@@ -131,15 +127,7 @@ const schema = {
 				.input(
 					s(
 						v.object({
-							step: v.optional(
-								v.pipe(
-									v.string(),
-									v.transform((value) => Number(value)),
-									v.number(),
-									v.minValue(1),
-								),
-								'1', // Defaults live on the input side so the pipe can transform them too.
-							),
+							step: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
 							dryRun: v.optional(v.boolean(), false),
 						}),
 					),
@@ -179,14 +167,8 @@ const schema = {
 									'us-east-1',
 								),
 								memory: v.optional(
-									v.pipe(
-										v.string(),
-										v.transform((value) => Number(value)),
-										v.number(),
-										v.minValue(128),
-										v.maxValue(10240),
-									),
-									'512',
+									v.pipe(v.number(), v.minValue(128), v.maxValue(10240)),
+									512,
 								),
 							}),
 						),
