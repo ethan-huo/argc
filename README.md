@@ -370,6 +370,49 @@ const app = cli(schema, {
 
 `selectionDepth` controls how many levels are included below a selector such as `--schema=.deploy`. It can also be a function when different selectors need different depths.
 
+## Result Formatting
+
+`argc/result` provides optional helpers for final command output. They do not change `cli()`, `--schema`, `--help`, or handler return behavior. Tool authors still own stdout/stderr policy, JSON mode, table output, progress logs, and product-specific rendering.
+
+Use these helpers when a CLI wants compact text that humans can read, agents can parse, and host UIs can scan for media/file artifacts:
+
+```typescript
+import { content, toon } from 'argc/result'
+
+console.log(
+	toon.encode({
+		task: 't1',
+		status: 'completed',
+		outputs: [
+			content.image({
+				url: 'blob://abc123',
+				mime: 'image/png',
+				filename: 'output-1.png',
+			}),
+		],
+		inspect: 'pica task get t1',
+	}),
+)
+```
+
+Output:
+
+```toon
+task: t1
+status: completed
+outputs:
+  - ::image{url:"blob://abc123",mime:"image/png",filename:"output-1.png"}
+inspect: pica task get t1
+```
+
+The result module has three layers:
+
+- `toon.encode(data)` / `toon.decode(text)` handle the compact data format.
+- `directive.encode(name, attrs)`, `directive.decode(text)`, and `directive.scan(text)` handle generic `::name{...}` tokens. Directive attrs use JSON5/JSONC object literal syntax.
+- `content.image(...)`, `content.video(...)`, `content.audio(...)`, and `content.file(...)` encode known media/file directives. `content.fromDirective(token)` converts directive tokens into typed content, and invalid known content is downgraded to explicit `unknown` content instead of being partially trusted.
+
+Progress and noisy lifecycle output should stay out of final result text. Use hook events for runtime progress and UI-side telemetry.
+
 ## Hook Events for Agent Runtimes
 
 CLI stdout is for the agent reading the command result. Hook events are for the system around the agent: runtime logs, UI rendering, progress panels, audit trails, or tool-call replay.
