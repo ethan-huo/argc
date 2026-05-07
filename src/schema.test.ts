@@ -90,6 +90,30 @@ describe('generateSchema', () => {
 		expect(output).not.toContain('sessions(count?: string = "2")')
 	})
 
+	test('command signature prefers derived output defaults over raw output schema defaults', () => {
+		const numeric = v.pipe(
+			v.string(),
+			v.regex(/\S/),
+			v.transform(Number),
+			v.number(),
+			v.integer(),
+			v.minValue(1),
+		)
+		const schema = {
+			run: c.input(
+				s(
+					v.object({
+						timeout: v.optional(numeric, '300'),
+					}),
+				),
+			),
+		}
+
+		const output = generateSchema(schema, { name: 'demo' })
+		expect(output).toContain('run(timeout?: number = 300)')
+		expect(output).not.toContain('run(timeout?: number = "300")')
+	})
+
 	test('command signature canonicalizes duplicate rendered types', () => {
 		const schema = {
 			cmd: c.input(

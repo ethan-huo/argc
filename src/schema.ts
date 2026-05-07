@@ -226,11 +226,13 @@ function extractOutputParamsDetailed(schema: Schema): ParamInfo[] {
 		) {
 			next = { ...next, description: inputProperty.description as string }
 		}
-		if (next.default !== undefined || inputDefault === undefined) return next
+		if (inputDefault === undefined) return next
 
 		const outputDefault = deriveOutputDefault(schema, param.name, inputDefault)
-		if (outputDefault === undefined) return next
-		return { ...next, default: outputDefault }
+		if (outputDefault !== undefined) {
+			return { ...next, default: outputDefault }
+		}
+		return next
 	})
 }
 
