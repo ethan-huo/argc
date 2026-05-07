@@ -370,21 +370,22 @@ const app = cli(schema, {
 
 `selectionDepth` controls how many levels are included below a selector such as `--schema=.deploy`. It can also be a function when different selectors need different depths.
 
-## Result Formatting
+## Directives
 
-`argc/result` provides optional helpers for final command output. They do not change `cli()`, `--schema`, `--help`, or handler return behavior. Tool authors still own stdout/stderr policy, JSON mode, table output, progress logs, and product-specific rendering.
+`argc/directive` provides optional helpers for final command output. They do not change `cli()`, `--schema`, `--help`, or handler return behavior. Tool authors still own stdout/stderr policy, JSON mode, table output, progress logs, and product-specific rendering.
 
-Use these helpers when a CLI wants compact text that humans can read, agents can parse, and host UIs can scan for media/file artifacts:
+Use these helpers when a CLI wants final result text that can carry media/file artifacts without coupling to a host UI. Serialization stays in the application layer: use JSON, official TOON, Markdown, or another product-level output mode as appropriate.
 
 ```typescript
-import { content, toon } from 'argc/result'
+import { encode } from '@toon-format/toon'
+import { directive } from 'argc/directive'
 
 console.log(
-	toon.encode({
+	encode({
 		task: 't1',
 		status: 'completed',
 		outputs: [
-			content.image({
+			directive.content.image({
 				url: 'blob://abc123',
 				mime: 'image/png',
 				filename: 'output-1.png',
@@ -395,21 +396,36 @@ console.log(
 )
 ```
 
-Output:
+Possible output:
 
 ```toon
 task: t1
 status: completed
-outputs:
-  - ::image{url:"blob://abc123",mime:"image/png",filename:"output-1.png"}
+outputs[1]: "::image{url:\"blob://abc123\",mime:\"image/png\",filename:\"output-1.png\"}"
 inspect: pica task get t1
 ```
 
-The result module has three layers:
+The directive module has two layers:
 
-- `toon.encode(data)` / `toon.decode(text)` handle the compact data format.
 - `directive.encode(name, attrs)`, `directive.decode(text)`, and `directive.scan(text)` handle generic `::name{...}` tokens. Directive attrs use JSON5/JSONC object literal syntax.
-- `content.image(...)`, `content.video(...)`, `content.audio(...)`, and `content.file(...)` encode known media/file directives. `content.fromDirective(token)` converts directive tokens into typed content, and invalid known content is downgraded to explicit `unknown` content instead of being partially trusted.
+- `directive.content.image(...)`, `directive.content.video(...)`, `directive.content.audio(...)`, and `directive.content.file(...)` encode known media/file directives. `directive.content.from(token)` converts directive tokens into typed content, and invalid known content is downgraded to explicit `unknown` content instead of being partially trusted.
+
+After parsing a serialized payload, use `directive.hydrate(value)` to turn complete directive strings into directive tokens without extending the serializer's data model:
+
+```typescript
+const data = decode(text)
+const hydrated = directive.hydrate(data)
+```
+
+For content directives, pass the semantic mapper:
+
+```typescript
+const hydrated = directive.hydrate(data, {
+	map: directive.content.from,
+})
+```
+
+`argc/directive` intentionally does not re-export TOON. If a CLI chooses TOON, import the official `@toon-format/toon` package directly so the application owns the serializer version and standards compliance.
 
 Progress and noisy lifecycle output should stay out of final result text. Use hook events for runtime progress and UI-side telemetry.
 

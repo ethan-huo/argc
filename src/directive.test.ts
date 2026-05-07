@@ -1,10 +1,21 @@
 import { describe, expect, test } from 'bun:test'
 
-import { content, directive, toon } from './result'
+import { directive } from './directive'
 
-test('exports the result helpers from argc/result', async () => {
-	const mod = await import('argc/result')
+test('exports directive helpers from argc/directive', async () => {
+	const mod = await import(['argc', 'directive'].join('/'))
 
+	expect(mod.directive.content.file({ url: 'file:///tmp/result.zip' })).toBe(
+		'::file{url:"file:///tmp/result.zip"}',
+	)
+})
+
+test('keeps argc/result as a compatibility alias', async () => {
+	const mod = await import(['argc', 'result'].join('/'))
+
+	expect(mod.directive.content.file({ url: 'file:///tmp/result.zip' })).toBe(
+		'::file{url:"file:///tmp/result.zip"}',
+	)
 	expect(mod.content.file({ url: 'file:///tmp/result.zip' })).toBe(
 		'::file{url:"file:///tmp/result.zip"}',
 	)
@@ -82,22 +93,28 @@ describe('directive', () => {
 describe('content', () => {
 	test('provides media directive helpers', () => {
 		expect(
-			content.image({
+			directive.content.image({
 				url: 'blob://a',
 				mime: 'image/png',
 				width: 640,
 				height: 480,
 			}),
 		).toBe('::image{url:"blob://a",mime:"image/png",width:640,height:480}')
-		expect(content.video({ url: 'blob://v', poster: 'https://x/y.jpg' })).toBe(
-			'::video{url:"blob://v",poster:"https://x/y.jpg"}',
-		)
-		expect(content.audio({ url: 'blob://x', duration: 2.5 })).toBe(
+		expect(
+			directive.content.video({
+				url: 'blob://v',
+				poster: 'https://x/y.jpg',
+			}),
+		).toBe('::video{url:"blob://v",poster:"https://x/y.jpg"}')
+		expect(directive.content.audio({ url: 'blob://x', duration: 2.5 })).toBe(
 			'::audio{url:"blob://x",duration:2.5}',
 		)
-		expect(content.file({ url: 'file:///tmp/result.zip', size: 12345 })).toBe(
-			'::file{url:"file:///tmp/result.zip",size:12345}',
-		)
+		expect(
+			directive.content.file({
+				url: 'file:///tmp/result.zip',
+				size: 12345,
+			}),
+		).toBe('::file{url:"file:///tmp/result.zip",size:12345}')
 	})
 
 	test('turns known directives into typed content', () => {
@@ -106,7 +123,7 @@ describe('content', () => {
 		)
 		expect(token).not.toBe(null)
 
-		const item = content.fromDirective(token!)
+		const item = directive.content.from(token!)
 
 		expect(item).toEqual({
 			type: 'image',
@@ -126,19 +143,19 @@ describe('content', () => {
 		expect(invalid).not.toBe(null)
 		expect(obsoleteFormat).not.toBe(null)
 
-		expect(content.fromDirective(unknown!)).toEqual({
+		expect(directive.content.from(unknown!)).toEqual({
 			type: 'unknown',
 			name: 'chart',
 			attrs: { url: 'blob://chart' },
 			raw: '::chart{url:"blob://chart"}',
 		})
-		expect(content.fromDirective(invalid!)).toEqual({
+		expect(directive.content.from(invalid!)).toEqual({
 			type: 'unknown',
 			name: 'image',
 			attrs: { url: 'blob://a', width: 'wide' },
 			raw: '::image{url:"blob://a",width:"wide"}',
 		})
-		expect(content.fromDirective(obsoleteFormat!)).toEqual({
+		expect(directive.content.from(obsoleteFormat!)).toEqual({
 			type: 'unknown',
 			name: 'image',
 			attrs: { url: 'blob://a', format: 'png' },
@@ -148,14 +165,14 @@ describe('content', () => {
 
 	test('scans content spans and supports exhaustive matching', () => {
 		const raw = '::file{url:"file:///tmp/a.zip",size:9}'
-		const [span] = content.scan(`see ${raw}`)
+		const [span] = directive.content.scan(`see ${raw}`)
 		expect(span).toMatchObject({
 			content: { type: 'file', url: 'file:///tmp/a.zip', size: 9 },
 			raw,
 			range: { start: 4, end: 4 + raw.length },
 		})
 
-		const label = content.match(span!.content, {
+		const label = directive.content.match(span!.content, {
 			image: (item) => `image:${item.url}`,
 			video: (item) => `video:${item.url}`,
 			audio: (item) => `audio:${item.url}`,
@@ -167,58 +184,46 @@ describe('content', () => {
 	})
 })
 
-describe('toon', () => {
-	test('encodes compact final result text', () => {
-		const output = toon.encode({
-			task: 't1',
-			status: 'completed',
-			outputs: [
-				content.image({
-					url: 'blob://abc123',
-					mime: 'image/png',
-					filename: 'output-1.png',
-				}),
-			],
-			inspect: 'pica task get t1',
+describe('hydrate', () => {
+	test('turns complete directive strings into directive tokens', () => {
+		const raw = '::image{url:"blob://a",mime:"image/png"}'
+
+		expect(
+			directive.hydrate({
+				a: 1,
+				b: 'plain text ::image{url:"blob://a"}',
+				c: raw,
+			}),
+		).toEqual({
+			a: 1,
+			b: 'plain text ::image{url:"blob://a"}',
+			c: {
+				kind: 'directive',
+				name: 'image',
+				attrs: { url: 'blob://a', mime: 'image/png' },
+				raw,
+				range: { start: 0, end: raw.length },
+			},
 		})
-
-		expect(output).toBe(
-			[
-				'task: t1',
-				'status: completed',
-				'outputs:',
-				'  - ::image{url:"blob://abc123",mime:"image/png",filename:"output-1.png"}',
-				'inspect: pica task get t1',
-			].join('\n'),
-		)
 	})
 
-	test('decodes the supported TOON subset emitted by encode', () => {
-		const data = {
-			task: 't1',
-			status: 'completed',
-			count: 2,
-			ok: true,
-			outputs: [content.file({ url: 'file:///tmp/a.zip', size: 12 })],
-		}
-		const encoded = toon.encode(data)
-
-		expect(toon.decode(encoded)).toEqual(data)
-	})
-
-	test('quotes ambiguous strings so decode can round-trip them', () => {
-		const data = {
-			id: '123',
-			empty: '',
-			padded: ' value ',
-			nil: 'null',
+	test('can hydrate directives through a semantic mapper', () => {
+		const value = {
+			items: ['::file{url:"file:///tmp/a.zip",size:9}'],
 		}
 
-		expect(toon.decode(toon.encode(data))).toEqual(data)
-	})
-
-	test('uses JSON-like undefined handling', () => {
-		expect(toon.encode({ keep: null, skip: undefined })).toBe('keep: null')
-		expect(toon.decode(toon.encode([undefined]))).toEqual([null])
+		expect(
+			directive.hydrate(value, {
+				map: directive.content.from,
+			}),
+		).toEqual({
+			items: [
+				{
+					type: 'file',
+					url: 'file:///tmp/a.zip',
+					size: 9,
+				},
+			],
+		})
 	})
 })

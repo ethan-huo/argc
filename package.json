@@ -1,6 +1,6 @@
 {
 	"name": "argc",
-	"version": "2.0.6",
+	"version": "3.0.0",
 	"type": "module",
 	"types": "./dist/index.d.ts",
 	"exports": {
@@ -13,6 +13,11 @@
 			"types": "./dist/terminal.d.ts",
 			"import": "./src/terminal.ts",
 			"default": "./src/terminal.ts"
+		},
+		"./directive": {
+			"types": "./dist/directive.d.ts",
+			"import": "./src/directive.ts",
+			"default": "./src/directive.ts"
 		},
 		"./result": {
 			"types": "./dist/result.d.ts",
