@@ -6,6 +6,7 @@ import type { Schema } from './types'
 
 import { c, group } from './command'
 import {
+	countSchemaCommands,
 	generateSchema,
 	generateSchemaHintExample,
 	generateSchemaOutline,
@@ -37,9 +38,30 @@ describe('generateSchema', () => {
 		}
 
 		const output = generateSchema(schema, { name: 'app' })
+		expect(
+			output.startsWith(
+				'Schema status: fully output; no drill-down query is needed.',
+			),
+		).toBe(true)
 		expect(output).toContain('type App = {')
 		expect(output).toContain('// Say hello')
 		expect(output).toContain('greet(name: string)')
+	})
+
+	test('description appears before schema status', () => {
+		const schema = {
+			greet: c.input(s(v.object({}))),
+		}
+
+		const output = generateSchema(schema, {
+			name: 'app',
+			description: 'Agent-facing command surface.',
+		})
+		expect(
+			output.startsWith(
+				'Agent-facing command surface.\n\nSchema status: fully output;',
+			),
+		).toBe(true)
 	})
 
 	test('command with optional params', () => {
@@ -356,6 +378,26 @@ describe('generateSchema', () => {
 
 		const lines = generateSchemaOutline(schema, 2)
 		expect(lines).toEqual(['deploy{aws{lambda,s3},vercel}'])
+	})
+
+	test('counts command leaves', () => {
+		const schema = {
+			deploy: group(
+				{ description: 'Deploy' },
+				{
+					aws: group(
+						{ description: 'AWS' },
+						{
+							lambda: c.input(s(v.object({}))),
+							s3: c.input(s(v.object({}))),
+						},
+					),
+					vercel: c.input(s(v.object({}))),
+				},
+			),
+		}
+
+		expect(countSchemaCommands(schema)).toBe(3)
 	})
 
 	test('outline hints', () => {

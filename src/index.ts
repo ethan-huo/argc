@@ -4,6 +4,7 @@ export type { CompletionContext } from './complete'
 export { c, CommandBuilder, group, GroupBuilder } from './command'
 export { parseArgv } from './parser'
 export {
+	countSchemaCommands,
 	generateSchema,
 	generateSchemaHintExample,
 	generateSchemaOutline,

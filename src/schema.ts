@@ -366,6 +366,15 @@ function generateCommandSchema(
 export function generateSchema(schema: Router, options: SchemaOptions): string {
 	const lines: string[] = []
 
+	// Put the agent decision signal before syntax details so a full selector
+	// result does not look like an invitation to keep drilling down.
+	if (options.description) {
+		lines.push(options.description)
+		lines.push('')
+	}
+	lines.push('Schema status: fully output; no drill-down query is needed.')
+	lines.push('')
+
 	// CLI syntax hint for AI agents
 	lines.push('CLI Syntax:')
 	lines.push(
@@ -376,12 +385,6 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 		'  objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }',
 	)
 	lines.push('')
-
-	// Description
-	if (options.description) {
-		lines.push(options.description)
-		lines.push('')
-	}
 
 	// Type declaration
 	lines.push(`type ${pascalCase(options.name)} = {`)
@@ -411,6 +414,14 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 	lines.push('}')
 
 	return lines.join('\n')
+}
+
+export function countSchemaCommands(schema: Router): number {
+	if (isCommand(schema)) return 1
+	return Object.values(getRouterChildren(schema)).reduce(
+		(total, child) => total + countSchemaCommands(child),
+		0,
+	)
 }
 
 export function generateSchemaOutline(

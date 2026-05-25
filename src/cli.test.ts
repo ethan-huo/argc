@@ -1393,6 +1393,72 @@ await app.run({
 			expect(output).toContain('alert-create(name: string)')
 		})
 
+		test('--schema says when output is complete', async () => {
+			const schema = {
+				call: c.input(s(v.object({}))),
+			}
+
+			process.argv = ['bun', 'cli', '--schema=.call']
+
+			const app = cli(schema, { name: 'mcpx', version: '1.0.0' })
+
+			await app.run({
+				handlers: {
+					call: () => {},
+				},
+			})
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain(
+				'Schema status: fully output; no drill-down query is needed.',
+			)
+		})
+
+		test('--schema compact outline gives selector guidance', async () => {
+			const schema = {
+				browser: group(
+					{ description: 'Browser tools' },
+					{
+						open: c.input(s(v.object({ url: v.string() }))),
+						click: c.input(s(v.object({ selector: v.string() }))),
+						type: c.input(s(v.object({ text: v.string() }))),
+					},
+				),
+			}
+
+			process.argv = ['bun', 'cli', '--schema=.browser']
+
+			const app = cli(schema, {
+				name: 'mcpx',
+				version: '1.0.0',
+				schemaExplorer: createDefaultSchemaExplorer({ maxLines: 1 }),
+			})
+
+			await app.run({
+				handlers: {
+					browser: {
+						open: () => {},
+						click: () => {},
+						type: () => {},
+					},
+				},
+			})
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain(
+				'Schema status: compact outline only; full schema is',
+			)
+			expect(output).toContain('across 3 commands/tools.')
+			expect(output).toContain(
+				'Use a narrower selector to continue exploration.',
+			)
+			expect(output).toContain('browser{open,click,type}')
+			expect(output).toContain('next: --schema=.namespace.{command1,command2}')
+			expect(output).toContain(
+				'selector syntax: path, ."key", .["key"], *, {a,b}, ..name',
+			)
+		})
+
 		test('--schema selects at-prefixed root commands', async () => {
 			const schema = {
 				'@add': c.input(s(v.object({ name: v.string() }))),

@@ -26,7 +26,7 @@ import { createHookDispatcher } from './hook'
 import { camelCase } from './naming'
 import { parseArgv } from './parser'
 import { getRouterChildren, findHandler } from './router'
-import { extractCliInputParamsDetailed } from './schema'
+import { countSchemaCommands, extractCliInputParamsDetailed } from './schema'
 import { createDefaultSchemaExplorer } from './schema-explorer'
 import {
 	expandHome,
@@ -291,22 +291,25 @@ export class CLI<
 				const lines = schemaOutput.split('\n')
 
 				if (lines.length > maxLines) {
-					console.log(
-						`Schema too large (${lines.length} lines). Showing compact outline.`,
-					)
-					console.log()
 					const outlineSchema =
 						selection === null ? this.schema : selection.schema
+					const commandCount = countSchemaCommands(outlineSchema)
+					console.log(
+						`Schema status: compact outline only; full schema is ${lines.length} lines across ${commandCount} commands/tools.`,
+					)
+					console.log('Use a narrower selector to continue exploration.')
+					console.log()
 					for (const line of schemaExplorer.outline(outlineSchema)) {
 						console.log(line)
 					}
 					console.log()
 					const hintExample = schemaExplorer.hint(outlineSchema)
 					if (hintExample) {
-						console.log(`hint: use --schema=.${hintExample}`)
+						console.log(`next: --schema=.${hintExample}`)
 					}
+					console.log('next: --schema=.namespace.{command1,command2}')
 					console.log(
-						'hint: selector is jq-like (path, ."key", .["key"], *, {a,b}, ..name)',
+						'selector syntax: path, ."key", .["key"], *, {a,b}, ..name',
 					)
 					return
 				}
@@ -315,7 +318,9 @@ export class CLI<
 				for (const line of lines) {
 					if (
 						line.trimStart().startsWith('//') ||
+						line.startsWith('Schema status:') ||
 						line.startsWith('CLI Syntax:') ||
+						line.startsWith('  flags:') ||
 						line.startsWith('  arrays:') ||
 						line.startsWith('  objects:')
 					) {

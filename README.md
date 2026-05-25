@@ -292,11 +292,14 @@ $ myapp --schema
 ```
 
 ```
+My CLI app
+
+Schema status: fully output; no drill-down query is needed.
+
 CLI Syntax:
+  flags:   --skip-build matches skip-build, or falls back to skipBuild
   arrays:  --tag a --tag b             → tag: ["a", "b"]
   objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }
-
-My CLI app
 
 type Myapp = {
   // Global options available to all commands
@@ -313,7 +316,7 @@ type Myapp = {
 }
 ```
 
-If the schema is large (>1000 lines by default), `--schema` prints a compact outline and hints for exploration.
+If the schema is large (>1000 lines by default), `--schema` prints a compact outline with the full line count, command/tool count, and selector guidance for exploration.
 
 Use jq-like selectors to narrow the output:
 
