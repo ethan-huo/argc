@@ -248,6 +248,7 @@ describe('generateCompletionScript', () => {
 	test('generates fish script', () => {
 		const script = generateCompletionScript('fish', 'myapp')
 		expect(script).not.toBeNull()
+		expect(script!).toContain('complete -c myapp -e')
 		expect(script!).toContain('complete -c myapp')
 		expect(script!).toContain('--_complete')
 		expect(script!).toContain('-- $tokens $cur')

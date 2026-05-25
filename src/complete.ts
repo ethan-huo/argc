@@ -322,6 +322,9 @@ compdef _${fn} ${name}`
 function generateFishScript(name: string): string {
 	const fn = sanitizeName(name)
 	return `# fish completion for ${name}
+# Clear stale generated or hand-written rules before installing the dynamic handler.
+complete -c ${name} -e
+
 function __${fn}_complete
   set -l tokens (commandline -opc)
   set -e tokens[1]
