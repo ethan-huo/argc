@@ -1,0 +1,10 @@
+export { CLI, cli } from './cli';
+export { complete, generateCompletionScript } from './complete';
+export type { CompletionContext } from './complete';
+export { c, CommandBuilder, group, GroupBuilder } from './command';
+export { parseArgv } from './parser';
+export { generateSchema, generateSchemaHintExample, generateSchemaOutline, } from './schema';
+export { createDefaultSchemaExplorer, type SchemaExplorer, type SchemaExplorerOptions, } from './schema-explorer';
+export { buildSchemaSubset, matchSchemaSelector, parseSchemaSelector, selectSchema, sliceRouter, } from './schema-selector';
+export type { SchemaSelectionOptions, SchemaSelectionResult, SelectorMatch, SelectorStep, } from './schema-selector';
+export type { AnyCommand, AnyGroup, ArgDef, CLIOptions, CombinedHandlers, CommandDef, CommandMeta, FlattenHandlers, GroupDef, GroupMeta, Handler, HandlerMeta, HandlerOptions, Handlers, HookEndData, HookErrorData, HookEvent, HookTransport, InferHandler, InferHandlers, InferInput, Router, RunConfig, Schema, StandardJSONSchemaV1, StandardSchemaV1, } from './types';
