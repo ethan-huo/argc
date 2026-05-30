@@ -74,9 +74,7 @@ jobs:
         run: |
           rm -rf dist
           bun run build
-          test -f dist/directive.d.ts
           test -f dist/index.d.ts
-          test -f dist/result.d.ts
           test -f dist/terminal.d.ts
 
       - name: Prune release snapshot

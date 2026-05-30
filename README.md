@@ -366,78 +366,11 @@ const app = cli(schema, {
 
 `selectionDepth` controls how many levels are included below a selector such as `--schema=.deploy`. It can also be a function when different selectors need different depths.
 
-## Directives
-
-`argc/directive` provides optional helpers for final command output. They do not change `cli()`, `--schema`, `--help`, or handler return behavior. Tool authors still own stdout/stderr policy, JSON mode, table output, progress logs, and product-specific rendering.
-
-Use these helpers when a CLI wants final result text that can carry media/file artifacts without coupling to a host UI. Serialization stays in the application layer: use JSON, official TOON, Markdown, or another product-level output mode as appropriate.
-
-```typescript
-import { encode } from '@toon-format/toon'
-import { directive } from 'argc/directive'
-
-console.log(
-	encode({
-		task: 't1',
-		status: 'completed',
-		outputs: [
-			directive.encode({
-				type: 'image',
-				url: 'blob://abc123',
-				mime: 'image/png',
-				filename: 'output-1.png',
-			}),
-		],
-		inspect: 'pica task get t1',
-	}),
-)
-```
-
-Possible output:
-
-```toon
-task: t1
-status: completed
-outputs[1]: "::image{url:\"blob://abc123\",mime:\"image/png\",filename:\"output-1.png\"}"
-inspect: pica task get t1
-```
-
-The directive module has one core object API:
-
-- `directive.encode({ type, ...payload })` encodes a directive object.
-- `directive.decode(text)` decodes a complete directive string into an object.
-- `directive.scan(text)` scans text and returns directive spans with ranges.
-- `directive.hydrate(value)` walks parsed JSON-like data and turns complete directive strings into directive objects.
-- `directive.is(value)` and `directive.isContent(value)` narrow unknown values at runtime.
-
-After parsing a serialized payload, use `directive.hydrate(value)` to turn complete directive strings into directive objects without extending the serializer's data model:
-
-```typescript
-const data = decode(text)
-const hydrated = directive.hydrate(data)
-```
-
-Known content directives are exported as types:
-
-```typescript
-import type { ContentDirective, ImageDirective } from 'argc/directive'
-
-const image: ImageDirective = {
-	type: 'image',
-	url: 'blob://abc123',
-	mime: 'image/png',
-}
-
-const output: ContentDirective[] = [image]
-```
-
-`argc/directive` intentionally does not re-export TOON. If a CLI chooses TOON, import the official `@toon-format/toon` package directly so the application owns the serializer version and standards compliance.
-
-Progress and noisy lifecycle output should stay out of final result text. Use hook events for runtime progress and UI-side telemetry.
-
 ## Hook Events for Agent Runtimes
 
 CLI stdout is for the agent reading the command result. Hook events are for the system around the agent: runtime logs, UI rendering, progress panels, audit trails, or tool-call replay.
+
+Final stdout remains application-owned: argc does not impose a result serialization layer. Use hook events for runtime progress and UI-side telemetry.
 
 Handlers receive an `emit(data)` function and a generated `meta.callId`:
 
