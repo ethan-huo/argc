@@ -72,7 +72,10 @@ The primary consumer of these CLIs is an AI agent. Design rules:
 - **`meta.description` and `meta.examples` are the agent's documentation.**
   Every command gets a description; non-obvious commands get an example.
 - **stdout is the result; stderr is diagnostics.** An agent pipes stdout into
-  its context. Progress bars, warnings, and logs go to stderr. Never mix.
+  its context. Progress bars, warnings, and logs go to stderr. Never mix. For
+  colored/iconized status and tables, use `argc/terminal` (see
+  `references/terminal.md`) — its color auto-disables when piped, so captured
+  stdout stays clean without per-call guards.
 - **`emit()` is for the runtime, not the agent.** Structured telemetry
   (progress, artifact metadata, IDs) goes through hook events; do not encode
   it into stdout.
@@ -125,10 +128,23 @@ When the tool grows, split into `src/schema.ts` + `src/handlers/*.ts` and type
 handlers with `typeof app.Handlers` (supports `AppHandlers['user.create']`
 dot-notation).
 
-## Full API Reference
+## Reference Material
 
-After `bun install`, the complete reference is local — read sections of
-`node_modules/argc/README.md` on demand:
+Load on demand — don't read these up front. Each covers a deeper slice than the
+README and exists because the README either omits it or only sketches it.
+
+| Read this skill's…              | When you are…                                                         |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `references/terminal.md`        | Adding color, status icons (✓/✗/⚠), or aligned tables to CLI output   |
+| `references/schema-cookbook.md` | Designing command input — coercion rules, transforms, arrays, enums   |
+
+`references/terminal.md` documents the `argc/terminal` subexport (`fmt`,
+`printTable`, `visibleWidth`) — **not in the README at all**. Reach for it
+whenever the tool prints anything a human will look at; its color auto-disables
+when piped, so agent-captured stdout stays clean.
+
+After `bun install`, the rest of the API lives in
+`node_modules/argc/README.md` — read a section on demand:
 
 | Need                                      | README section                 |
 | ----------------------------------------- | ------------------------------ |
