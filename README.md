@@ -868,6 +868,15 @@ app.run({
 })
 ```
 
+## Agent Skill
+
+An agent skill for building and releasing new CLI tools with argc (scaffold
+templates, GitHub Actions release pipeline, bun bundle build) lives at:
+
+```text
+skills/argc/SKILL.md
+```
+
 ## License
 
 MIT

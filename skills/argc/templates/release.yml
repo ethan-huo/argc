@@ -1,0 +1,114 @@
+# Release on version bump: edit package.json "version" and push to main.
+# No manual tagging — this workflow tags vX.Y.Z and publishes the bundle.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  detect-version-bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_release: ${{ steps.version.outputs.should_release }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_version=$(jq -r '.version' package.json)
+          tag="v$current_version"
+          before_sha="${{ github.event.before }}"
+          previous_version=""
+          tag_exists=false
+
+          if [ "$before_sha" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "${before_sha}:package.json" 2>/dev/null; then
+            previous_version=$(git show "${before_sha}:package.json" | jq -r '.version')
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            tag_exists=true
+          fi
+
+          should_release=false
+          if [ "$tag_exists" != "true" ] || [ "$current_version" != "$previous_version" ]; then
+            should_release=true
+          fi
+
+          echo "Detected package version: $current_version"
+          echo "Previous package version: ${previous_version:-<none>}"
+          echo "Release tag exists: $tag_exists"
+          echo "Release required: $should_release"
+
+          {
+            echo "should_release=$should_release"
+            echo "version=$current_version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: detect-version-bump
+    if: needs.detect-version-bump.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+      - name: Ensure release tag exists for the current package version
+        env:
+          TAG: ${{ needs.detect-version-bump.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --tags origin
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+            tag_sha=$(git rev-list -n 1 "$TAG")
+            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "Tag $TAG already exists on $tag_sha, not on $GITHUB_SHA."
+              exit 1
+            fi
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.detect-version-bump.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/myapp --clobber
+            exit 0
+          fi
+
+          gh release create "$TAG" dist/myapp \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            --title "$TAG"
