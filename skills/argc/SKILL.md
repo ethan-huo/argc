@@ -87,11 +87,12 @@ The primary consumer of these CLIs is an AI agent. Design rules:
   'yaml'`), not `Bun.YAML` — the latter can't emit `|` block scalars. Add `--json`
   on data commands so the agent can `jq` the raw form. Avoid bare-JSON-as-default
   and TOON for CLI output — see `references/output.md`.
-- **`@`-keys are the tool→agent channel.** A top-level `@`-prefixed key carries an
-  out-of-band signal to the agent, separate from the data payload: `@hints` (what
-  to do next — "records at .myapp/x.json, slice with `jq …`"), `@notification`
-  (a system notice to surface, common in daemon-style tools). The set is open;
-  keep them few and document any you coin. See `references/output.md`.
+- **`$`-keys are the tool→agent channel.** A top-level `$`-prefixed key carries an
+  out-of-band signal to the agent, separate from the data payload: `$hints` (what
+  to do next — "records at .myapp/x.json, slice with `jq …`"), `$notification`
+  (a system notice to surface, common in daemon-style tools). `$` is a plain YAML
+  scalar (unlike `@`, which forces quotes). The set is open; keep them few and
+  document any you coin. See `references/output.md`.
 - **`emit()` is for the runtime, not the agent.** Structured telemetry
   (progress, artifact metadata, IDs) goes through hook events; do not encode
   it into stdout.
@@ -149,7 +150,7 @@ README and exists because the README either omits it or only sketches it.
 
 | Read this skill's…              | When you are…                                                         |
 | ------------------------------- | --------------------------------------------------------------------- |
-| `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, @hints  |
+| `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, $hints  |
 | `references/terminal.md`        | Adding color, status icons (✓/✗/⚠), or aligned tables to CLI output   |
 | `references/schema-cookbook.md` | Designing command input — coercion rules, transforms, arrays, enums   |
 | `references/release.md`         | Shipping it — version-bump release, bundle, install.sh, native binary |

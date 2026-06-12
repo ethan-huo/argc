@@ -67,7 +67,7 @@ preview: |
   <div>
     hello
   </div>
-"@hints":
+$hints:
   - Re-run with --json to stream raw records to a pipe
 ```
 
@@ -76,19 +76,25 @@ de-facto standard. (Multi-line previews this large usually still belong in
 `.<tool>/`, not stdout — but when a short multi-line value does land in a summary,
 block scalars are why it stays legible.)
 
-## `@`-keys — the tool→agent signal channel
+## `$`-keys — the tool→agent signal channel
 
-`@`-prefixed keys are a reserved convention: an out-of-band channel for the tool
+`$`-prefixed keys are a reserved convention: an out-of-band channel for the tool
 (or system) to speak *to the agent*, kept separate from the command's data payload.
-A plain key is data the agent asked for; an `@`-key is the tool talking back. The
-`@` prefix sorts these meta keys visually apart from data and reads as "not part of
-the result" (YAML quotes the key — harmless). Two established members:
+A plain key is data the agent asked for; a `$`-key is the tool talking back. The
+`$` prefix sorts these meta keys visually apart from data and reads as "not part of
+the result" — the same sigil JSON Schema uses for its `$schema`/`$ref` vocabulary.
 
-- **`@hints`** — what the agent should consider doing *next*, grounded in what just
+To the parser a `$`-key is just an ordinary field, sitting in the same mapping as
+the data; the "this is meta" meaning is a convention the consumer honors, not a
+YAML feature. (Don't use `@` — it is a YAML reserved indicator, so `@hints` only
+serializes with forced quotes: `"@hints":`. `$` is a plain scalar, no quoting.)
+Two established members:
+
+- **`$hints`** — what the agent should consider doing *next*, grounded in what just
   happened (the real path written, the real count truncated). It rides on top of
-  the skill: the skill teaches general usage; `@hints` are runtime-specific nudges.
+  the skill: the skill teaches general usage; `$hints` are runtime-specific nudges.
   Make them actionable and concrete — a command the agent can copy, not advice.
-- **`@notification`** — a system notice the agent should surface or react to, even
+- **`$notification`** — a system notice the agent should surface or react to, even
   though it didn't ask: a daemon's state change, a deprecation, a quota warning, a
   background job that finished. Common in long-running / daemon-style tools where
   the tool needs to push something at the agent between commands.
@@ -97,15 +103,17 @@ the result" (YAML quotes the key — harmless). Two established members:
 records: 2000
 written: .myapp/fetch-001.json
 bytes: 98123
-"@hints":
+$hints:
   - "Full records at .myapp/fetch-001.json — slice with: jq '.[0:10]' .myapp/fetch-001.json"
   - Re-run with --json to stream raw records to a pipe
   - See the myapp skill references/process-data.md for the record shape
-"@notification": "watcher daemon restarted at 12:04 — re-run `myapp status` to resync"
+$notification: "watcher daemon restarted at 12:04 — re-run `myapp status` to resync"
 ```
 
-The set is open: coin a new `@`-key when the tool needs a distinct channel, but
+The set is open: coin a new `$`-key when the tool needs a distinct channel, but
 keep them few and predictable, and document any you invent in the tool's own skill.
+An agent wanting just the data filters them out by prefix
+(`keys.filter(k => !k.startsWith('$'))`).
 
 ## A stateful command, end to end
 
@@ -128,7 +136,7 @@ async fetch({ input }) {
   process.stdout.write(stringify({                     // default: summary to stdout
     records: records.length,
     written: path,
-    '@hints': [
+    $hints: [
       `Records at ${path} — slice with: jq '.[0:10]' ${path}`,
       'Re-run with --json to stream raw records to a pipe',
     ],
