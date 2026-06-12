@@ -84,7 +84,7 @@ The primary consumer of these CLIs is an AI agent. Design rules:
 - **YAML for stdout summaries; `--json` for machine pipes.** A YAML KV block is
   the most readable disclosure for agent and human alike, and every agent parses
   it natively. Serialize with the `yaml` library (`import { stringify } from
-  'yaml'`), not `Bun.YAML` — the latter can't emit `|` block scalars. Add `--json`
+'yaml'`), not `Bun.YAML` — the latter can't emit `|` block scalars. Add `--json`
   on data commands so the agent can `jq` the raw form. Avoid bare-JSON-as-default
   and TOON for CLI output — see `references/output.md`.
 - **`$`-keys are the tool→agent channel.** A top-level `$`-prefixed key carries an
@@ -108,31 +108,39 @@ import * as v from 'valibot'
 import { c, cli, group } from 'argc'
 import packageJson from '../package.json' with { type: 'json' }
 
-const s = toStandardJsonSchema  // valibot needs this wrapper; zod/arktype do not
+const s = toStandardJsonSchema // valibot needs this wrapper; zod/arktype do not
 
 const schema = {
-	user: group({ description: 'User management' }, {
-		create: c
-			.meta({
-				description: 'Create a user',
-				examples: ['myapp user create --name john'],
-			})
-			.input(s(v.object({
-				name: v.pipe(v.string(), v.minLength(2)),
-				tags: v.optional(v.array(v.string())),        // --tags a --tags b
-			}))),
-	}),
+	user: group(
+		{ description: 'User management' },
+		{
+			create: c
+				.meta({
+					description: 'Create a user',
+					examples: ['myapp user create --name john'],
+				})
+				.input(
+					s(
+						v.object({
+							name: v.pipe(v.string(), v.minLength(2)),
+							tags: v.optional(v.array(v.string())), // --tags a --tags b
+						}),
+					),
+				),
+		},
+	),
 }
 
 const app = cli(schema, {
 	name: 'myapp',
-	version: packageJson.version,  // single source of truth: package.json
+	version: packageJson.version, // single source of truth: package.json
 	description: 'One-line tool description.',
 })
 
 await app.run({
 	handlers: {
-		'user.create': ({ input }) => {                  // flat or nested keys
+		'user.create': ({ input }) => {
+			// flat or nested keys
 			console.log(`created ${input.name}`)
 		},
 	},
@@ -150,7 +158,7 @@ README and exists because the README either omits it or only sketches it.
 
 | Read this skill's…              | When you are…                                                         |
 | ------------------------------- | --------------------------------------------------------------------- |
-| `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, $hints  |
+| `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, $hints |
 | `references/terminal.md`        | Adding color, status icons (✓/✗/⚠), or aligned tables to CLI output   |
 | `references/schema-cookbook.md` | Designing command input — coercion rules, transforms, arrays, enums   |
 | `references/release.md`         | Shipping it — version-bump release, bundle, install.sh, native binary |
@@ -163,14 +171,14 @@ when piped, so agent-captured stdout stays clean.
 After `bun install`, the rest of the API lives in
 `node_modules/argc/README.md` — read a section on demand:
 
-| Need                                      | README section                 |
-| ----------------------------------------- | ------------------------------ |
-| string → File/Date/URL coercion           | Transform: Schema Superpowers  |
-| global flags → typed handler context      | Global Options → Context       |
-| handlers split across files               | Handlers in Separate Files     |
-| `--schema` selectors, custom explorer     | AI Agent Integration           |
-| hook events for agent runtimes            | Hook Events for Agent Runtimes |
-| scripting mode (`--run`)                  | Scripting Mode                 |
+| Need                                  | README section                 |
+| ------------------------------------- | ------------------------------ |
+| string → File/Date/URL coercion       | Transform: Schema Superpowers  |
+| global flags → typed handler context  | Global Options → Context       |
+| handlers split across files           | Handlers in Separate Files     |
+| `--schema` selectors, custom explorer | AI Agent Integration           |
+| hook events for agent runtimes        | Hook Events for Agent Runtimes |
+| scripting mode (`--run`)              | Scripting Mode                 |
 
 ## Gotchas
 
@@ -187,7 +195,7 @@ After `bun install`, the rest of the API lives in
   `import packageJson from '../package.json' with { type: 'json' }` — never
   hardcode it, or the release tag and `--version` will drift.
 - **Ship the tool's own skill.** Every sibling tool (ghd/ctx/slack/calque)
-  exposes `skills/<name>/SKILL.md` teaching agents how to *use* it. A CLI
+  exposes `skills/<name>/SKILL.md` teaching agents how to _use_ it. A CLI
   without one is unfinished. Start from `templates/tool-skill.md`.
 
 ## Self-Improvement

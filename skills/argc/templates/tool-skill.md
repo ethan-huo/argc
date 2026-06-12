@@ -27,9 +27,9 @@ myapp --schema=.subcommand  # drill into one command group
      Borrow the ghd skill's columns: Command / What it does / Context cost /
      When to use. Delete this section if a plain command list is enough. -->
 
-| Command | What it does | When to use |
-| ------- | ------------ | ----------- |
-| `myapp hello` | ... | ... |
+| Command       | What it does | When to use |
+| ------------- | ------------ | ----------- |
+| `myapp hello` | ...          | ...         |
 
 ## Core Workflow
 
@@ -54,10 +54,10 @@ myapp cmd --input @payload.json
 <!-- The highest-value section. Each row is a mistake an agent actually made
      or will plausibly make. Grow this list from real usage friction. -->
 
-| Don't do this | Do this instead | Why |
-| ------------- | --------------- | --- |
+| Don't do this                                   | Do this instead                                            | Why                                              |
+| ----------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------ |
 | Pipe full output into context to find one field | Re-read the persisted file with `jq`/`rg`, or use `--json` | stdout is a summary; the bulk lives in `.myapp/` |
-| ...           | ...             | ... |
+| ...                                             | ...                                                        | ...                                              |
 
 ## Self-Improvement
 

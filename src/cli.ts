@@ -396,15 +396,18 @@ export class CLI<
 			? extractCliInputParamsDetailed(commandDef.input)
 			: []
 		const inputFieldNames = new Set(inputParams.map((p) => p.name))
-		const cliFieldNames = new Set([
-			...inputFieldNames,
-			...this.getGlobalOptionNames(),
-		])
+		const globalOptionNames = this.getGlobalOptionNames()
+		const cliFieldNames = new Set([...inputFieldNames, ...globalOptionNames])
 		const allowSystemInput = !inputFieldNames.has('input')
 		const commandFlags = this.normalizeFlagsForFields(
 			parsed.flags,
 			cliFieldNames,
 		)
+		const allowedFlagNames = allowSystemInput
+			? new Set([...cliFieldNames, 'input'])
+			: cliFieldNames
+		this.assertKnownFlags(commandFlags, allowedFlagNames, commandPath)
+		this.assertKnownPositionals(remaining, commandDef.args, commandPath)
 
 		const { flagsWithoutInput, inputFlag } = allowSystemInput
 			? this.extractInputFlag(commandFlags)
@@ -415,6 +418,7 @@ export class CLI<
 		let input = this.buildInput(flagsWithoutInput, remaining, commandDef.args)
 		if (allowSystemInput && inputFlag !== undefined) {
 			input = await this.parseJsonInput(inputFlag)
+			this.assertKnownJsonInput(input, inputFieldNames, commandPath)
 		} else {
 			// Only argv tokens need adaptation; --input is already structured schema input.
 			input = coerceCliInput(commandDef.input, input)
@@ -655,6 +659,79 @@ export class CLI<
 		}
 
 		return input
+	}
+
+	private assertKnownFlags(
+		flags: Record<string, unknown>,
+		allowedFields: Set<string>,
+		commandPath: string[],
+	): void {
+		const unknown = Object.keys(flags).filter(
+			(name) => !allowedFields.has(name),
+		)
+		if (unknown.length === 0) return
+
+		this.showUnknownArguments(
+			unknown.map((name) => `--${name}`),
+			commandPath,
+		)
+	}
+
+	private assertKnownPositionals(
+		positionals: string[],
+		argDefs: { name: string }[] | undefined,
+		commandPath: string[],
+	): void {
+		const variadicIndex = argDefs?.findIndex((arg) => arg.name.endsWith('...'))
+		if (
+			variadicIndex !== undefined &&
+			variadicIndex !== -1 &&
+			variadicIndex !== (argDefs?.length ?? 0) - 1
+		) {
+			console.log(colors.error('Invalid args: variadic argument must be last'))
+			process.exit(1)
+		}
+
+		if (!argDefs || argDefs.length === 0) {
+			if (positionals.length === 0) return
+			this.showUnknownArguments(positionals, commandPath)
+			return
+		}
+
+		const hasVariadic = argDefs[argDefs.length - 1]?.name.endsWith('...')
+		if (hasVariadic || positionals.length <= argDefs.length) return
+
+		this.showUnknownArguments(positionals.slice(argDefs.length), commandPath)
+	}
+
+	private assertKnownJsonInput(
+		input: Record<string, unknown>,
+		inputFieldNames: Set<string>,
+		commandPath: string[],
+	): void {
+		const unknown = Object.keys(input).filter(
+			(name) => !inputFieldNames.has(name),
+		)
+		if (unknown.length === 0) return
+
+		// Standard Schema libraries may strip unknown keys by default; argc must
+		// reject them before validation so agent-hallucinated parameters fail loudly.
+		this.showUnknownArguments(
+			unknown.map((name) => `--input.${name}`),
+			commandPath,
+		)
+	}
+
+	private showUnknownArguments(args: string[], commandPath: string[]): never {
+		const label = args.length === 1 ? 'Unknown argument' : 'Unknown arguments'
+		console.error(colors.error(`${label}: ${args.join(', ')}`))
+		console.error()
+		const cmdName =
+			commandPath.length > 0
+				? `${this.options.name} ${commandPath.join(' ')}`
+				: this.options.name
+		console.error(colors.dim(`Run '${cmdName} --help' for full usage.`))
+		process.exit(1)
 	}
 
 	private normalizeFlagsForFields(

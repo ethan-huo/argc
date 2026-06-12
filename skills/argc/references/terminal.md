@@ -53,15 +53,15 @@ human, not the result an agent reads:
 
 ```typescript
 import { stringify } from 'yaml'
-console.error(fmt.info('Connecting…'))   // stderr: human progress
-console.error(fmt.success('Connected'))  // stderr
-process.stdout.write(stringify(result))  // stdout: the agent's summary
+console.error(fmt.info('Connecting…')) // stderr: human progress
+console.error(fmt.success('Connected')) // stderr
+process.stdout.write(stringify(result)) // stdout: the agent's summary
 ```
 
 ## `printTable` — aligned tables with color and wide chars
 
 `console.table` miscounts columns when cells contain ANSI codes or CJK
-characters. `printTable` measures *visible* width, so colored and full-width
+characters. `printTable` measures _visible_ width, so colored and full-width
 text align correctly.
 
 ```typescript
@@ -97,10 +97,10 @@ alice   ok
 For custom layouts (columns, right-aligned numbers, progress lines):
 
 ```typescript
-visibleWidth('你好')        // 4  — CJK counts as 2; ANSI codes count as 0
+visibleWidth('你好') // 4  — CJK counts as 2; ANSI codes count as 0
 visibleWidth(fmt.red('hi')) // 2  — escape codes excluded
-padEnd('id', 8)             // 'id      ' — pad to visible width 8
-padEnd(fmt.green('ok'), 8)  // pads by visible width, color preserved
+padEnd('id', 8) // 'id      ' — pad to visible width 8
+padEnd(fmt.green('ok'), 8) // pads by visible width, color preserved
 ```
 
 Wide-char detection covers CJK ideographs, Hangul, Hiragana/Katakana, fullwidth

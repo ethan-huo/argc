@@ -1,14 +1,14 @@
 # Output: Summaries, Not Raw Data
 
 stdout is the agent's context budget — every byte you print is a byte it pays to
-read. The job of a command's stdout is *disclosure*: say what happened, hand back
+read. The job of a command's stdout is _disclosure_: say what happened, hand back
 the numbers that matter, and point to where the bulk lives. Not to dump the bulk.
 
 ## Two kinds of tools
 
 Classify the tool before you design its output.
 
-**Stateless (output-driven).** The result *is* the output; nothing is persisted
+**Stateless (output-driven).** The result _is_ the output; nothing is persisted
 between runs. A formatter, a calculator, a one-shot query. Emit a YAML summary to
 stdout; add `--json` on data commands for `jq` pipes.
 
@@ -31,14 +31,14 @@ cwd/.myapp/
 
 ## Why YAML — not JSON, not TOON
 
-For stdout *summaries*, prefer YAML:
+For stdout _summaries_, prefer YAML:
 
 - **Readable as disclosure.** A YAML mapping is a clean KV block — the natural
   shape for "here's what happened" — and every agent parses it natively without a
   tool call. Bare JSON-as-default is noisier to skim and invites the agent to
   treat stdout as data rather than a summary.
-- **TOON is the wrong fit here.** TOON optimizes token density for *uniform
-  tabular* records. CLI summaries are heterogeneous — counts, paths, prose, the
+- **TOON is the wrong fit here.** TOON optimizes token density for _uniform
+  tabular_ records. CLI summaries are heterogeneous — counts, paths, prose, the
   occasional snippet — which is exactly what YAML mappings model and TOON does
   not. Reserve TOON (if ever) for shipping a large uniform table; even then,
   `--json` + `jq` is the better escape hatch.
@@ -49,7 +49,7 @@ can pipe it through `jq`, and keep the default human/agent-facing path as a summ
 ## Serializing: use the `yaml` library, not `Bun.YAML`
 
 ```typescript
-import { stringify } from 'yaml'   // npm: yaml (eemeli/yaml), the js-yaml successor
+import { stringify } from 'yaml' // npm: yaml (eemeli/yaml), the js-yaml successor
 
 process.stdout.write(stringify(value))
 ```
@@ -79,7 +79,7 @@ block scalars are why it stays legible.)
 ## `$`-keys — the tool→agent signal channel
 
 `$`-prefixed keys are a reserved convention: an out-of-band channel for the tool
-(or system) to speak *to the agent*, kept separate from the command's data payload.
+(or system) to speak _to the agent_, kept separate from the command's data payload.
 A plain key is data the agent asked for; a `$`-key is the tool talking back. The
 `$` prefix sorts these meta keys visually apart from data and reads as "not part of
 the result" — the same sigil JSON Schema uses for its `$schema`/`$ref` vocabulary.
@@ -90,7 +90,7 @@ YAML feature. (Don't use `@` — it is a YAML reserved indicator, so `@hints` on
 serializes with forced quotes: `"@hints":`. `$` is a plain scalar, no quoting.)
 Two established members:
 
-- **`$hints`** — what the agent should consider doing *next*, grounded in what just
+- **`$hints`** — what the agent should consider doing _next_, grounded in what just
   happened (the real path written, the real count truncated). It rides on top of
   the skill: the skill teaches general usage; `$hints` are runtime-specific nudges.
   Make them actionable and concrete — a command the agent can copy, not advice.
@@ -107,7 +107,7 @@ $hints:
   - "Full records at .myapp/fetch-001.json — slice with: jq '.[0:10]' .myapp/fetch-001.json"
   - Re-run with --json to stream raw records to a pipe
   - See the myapp skill references/process-data.md for the record shape
-$notification: "watcher daemon restarted at 12:04 — re-run `myapp status` to resync"
+$notification: 'watcher daemon restarted at 12:04 — re-run `myapp status` to resync'
 ```
 
 The set is open: coin a new `$`-key when the tool needs a distinct channel, but

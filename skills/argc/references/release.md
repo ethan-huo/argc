@@ -10,7 +10,7 @@ carry their own header comments — read them as the source of truth, not this p
 This page covers only what those files can't say inline: the contract and the
 non-obvious edges.
 
-## The contract: version bump *is* the release trigger
+## The contract: version bump _is_ the release trigger
 
 ```
 bump package.json "version" → push to main

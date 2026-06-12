@@ -1670,6 +1670,125 @@ await app.run({
 	})
 
 	describe('validation errors', () => {
+		test('rejects unknown command flags before schema validation', async () => {
+			let called = false
+			const schema = {
+				greet: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'greet', '--name', 'Ada', '--model', 'x']
+
+			const app = cli(schema, { name: 'app', version: '1.0.0' })
+
+			try {
+				await app.run({
+					handlers: {
+						greet: () => {
+							called = true
+						},
+					},
+				})
+			} catch {
+				// process.exit throws
+			}
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('Unknown argument: --model')
+			expect(called).toBe(false)
+			expect(exitCode).toBe(1)
+		})
+
+		test('rejects unknown --input object keys before schema validation', async () => {
+			let called = false
+			const schema = {
+				greet: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = [
+				'bun',
+				'cli',
+				'greet',
+				'--input',
+				'{"name":"Ada","model":"x"}',
+			]
+
+			const app = cli(schema, { name: 'app', version: '1.0.0' })
+
+			try {
+				await app.run({
+					handlers: {
+						greet: () => {
+							called = true
+						},
+					},
+				})
+			} catch {
+				// process.exit throws
+			}
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('Unknown argument: --input.model')
+			expect(called).toBe(false)
+			expect(exitCode).toBe(1)
+		})
+
+		test('rejects extra positionals before schema validation', async () => {
+			let called = false
+			const schema = {
+				greet: c.args('name').input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'greet', 'Ada', 'extra']
+
+			const app = cli(schema, { name: 'app', version: '1.0.0' })
+
+			try {
+				await app.run({
+					handlers: {
+						greet: () => {
+							called = true
+						},
+					},
+				})
+			} catch {
+				// process.exit throws
+			}
+
+			const output = consoleOutput.join('\n')
+			expect(output).toContain('Unknown argument: extra')
+			expect(called).toBe(false)
+			expect(exitCode).toBe(1)
+		})
+
+		test('allows globals while rejecting unknown command flags', async () => {
+			let received: unknown
+			const schema = {
+				greet: c.input(s(v.object({ name: v.string() }))),
+			}
+
+			process.argv = ['bun', 'cli', 'greet', '--name', 'Ada', '--verbose']
+
+			const app = cli(schema, {
+				name: 'app',
+				version: '1.0.0',
+				globals: s(v.object({ verbose: v.optional(v.boolean(), false) })),
+				context: (globals) => globals,
+			})
+
+			await app.run({
+				handlers: {
+					greet: ({ input, context }) => {
+						received = { input, context }
+					},
+				},
+			})
+
+			expect(received).toEqual({
+				input: { name: 'Ada' },
+				context: { verbose: true },
+			})
+		})
+
 		test('shows error for missing required field', async () => {
 			const schema = {
 				greet: c.input(s(v.object({ name: v.string() }))),
