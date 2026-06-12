@@ -52,9 +52,10 @@ fmt.option('--verbose')  // = fmt.green
 human, not the result an agent reads:
 
 ```typescript
+import { stringify } from 'yaml'
 console.error(fmt.info('Connecting…'))   // stderr: human progress
 console.error(fmt.success('Connected'))  // stderr
-console.log(JSON.stringify(result))      // stdout: the agent's payload
+process.stdout.write(stringify(result))  // stdout: the agent's summary
 ```
 
 ## `printTable` — aligned tables with color and wide chars
@@ -88,8 +89,8 @@ alice   ok
 - `TableRow` = `Record<string, string>`. Pre-format cells with `fmt.*`; missing
   keys render empty.
 - Header and separator are dimmed; it writes via `console.log` (stdout). For an
-  agent-facing command, prefer machine output (JSON) and reserve tables for a
-  `--format table` human mode.
+  agent-facing command, prefer a YAML summary (or `--json` for raw data) and
+  reserve tables for a `--format table` human mode — see `references/output.md`.
 
 ## `visibleWidth` / `padEnd` — alignment primitives
 

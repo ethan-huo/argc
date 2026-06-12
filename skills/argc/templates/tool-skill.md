@@ -56,6 +56,7 @@ myapp cmd --input @payload.json
 
 | Don't do this | Do this instead | Why |
 | ------------- | --------------- | --- |
+| Pipe full output into context to find one field | Re-read the persisted file with `jq`/`rg`, or use `--json` | stdout is a summary; the bulk lives in `.myapp/` |
 | ...           | ...             | ... |
 
 ## Self-Improvement

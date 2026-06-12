@@ -76,11 +76,25 @@ The primary consumer of these CLIs is an AI agent. Design rules:
   colored/iconized status and tables, use `argc/terminal` (see
   `references/terminal.md`) — its color auto-disables when piped, so captured
   stdout stays clean without per-call guards.
+- **Summarize to stdout; persist the bulk.** stdout is the agent's context
+  budget, not a data dump. If a command produces more than a screenful — or
+  output the agent will want to slice — write the bytes to a hidden state dir
+  (`cwd/.<tool>/`) and let stdout carry only a summary plus the path to re-read.
+  This is the stateful-tool pattern; stateless tools just emit their summary.
+- **YAML for stdout summaries; `--json` for machine pipes.** A YAML KV block is
+  the most readable disclosure for agent and human alike, and every agent parses
+  it natively. Serialize with the `yaml` library (`import { stringify } from
+  'yaml'`), not `Bun.YAML` — the latter can't emit `|` block scalars. Add `--json`
+  on data commands so the agent can `jq` the raw form. Avoid bare-JSON-as-default
+  and TOON for CLI output — see `references/output.md`.
+- **`@`-keys are the tool→agent channel.** A top-level `@`-prefixed key carries an
+  out-of-band signal to the agent, separate from the data payload: `@hints` (what
+  to do next — "records at .myapp/x.json, slice with `jq …`"), `@notification`
+  (a system notice to surface, common in daemon-style tools). The set is open;
+  keep them few and document any you coin. See `references/output.md`.
 - **`emit()` is for the runtime, not the agent.** Structured telemetry
   (progress, artifact metadata, IDs) goes through hook events; do not encode
   it into stdout.
-- **Keep stdout budget-conscious.** If a command can dump unbounded content,
-  add paging/limit flags and a summary mode, like `ctx` structural summaries.
 - **Complex input → `--input`.** Commands accept full JSON/JSON5 via
   `--input '{...}'`, `--input @file.json`, or `--input @-` (stdin). Free with
   argc; mention it in the tool's skill for long payloads.
@@ -135,8 +149,10 @@ README and exists because the README either omits it or only sketches it.
 
 | Read this skill's…              | When you are…                                                         |
 | ------------------------------- | --------------------------------------------------------------------- |
+| `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, @hints  |
 | `references/terminal.md`        | Adding color, status icons (✓/✗/⚠), or aligned tables to CLI output   |
 | `references/schema-cookbook.md` | Designing command input — coercion rules, transforms, arrays, enums   |
+| `references/release.md`         | Shipping it — version-bump release, bundle, install.sh, native binary |
 
 `references/terminal.md` documents the `argc/terminal` subexport (`fmt`,
 `printTable`, `visibleWidth`) — **not in the README at all**. Reach for it
@@ -155,40 +171,6 @@ After `bun install`, the rest of the API lives in
 | hook events for agent runtimes            | Hook Events for Agent Runtimes |
 | scripting mode (`--run`)                  | Scripting Mode                 |
 
-## Build & Release Pipeline
-
-The pipeline (from `templates/`):
-
-```
-bump package.json version → push to main
-  → release.yml detects the version change
-  → bun run check && bun run build
-  → tags vX.Y.Z, creates GitHub Release with dist/<name> attached
-```
-
-There is no manual tagging step. To cut a release, edit `version` in
-`package.json` and push. Pushing without a version change runs CI only.
-
-- **Bundle:** `bun build src/main.ts --outfile=dist/<name> --target=bun
-  --minify` produces a single executable JS file. `--target=bun` injects the
-  `#!/usr/bin/env bun` shebang; the build script still needs `chmod +x`.
-- **Artifact:** the release attaches the bare `dist/<name>` bundle.
-  `install.sh` curls it from the release URL and installs to `~/.local/bin`;
-  when the direct download 404s (private repo), it falls back to
-  `gh release download` with the user's GitHub auth.
-- **End-user install** (the scaffold README carries both):
-
-```bash
-# public repo
-curl -fsSL https://raw.githubusercontent.com/<owner>/<name>/main/install.sh | bash
-# private repo (install.sh itself needs gh to fetch)
-gh api repos/<owner>/<name>/contents/install.sh --jq .content | base64 -d | bash
-```
-
-For a compiled native binary instead of a JS bundle, use
-`bun build --compile`; only do this when the user explicitly wants a
-no-Bun-required binary — it is ~50MB+ per platform and needs a target matrix.
-
 ## Gotchas
 
 - **valibot requires `toStandardJsonSchema` from `@valibot/to-json-schema`**
@@ -203,10 +185,6 @@ no-Bun-required binary — it is ~50MB+ per platform and needs a target matrix.
 - **`version` comes from `package.json`** via
   `import packageJson from '../package.json' with { type: 'json' }` — never
   hardcode it, or the release tag and `--version` will drift.
-- **release.yml compares against `github.event.before`** to detect version
-  bumps, so squash-merging several bumps in one push still releases only the
-  final version; force-pushes with a zero `before` SHA fall back to
-  tag-existence checking.
 - **Ship the tool's own skill.** Every sibling tool (ghd/ctx/slack/calque)
   exposes `skills/<name>/SKILL.md` teaching agents how to *use* it. A CLI
   without one is unfinished. Start from `templates/tool-skill.md`.
