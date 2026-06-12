@@ -1,1 +1,0 @@
-- 2026-06-11 install.sh template: private-repo path end-to-end verified against celados/calque (curl 404 → private detect → gh fallback → install OK). Public direct-curl path untested — no public repo with a bare release asset yet; verify on first public tool release.
