@@ -329,7 +329,13 @@ Use jq-like selectors to narrow the output:
 | `.{a,b}`   | Specific children | `--schema=.{user,deploy}` |
 | `..name`   | Recursive search  | `--schema=..create`       |
 
-Patterns compose: `--schema=.deploy..lambda`, `--schema=.*.list`
+Set branches are full sub-selectors, so one query can pick leaves at different depths:
+
+```bash
+--schema='.{compute.alpha.{list,get},storage.beta.create}'
+```
+
+Patterns compose: `--schema=.deploy..lambda`, `--schema=.*.list`, `--schema=.{user,config}.create`
 
 For custom schema commands or integrations, use `selectSchema` as the stable schema discovery API:
 

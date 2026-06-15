@@ -87,6 +87,29 @@ describe('buildSchemaSubset', () => {
 		>
 		expect(Object.keys(subset)).toEqual(['user', 'plain'])
 	})
+
+	test('assembles asymmetric branches into one subset tree', () => {
+		const matches = matchSchemaSelector(
+			schema,
+			parseSchemaSelector('.{user.create,deploy.aws.lambda}'),
+		)
+		const subset = buildSchemaSubset(schema, matches, 1) as Record<
+			string,
+			unknown
+		>
+		expect(Object.keys(subset)).toEqual(['user', 'deploy'])
+
+		const userChildren = (subset['user'] as ReturnType<typeof group>)[
+			'~argc.group'
+		].children
+		expect(Object.keys(userChildren)).toEqual(['create'])
+
+		const deploy = subset['deploy'] as ReturnType<typeof group>
+		const aws = deploy['~argc.group'].children['aws'] as ReturnType<
+			typeof group
+		>
+		expect(Object.keys(aws['~argc.group'].children)).toEqual(['lambda'])
+	})
 })
 
 describe('selectSchema', () => {

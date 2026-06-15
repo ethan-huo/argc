@@ -6,7 +6,10 @@ import { isCommand, isGroup } from './types'
 export type SelectorStep =
 	| { type: 'key'; name: string }
 	| { type: 'wildcard' }
-	| { type: 'set'; names: string[] }
+	// Each branch is a relative sub-selector, evaluated independently from the
+	// set's position; this is what lets one query pick asymmetric branches and
+	// depths, e.g. .{compute.alpha.{list,get},storage.{add,remove}}.
+	| { type: 'set'; branches: SelectorStep[][] }
 	| { type: 'recursive' }
 
 const BARE_KEY_CHAR_RE = /[A-Za-z0-9_@-]/
@@ -77,55 +80,62 @@ export function matchSchemaSelector(
 	schema: Router,
 	steps: SelectorStep[],
 ): SelectorMatch[] {
-	if (steps.length === 0) {
-		return [{ path: [], node: schema }]
+	return applySteps([{ path: [], node: schema }], steps)
+}
+
+function applySteps(
+	matches: SelectorMatch[],
+	steps: SelectorStep[],
+): SelectorMatch[] {
+	let current = matches
+	for (const step of steps) {
+		current = applyStep(current, step)
+	}
+	return current
+}
+
+function applyStep(
+	current: SelectorMatch[],
+	step: SelectorStep,
+): SelectorMatch[] {
+	if (step.type === 'recursive') {
+		const expanded: SelectorMatch[] = []
+		for (const match of current) {
+			collectDescendants(match, expanded)
+		}
+		return expanded
 	}
 
-	let current: SelectorMatch[] = [{ path: [], node: schema }]
+	// A set fans out into independent sub-selectors evaluated from the current
+	// position; their matches are unioned, so each branch can drill to its own
+	// depth in a single query.
+	if (step.type === 'set') {
+		const out: SelectorMatch[] = []
+		for (const branch of step.branches) {
+			out.push(...applySteps(current, branch))
+		}
+		return out
+	}
 
-	for (const step of steps) {
-		if (step.type === 'recursive') {
-			const expanded: SelectorMatch[] = []
-			for (const match of current) {
-				collectDescendants(match, expanded)
+	const next: SelectorMatch[] = []
+	for (const match of current) {
+		const children = getChildren(match.node)
+		if (!children) continue
+
+		if (step.type === 'key') {
+			const child = children[step.name]
+			if (child) {
+				next.push({ path: [...match.path, step.name], node: child })
 			}
-			current = expanded
 			continue
 		}
 
-		const next: SelectorMatch[] = []
-		for (const match of current) {
-			const children = getChildren(match.node)
-			if (!children) continue
-
-			if (step.type === 'key') {
-				const child = children[step.name]
-				if (child) {
-					next.push({ path: [...match.path, step.name], node: child })
-				}
-				continue
-			}
-
-			if (step.type === 'wildcard') {
-				for (const [name, child] of Object.entries(children)) {
-					next.push({ path: [...match.path, name], node: child })
-				}
-				continue
-			}
-
-			if (step.type === 'set') {
-				for (const name of step.names) {
-					const child = children[name]
-					if (child) {
-						next.push({ path: [...match.path, name], node: child })
-					}
-				}
-			}
+		// wildcard: every direct child
+		for (const [name, child] of Object.entries(children)) {
+			next.push({ path: [...match.path, name], node: child })
 		}
-		current = next
 	}
-
-	return current
+	return next
 }
 
 export function buildSchemaSubset(
@@ -202,21 +212,20 @@ function parseSegment(
 
 	if (ch === '{') {
 		let i = start + 1
-		const names: string[] = []
+		const branches: SelectorStep[][] = []
 
 		i = skipSpaces(input, i)
 		if (charAt(input, i) === '}') {
 			throw new Error('Selector set cannot be empty')
 		}
 		while (i < input.length) {
-			const parsed = parseKey(input, i)
-			names.push(parsed.name)
-			i = parsed.nextIndex
-
 			i = skipSpaces(input, i)
+			const parsed = parseSetBranch(input, i)
+			branches.push(parsed.steps)
+			i = skipSpaces(input, parsed.nextIndex)
+
 			if (charAt(input, i) === ',') {
 				i += 1
-				i = skipSpaces(input, i)
 				continue
 			}
 			if (charAt(input, i) === '}') {
@@ -226,11 +235,11 @@ function parseSegment(
 			throw new Error(`Expected "," or "}" at ${i}`)
 		}
 
-		if (names.length === 0) {
+		if (branches.length === 0) {
 			throw new Error('Selector set cannot be empty')
 		}
 
-		return { step: { type: 'set', names }, nextIndex: i }
+		return { step: { type: 'set', branches }, nextIndex: i }
 	}
 
 	if (ch === '[') {
@@ -246,6 +255,60 @@ function parseSegment(
 		step: { type: 'key', name: parsed.name },
 		nextIndex: parsed.nextIndex,
 	}
+}
+
+// Parse one set element as a relative sub-selector: a leading segment with no
+// dot, then dot-prefixed (and "..") continuations, stopping at the set's ","
+// or "}". Reuses parseSegment so nested sets, wildcards and quoted keys work
+// recursively.
+function parseSetBranch(
+	input: string,
+	start: number,
+): {
+	steps: SelectorStep[]
+	nextIndex: number
+} {
+	const first = parseSegment(input, start)
+	const steps: SelectorStep[] = [first.step]
+	let i = first.nextIndex
+
+	while (i < input.length) {
+		const j = skipSpaces(input, i)
+		const ch = charAt(input, j)
+		if (ch === ',' || ch === '}') {
+			i = j
+			break
+		}
+		if (ch !== '.') {
+			throw new Error(`Expected ".", "," or "}" at ${j}`)
+		}
+		i = j
+
+		// Recursive descent within a branch, mirroring top-level "..".
+		if (charAt(input, i + 1) === '.') {
+			i += 2
+			steps.push({ type: 'recursive' })
+			const after = charAt(input, i)
+			if (after === '' || after === ',' || after === '}' || after === '.') {
+				continue
+			}
+			const seg = parseSegment(input, i)
+			steps.push(seg.step)
+			i = seg.nextIndex
+			continue
+		}
+
+		i += 1
+		const after = charAt(input, i)
+		if (after === '' || after === ',' || after === '}') {
+			throw new Error(`Expected identifier at ${i}`)
+		}
+		const seg = parseSegment(input, i)
+		steps.push(seg.step)
+		i = seg.nextIndex
+	}
+
+	return { steps, nextIndex: i }
 }
 
 function parseKey(

@@ -78,6 +78,41 @@ describe('matchSchemaSelector', () => {
 		expect(matches.map((m) => m.path)).toEqual([['@add'], ['config']])
 	})
 
+	test('matches asymmetric set branches', () => {
+		const steps = parseSchemaSelector('.{user.create,config}')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([['user', 'create'], ['config']])
+	})
+
+	test('matches nested sets down to specific leaves', () => {
+		const steps = parseSchemaSelector('.{user.{list,create},deploy.aws.lambda}')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([
+			['user', 'list'],
+			['user', 'create'],
+			['deploy', 'aws', 'lambda'],
+		])
+	})
+
+	test('matches set followed by a shared trailing path', () => {
+		const steps = parseSchemaSelector('.{user,config}.create')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([
+			['user', 'create'],
+			['config', 'create'],
+		])
+	})
+
+	test('matches wildcard and recursive descent inside branches', () => {
+		const steps = parseSchemaSelector('.{user.*,deploy..lambda}')
+		const matches = matchSchemaSelector(schema, steps)
+		expect(matches.map((m) => m.path)).toEqual([
+			['user', 'list'],
+			['user', 'create'],
+			['deploy', 'aws', 'lambda'],
+		])
+	})
+
 	test('matches recursive descent for name', () => {
 		const steps = parseSchemaSelector('..create')
 		const matches = matchSchemaSelector(schema, steps)
