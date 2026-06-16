@@ -1,9 +1,9 @@
 {
-	"name": "myapp",
+	"name": "{{APP_NAME}}",
 	"version": "0.1.0",
-	"description": "Describe what myapp does in one line.",
+	"description": "Describe what {{APP_NAME}} does in one line.",
 	"bin": {
-		"myapp": "./src/main.ts"
+		"{{APP_NAME}}": "./src/main.ts"
 	},
 	"type": "module",
 	"scripts": {
@@ -14,7 +14,7 @@
 		"typecheck": "tsgo --noEmit",
 		"test": "bun test",
 		"check": "bun run fmt:check && bun run typecheck && bun test",
-		"build": "bun build src/main.ts --outfile=dist/myapp --target=bun --minify && chmod +x dist/myapp"
+		"build": "bun build src/main.ts --outfile=dist/{{APP_NAME}} --target=bun --minify && chmod +x dist/{{APP_NAME}}"
 	},
 	"dependencies": {
 		"@valibot/to-json-schema": "^1.7.0",

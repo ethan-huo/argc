@@ -62,11 +62,11 @@ fi
 
 mkdir -p "$DIR/src" "$DIR/.github/workflows" "$DIR/skills/$NAME"
 
-# render SRC DEST: copy a template with placeholder substitution
+# render SRC DEST: copy a template, substituting {{...}} placeholders
 render() {
-  sed -e "s|owner/myapp|$REPO|g" \
-    -e "s|myapp|$NAME|g" \
-    -e "s|MYAPP|$UPPER|g" \
+  sed -e "s|{{REPO}}|$REPO|g" \
+    -e "s|{{APP_NAME_UPPER}}|$UPPER|g" \
+    -e "s|{{APP_NAME}}|$NAME|g" \
     "$TEMPLATES_DIR/$1" > "$DIR/$2"
 }
 
@@ -78,7 +78,11 @@ render ci.yml .github/workflows/ci.yml
 render release.yml .github/workflows/release.yml
 render install.sh install.sh
 render tool-skill.md "skills/$NAME/SKILL.md"
+render AGENTS.md AGENTS.md
 chmod +x "$DIR/install.sh"
+
+# CLAUDE.md is the same dev guide under the name Claude Code auto-loads.
+ln -s AGENTS.md "$DIR/CLAUDE.md"
 
 cat > "$DIR/README.md" <<EOF
 # $NAME

@@ -12,7 +12,7 @@ const schema = {
 	hello: c
 		.meta({
 			description: 'Say hello',
-			examples: ['myapp hello --name world --loud'],
+			examples: ['{{APP_NAME}} hello --name world --loud'],
 		})
 		.input(
 			s(
@@ -25,9 +25,9 @@ const schema = {
 }
 
 const app = cli(schema, {
-	name: 'myapp',
+	name: '{{APP_NAME}}',
 	version: packageJson.version,
-	description: 'Describe what myapp does in one line.',
+	description: 'Describe what {{APP_NAME}} does in one line.',
 })
 
 await app.run({

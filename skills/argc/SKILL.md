@@ -46,6 +46,7 @@ templates/ci.yml        → .github/workflows/ci.yml
 templates/release.yml   → .github/workflows/release.yml
 templates/install.sh    → install.sh         # end-user install from GH release
 templates/tool-skill.md → skills/<name>/SKILL.md   # the tool's own agent skill
+templates/AGENTS.md     → AGENTS.md           # dev guide for the building agent (CLAUDE.md symlinks to it)
 ```
 
 After scaffolding:
