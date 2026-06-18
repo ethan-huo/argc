@@ -45,6 +45,7 @@ templates/tsconfig.json → tsconfig.json
 templates/ci.yml        → .github/workflows/ci.yml
 templates/release.yml   → .github/workflows/release.yml
 templates/install.sh    → install.sh         # end-user install from GH release
+templates/.agents/skills/release/SKILL.md → .agents/skills/release/SKILL.md # release workflow skill
 templates/tool-skill.md → skills/<name>/SKILL.md   # the tool's own agent skill
 templates/AGENTS.md     → AGENTS.md           # dev guide for the building agent (CLAUDE.md symlinks to it)
 ```
@@ -53,6 +54,7 @@ After scaffolding:
 
 - [ ] `bun run src/main.ts --schema` reads well — this is the agent's UI
 - [ ] Fill in `skills/<name>/SKILL.md` for the finished tool (see template)
+- [ ] Use `.agents/skills/release/SKILL.md` when cutting releases
 - [ ] Create the GitHub repo, push — release.yml takes over from there
 
 Never pin argc to `#main` — main does not commit `dist/*.d.ts`; only release
@@ -175,13 +177,13 @@ dot-notation).
 Load on demand — don't read these up front. Each covers a deeper slice than the
 README and exists because the README either omits it or only sketches it.
 
-| Read this skill's…              | When you are…                                                         |
-| ------------------------------- | --------------------------------------------------------------------- |
+| Read this skill's…              | When you are…                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------- |
 | `references/flow.md`            | Designing a mutation command — 7-step shape, prompts, dangerous ops, exit codes |
-| `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, $hints |
-| `references/terminal.md`        | Adding color, status icons (✓/✗/⚠), or aligned tables to CLI output   |
-| `references/schema-cookbook.md` | Designing command input — coercion rules, transforms, arrays, enums   |
-| `references/release.md`         | Shipping it — version-bump release, bundle, install.sh, native binary |
+| `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, $hints           |
+| `references/terminal.md`        | Adding color, status icons (✓/✗/⚠), or aligned tables to CLI output             |
+| `references/schema-cookbook.md` | Designing command input — coercion rules, transforms, arrays, enums             |
+| `references/release.md`         | Shipping it — version-bump release, bundle, install.sh, native binary           |
 
 `references/terminal.md` documents the `argc/terminal` subexport (`fmt`,
 `printTable`, `visibleWidth`) — **not in the README at all**. Reach for it

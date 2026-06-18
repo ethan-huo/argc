@@ -60,7 +60,7 @@ if [[ -e "$DIR" ]]; then
   exit 1
 fi
 
-mkdir -p "$DIR/src" "$DIR/.github/workflows" "$DIR/skills/$NAME"
+mkdir -p "$DIR/src" "$DIR/.github/workflows" "$DIR/skills/$NAME" "$DIR/.agents/skills/release"
 
 # render SRC DEST: copy a template, substituting {{...}} placeholders
 render() {
@@ -77,6 +77,7 @@ render tsconfig.json tsconfig.json
 render ci.yml .github/workflows/ci.yml
 render release.yml .github/workflows/release.yml
 render install.sh install.sh
+render .agents/skills/release/SKILL.md .agents/skills/release/SKILL.md
 render tool-skill.md "skills/$NAME/SKILL.md"
 render AGENTS.md AGENTS.md
 chmod +x "$DIR/install.sh"
@@ -166,4 +167,5 @@ Next steps:
   1. Implement your schema and handlers in src/main.ts
   2. Fill in skills/$NAME/SKILL.md (the tool's agent skill)
   3. Create the GitHub repo ($REPO) and push — release.yml handles releases
+  4. Use .agents/skills/release/SKILL.md when cutting future releases
 EOF
