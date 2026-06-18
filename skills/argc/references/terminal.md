@@ -107,3 +107,58 @@ Wide-char detection covers CJK ideographs, Hangul, Hiragana/Katakana, fullwidth
 forms, and CJK symbols/punctuation. Use these instead of `String.prototype.padEnd`
 whenever cells may contain color codes or non-Latin text — the native method
 counts bytes/code units and will misalign.
+
+## Pipe and signal hygiene
+
+Two boring failure modes that produce ugly stack traces in agent transcripts.
+Handle them once at the top of the entry file:
+
+**EPIPE — closed downstream pipe.** `mytool fetch | head -1` closes stdout
+after the first line. The next `process.stdout.write` throws `EPIPE` and Node
+exits with a stack trace. Silence it:
+
+```typescript
+process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+	if (err.code === 'EPIPE') process.exit(0)
+	throw err
+})
+```
+
+This is the right behavior — pipe consumers that take what they want are a
+core CLI idiom; your tool should exit `0` and quietly.
+
+**SIGINT — Ctrl-C during long work.** A spinner on stderr leaves a half-drawn
+line and a hidden cursor when the process is killed mid-frame. Clear before
+you exit, and tell the user whether anything is still running remotely:
+
+```typescript
+process.on('SIGINT', () => {
+	spinner?.stop()                 // clear ANSI, restore cursor
+	console.error(fmt.warn('Interrupted. Remote job may still be running — check with `myapp status`.'))
+	process.exit(130)               // 128 + SIGINT
+})
+```
+
+If the command is purely local, the second line is unnecessary; just stop the
+spinner and exit.
+
+## Warnings: gutter glyph, not label
+
+`fmt.warn('…')` produces `⚠ <message>` — that's the right surface for a
+nonfatal notice. Don't print `WARNING:` or `WARNING!` as a leading label;
+the glyph carries the same meaning with less noise, and `fmt.warn` already
+colors it yellow when the terminal supports it.
+
+Same goes for errors: `fmt.error('…')` (`✗`) is the surface, not a hand-written
+`ERROR:` prefix.
+
+## Error voice
+
+When you write an error message, follow the 3-part structure from
+`references/flow.md` (what failed → why → how to fix). On the wording itself:
+
+- `Failed to …` for system/network/upstream failures.
+- `Couldn't …` / `Can't …` for user-state and validation failures.
+- Don't write `Unable to …`, `An error occurred`, or `Something went wrong`.
+- Don't say `successfully` — name the action: `Created project acme/web`,
+  not `Successfully created project`.

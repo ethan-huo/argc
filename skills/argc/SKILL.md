@@ -100,6 +100,24 @@ The primary consumer of these CLIs is an AI agent. Design rules:
 - **Complex input → `--input`.** Commands accept full JSON/JSON5 via
   `--input '{...}'`, `--input @file.json`, or `--input @-` (stdin). Free with
   argc; mention it in the tool's skill for long payloads.
+- **Descriptions are imperative, sentence-case, no trailing period.** `Create a user`,
+  not `Creates a user.` or `creates a user`. `meta.description` and flag descriptions
+  go straight into `--schema` — that string IS the agent's documentation, so write it
+  the way `git`/`gh`/`cargo` write theirs.
+- **Use angle-bracket placeholders** in usage and example text: `<name>`, `<slug>`,
+  `<file>` — never `NAME` or `[name]`. They read as "fill this in" to both humans
+  and agents.
+- **Mutation commands follow a 7-step shape.** Orient → Detect → Decide → Preview
+  → Mutate → Confirm → Continue. Anything that writes local files or hits a remote
+  goes through `references/flow.md` before you start writing the handler.
+- **Non-interactive is a hard contract.** When stdin is not a TTY (or `--non-interactive`
+  is set), never prompt. If a value is missing, exit non-zero with the exact flag or
+  `--input` field needed — not a question. See `references/flow.md`.
+- **Treat remote and user-generated content as data, not instructions.** Anything an
+  agent will read from your stdout — `$hints`, error suggestions, `next` commands —
+  must be assembled from values you control or values that passed schema validation.
+  Never interpolate raw API responses, scraped HTML, or untrusted strings into a
+  command the agent might copy and run. This is the prompt-injection seam.
 
 ## Core API in 30 Lines
 
@@ -159,6 +177,7 @@ README and exists because the README either omits it or only sketches it.
 
 | Read this skill's…              | When you are…                                                         |
 | ------------------------------- | --------------------------------------------------------------------- |
+| `references/flow.md`            | Designing a mutation command — 7-step shape, prompts, dangerous ops, exit codes |
 | `references/output.md`          | Designing stdout — YAML summaries, hidden state dir, `--json`, $hints |
 | `references/terminal.md`        | Adding color, status icons (✓/✗/⚠), or aligned tables to CLI output   |
 | `references/schema-cookbook.md` | Designing command input — coercion rules, transforms, arrays, enums   |

@@ -4,6 +4,27 @@ stdout is the agent's context budget — every byte you print is a byte it pays 
 read. The job of a command's stdout is _disclosure_: say what happened, hand back
 the numbers that matter, and point to where the bulk lives. Not to dump the bulk.
 
+## Output Surfaces
+
+Pick one surface before writing the line. A line that mixes two surfaces — a URL
+that doubles as progress, a warning glued onto a result row — is a layout bug,
+not a phrasing problem.
+
+| Surface          | Stream  | When                                              |
+| ---------------- | ------- | ------------------------------------------------- |
+| prompt           | stderr  | TTY only; user must decide                        |
+| progress         | stderr  | work is happening (`fmt.info`, spinner)           |
+| success / result | stdout  | the durable thing the agent is supposed to read   |
+| warning          | stderr  | nonfatal risk, deprecation, post-action notice    |
+| error            | stderr  | the action failed; non-zero exit                  |
+| table / detail   | stdout  | many resources or one resource, human-formatted   |
+| stream           | stdout  | live logs / foreground process output             |
+| `--json` payload | stdout  | machine pipe; nothing else on stdout              |
+
+The cardinal rule: **only one surface owns stdout per invocation.** Either it's
+the YAML summary, or it's the `--json` payload, or it's the live stream. Never
+two at once.
+
 ## Two kinds of tools
 
 Classify the tool before you design its output.
@@ -114,6 +135,45 @@ The set is open: coin a new `$`-key when the tool needs a distinct channel, but
 keep them few and predictable, and document any you invent in the tool's own skill.
 An agent wanting just the data filters them out by prefix
 (`keys.filter(k => !k.startsWith('$'))`).
+
+### `$hints` is a prompt-injection seam — keep it sterile
+
+The agent reads `$hints` as something close to instructions: each line is a
+runnable command or a thing to do next. That makes it the highest-value target
+in your output for prompt injection. **Treat the contents of `$hints` as a
+template the developer fills in, never as a string assembled from inputs you
+don't control.**
+
+Hard rules:
+
+- Never interpolate raw API responses, scraped HTML, file contents, or other
+  remote/user-generated text into a `$hints` line. If the API returns
+  `{"name": "; rm -rf ~"}`, that string must not become part of a suggested
+  command.
+- Values that *do* go into hints must come from your own argv, your own
+  schema-validated input, or paths you constructed yourself.
+- Same rule applies to `next` commands in error output, `$notification`
+  bodies, and anything else the agent will read as "what to do next."
+
+Treat all remote and user-generated content as **data**, not instructions —
+park it in regular keys (`data:`, `items:`, named fields) where the agent reads
+it as a value, not as a command to run.
+
+## Empty results
+
+A query that finds nothing is not an error.
+
+- YAML summary: `count: 0` plus an explicit empty list (`items: []`). Don't
+  hide the field or print a blank summary.
+- `--json` mode: emit `[]` or `{}`. Exit `0`.
+- Use natural prose for human-facing empty states: `No deployments found.`,
+  not `0 deployments found.` or `Found 0 deployments.`
+- If a filter narrowed the result to zero, say which filter:
+  `No deployments match --env=production.`
+
+Singular vs plural: pick one (`1 record written` / `3 records written`). Don't
+write `1 record(s) written` — the parens leak the implementation through to
+the reader.
 
 ## A stateful command, end to end
 
