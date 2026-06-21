@@ -21,7 +21,7 @@ visible — small commands collapse half of them — but the order is fixed.
    record found, framework auto-detected, default branch). Don't print state just
    to prove you resolved it — only if it affects what comes next.
 3. **Decide.** Ask only for values you couldn't infer and that have no flag.
-   See *Prompt Discipline* below.
+   See _Prompt Discipline_ below.
 4. **Preview.** Before risky or broad mutations, show the planned change as a
    compact YAML block on stderr. The user / agent gets a chance to abort.
 5. **Mutate.** Do the work. If it takes more than a beat, emit a spinner or a
@@ -105,7 +105,7 @@ Never:
 
 ## Dangerous Actions
 
-A mutation is *dangerous* if it deletes data, rewrites production, rotates
+A mutation is _dangerous_ if it deletes data, rewrites production, rotates
 secrets, or makes a billing/permission change. Extra rules apply:
 
 - **`--yes` and `--force` are not synonyms.** `--yes` accepts low-risk defaults
@@ -119,13 +119,14 @@ secrets, or makes a billing/permission change. Extra rules apply:
   ```
 
   Default the y/N fallback to **No** (`y/N`), never `Y/n`.
+
 - **Non-interactive: a dedicated proof flag.** `--yes` alone must not delete a
   project. Require something specific like `--confirm-name <name>` whose value
   matches the resource. This stops "agent passed `--yes` blindly" from turning
   into data loss.
 - **Distinguish no-op from completed.** If the resource was already gone /
   already at the target state, say so explicitly (`! example.com is already
-  removed.`) — don't print a fake success row.
+removed.`) — don't print a fake success row.
 
 ## Exit Codes
 

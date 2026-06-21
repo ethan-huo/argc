@@ -133,9 +133,13 @@ you exit, and tell the user whether anything is still running remotely:
 
 ```typescript
 process.on('SIGINT', () => {
-	spinner?.stop()                 // clear ANSI, restore cursor
-	console.error(fmt.warn('Interrupted. Remote job may still be running — check with `myapp status`.'))
-	process.exit(130)               // 128 + SIGINT
+	spinner?.stop() // clear ANSI, restore cursor
+	console.error(
+		fmt.warn(
+			'Interrupted. Remote job may still be running — check with `myapp status`.',
+		),
+	)
+	process.exit(130) // 128 + SIGINT
 })
 ```
 

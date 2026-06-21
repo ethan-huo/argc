@@ -10,16 +10,16 @@ Pick one surface before writing the line. A line that mixes two surfaces — a U
 that doubles as progress, a warning glued onto a result row — is a layout bug,
 not a phrasing problem.
 
-| Surface          | Stream  | When                                              |
-| ---------------- | ------- | ------------------------------------------------- |
-| prompt           | stderr  | TTY only; user must decide                        |
-| progress         | stderr  | work is happening (`fmt.info`, spinner)           |
-| success / result | stdout  | the durable thing the agent is supposed to read   |
-| warning          | stderr  | nonfatal risk, deprecation, post-action notice    |
-| error            | stderr  | the action failed; non-zero exit                  |
-| table / detail   | stdout  | many resources or one resource, human-formatted   |
-| stream           | stdout  | live logs / foreground process output             |
-| `--json` payload | stdout  | machine pipe; nothing else on stdout              |
+| Surface          | Stream | When                                            |
+| ---------------- | ------ | ----------------------------------------------- |
+| prompt           | stderr | TTY only; user must decide                      |
+| progress         | stderr | work is happening (`fmt.info`, spinner)         |
+| success / result | stdout | the durable thing the agent is supposed to read |
+| warning          | stderr | nonfatal risk, deprecation, post-action notice  |
+| error            | stderr | the action failed; non-zero exit                |
+| table / detail   | stdout | many resources or one resource, human-formatted |
+| stream           | stdout | live logs / foreground process output           |
+| `--json` payload | stdout | machine pipe; nothing else on stdout            |
 
 The cardinal rule: **only one surface owns stdout per invocation.** Either it's
 the YAML summary, or it's the `--json` payload, or it's the live stream. Never
@@ -150,7 +150,7 @@ Hard rules:
   remote/user-generated text into a `$hints` line. If the API returns
   `{"name": "; rm -rf ~"}`, that string must not become part of a suggested
   command.
-- Values that *do* go into hints must come from your own argv, your own
+- Values that _do_ go into hints must come from your own argv, your own
   schema-validated input, or paths you constructed yourself.
 - Same rule applies to `next` commands in error output, `$notification`
   bodies, and anything else the agent will read as "what to do next."
