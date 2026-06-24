@@ -24,6 +24,7 @@ export type CommandDef<TInput extends Schema = Schema> = {
 	'~argc': {
 		input?: TInput
 		meta: CommandMeta
+		positionals: string[]
 	}
 }
 

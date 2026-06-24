@@ -1,9 +1,14 @@
 import { stringify } from 'yaml'
 
-import type { Router, Schema } from './types'
+import type { AnyCommand, Router, Schema } from './types'
 
 import { getRouterChildren } from './router'
-import { buildSurfaceExamples, getInputTypeHint } from './schema'
+import {
+	buildSurfaceExamples,
+	extractInputFieldDescriptors,
+	getInputTypeHint,
+	type FieldDescriptor,
+} from './schema'
 import { isCommand, isGroup } from './types'
 
 export function showHelp(
@@ -63,4 +68,34 @@ export function renderNamespaceCommands(
 		if (!hidden) lines.push([...prefix, key].join('.'))
 	}
 	return lines
+}
+
+function flagUsage(field: FieldDescriptor): string {
+	if (field.kind === 'boolean') return `--${field.name}[=true|false]`
+	if (field.kind === 'array') return `--${field.name} <value>  # repeatable`
+	return `--${field.name} <value>`
+}
+
+export function showCommandHelp(
+	command: AnyCommand,
+	commandPath: string[],
+	options: {
+		name: string
+	},
+): void {
+	const fields = extractInputFieldDescriptors(command['~argc'].input)
+	const positionals = command['~argc'].positionals
+	const usageParts = [
+		options.name,
+		commandPath.join('.'),
+		...positionals.map((name) => `<${name}>`),
+	]
+	const output: Record<string, unknown> = {
+		usage: usageParts.join(' '),
+	}
+	if (positionals.length > 0) output.positionals = positionals.join('\n')
+	if (fields.length > 0) {
+		output.flags = fields.map((field) => flagUsage(field)).join('\n')
+	}
+	process.stdout.write(stringify(output, { lineWidth: 0 }))
 }

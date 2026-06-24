@@ -17,6 +17,7 @@ export class CommandBuilder<
 	constructor(def: Partial<CommandBuilderDef<TInput>> = {}) {
 		this['~argc'] = {
 			meta: {},
+			positionals: [],
 			...def,
 		} as CommandBuilderDef<TInput>
 	}
@@ -32,6 +33,13 @@ export class CommandBuilder<
 		return new CommandBuilder({
 			...this['~argc'],
 			meta: { ...this['~argc'].meta, ...meta },
+		})
+	}
+
+	positional(...names: string[]): CommandBuilder<TInput> {
+		return new CommandBuilder({
+			...this['~argc'],
+			positionals: names,
 		})
 	}
 }

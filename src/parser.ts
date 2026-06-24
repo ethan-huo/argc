@@ -3,6 +3,7 @@ export type InputSource =
 	| { kind: 'inline'; value: string }
 	| { kind: 'file'; path: string }
 	| { kind: 'stdin' }
+	| { kind: 'object'; value: Record<string, unknown> }
 
 export type ParsedArgs = {
 	raw: string[]

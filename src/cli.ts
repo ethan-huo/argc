@@ -21,8 +21,9 @@ import {
 	getCompletionReloadHint,
 	installCompletionScript,
 } from './complete'
-import { showHelp } from './help'
+import { showCommandHelp, showHelp } from './help'
 import { createHookDispatcher } from './hook'
+import { parseHumanArgs } from './human'
 import { parseInputSource, type InputSource } from './parser'
 import {
 	ArgcError,
@@ -49,13 +50,20 @@ import {
 import { suggestSimilar } from './suggest'
 import { isCommand, isGroup } from './types'
 
-type ParsedCall = {
+type ParsedCommandCall = {
+	kind: 'command'
 	commandPath: string[]
 	command: AnyCommand
 	input: InputSource
 	context: InputSource
 	raw: string[]
 }
+
+type ParsedHelpCall = {
+	kind: 'help'
+}
+
+type ParsedCall = ParsedCommandCall | ParsedHelpCall
 
 const SYSTEM_CONTEXT: InputSource = { kind: 'omitted' }
 
@@ -141,6 +149,7 @@ export class CLI<
 		}
 
 		const parsed = this.parseCall(argv)
+		if (parsed.kind === 'help') return
 		const context = await this.resolveContext(parsed.context)
 		const result = await this.invokeCommand(
 			parsed.commandPath,
@@ -388,23 +397,47 @@ export class CLI<
 				index++
 				continue
 			}
+			if (token === '--help' || token === '-h') {
+				showCommandHelp(current, commandPath, { name: this.options.name })
+				return { kind: 'help' }
+			}
 			if (token.startsWith('--')) {
-				throw new ArgcError({
-					error: 'UNKNOWN_COMMAND',
-					got: token,
-					$schema: this.renderSchemaSlice(commandPath),
+				if (seenInput) {
+					throw new ArgcError({
+						error: 'TWO_INPUTS',
+						$hint: 'object input cannot be mixed with other input forms',
+					})
+				}
+				if (this.hasCommandHelpToken(argv, index)) {
+					showCommandHelp(current, commandPath, { name: this.options.name })
+					return { kind: 'help' }
+				}
+				const human = parseHumanArgs(current, argv.slice(index), {
+					commandPath,
 				})
+				input = { kind: 'object', value: human.input }
+				if (human.context) context = human.context
+				seenInput = true
+				break
 			}
 			if (!this.isInputToken(token)) {
-				const spacePath = this.collectBarePath(argv, index)
-				throw new ArgcError({
-					error: 'BAD_PATH',
-					got: [pathToken, ...spacePath].join(' '),
-					$hint: `paths are dotted — ${this.options.name} ${[
-						pathToken,
-						...spacePath,
-					].join('.')} "{ ... }"`,
+				if (seenInput) {
+					throw new ArgcError({
+						error: 'TWO_INPUTS',
+						$hint: 'object input cannot be mixed with other input forms',
+					})
+				}
+				if (this.hasCommandHelpToken(argv, index)) {
+					showCommandHelp(current, commandPath, { name: this.options.name })
+					return { kind: 'help' }
+				}
+				const human = parseHumanArgs(current, argv.slice(index), {
+					commandPath,
 				})
+				input = { kind: 'object', value: human.input }
+				if (human.context) context = human.context
+				seenInput = true
+				break
 			}
 			if (seenInput) {
 				throw new ArgcError({
@@ -420,6 +453,7 @@ export class CLI<
 		}
 
 		return {
+			kind: 'command',
 			commandPath,
 			command: current,
 			input,
@@ -467,6 +501,10 @@ export class CLI<
 		}
 
 		return { path: resolvedPath, router: current }
+	}
+
+	private hasCommandHelpToken(argv: string[], start: number): boolean {
+		return argv.slice(start).some((token) => token === '--help' || token === '-h')
 	}
 
 	private isInputToken(token: string): boolean {
@@ -559,6 +597,7 @@ export class CLI<
 
 	private async resolveInput(source: InputSource): Promise<unknown> {
 		if (source.kind === 'omitted') return {}
+		if (source.kind === 'object') return source.value
 		let raw: string
 		if (source.kind === 'stdin') {
 			raw = await this.readStdinText()

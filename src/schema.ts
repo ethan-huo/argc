@@ -19,6 +19,26 @@ export type ParamInfo = {
 	description?: string
 }
 
+export type FieldKind =
+	| 'string'
+	| 'number'
+	| 'integer'
+	| 'boolean'
+	| 'array'
+	| 'object'
+	| 'unknown'
+
+export type FieldDescriptor = {
+	name: string
+	required: boolean
+	kind: FieldKind
+	item?: FieldDescriptor
+	enum?: unknown[]
+	default?: unknown
+	description?: string
+	rawSchema: JSONSchema
+}
+
 const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
 export function isValidIdentifier(name: string): boolean {
@@ -148,6 +168,51 @@ function jsonSchemaToTypeString(schema: JSONSchema): string {
 	}
 }
 
+function fieldKindFromJsonSchema(schema: JSONSchema): FieldKind {
+	const type = schema.type
+	if (type === 'string') return 'string'
+	if (type === 'number') return 'number'
+	if (type === 'integer') return 'integer'
+	if (type === 'boolean') return 'boolean'
+	if (type === 'array') return 'array'
+	if (type === 'object') return 'object'
+	if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+		const types = new Set(schema.enum.map((value) => typeof value))
+		if (types.size === 1) {
+			const [only] = [...types]
+			if (only === 'string') return 'string'
+			if (only === 'number') return 'number'
+			if (only === 'boolean') return 'boolean'
+		}
+	}
+	if (schema.properties) return 'object'
+	return 'unknown'
+}
+
+function buildFieldDescriptor(
+	name: string,
+	schema: JSONSchema,
+	required: boolean,
+): FieldDescriptor {
+	const descriptor: FieldDescriptor = {
+		name,
+		required,
+		kind: fieldKindFromJsonSchema(schema),
+		rawSchema: schema,
+	}
+	if (Array.isArray(schema.enum)) descriptor.enum = schema.enum
+	if (schema.default !== undefined) descriptor.default = schema.default
+	if (schema.description !== undefined)
+		descriptor.description = schema.description as string
+	if (descriptor.kind === 'array') {
+		const itemSchema = schema.items as JSONSchema | undefined
+		if (itemSchema) {
+			descriptor.item = buildFieldDescriptor(`${name}[]`, itemSchema, true)
+		}
+	}
+	return descriptor
+}
+
 function readJsonSchema(
 	schema: Schema,
 	side: 'input' | 'output',
@@ -183,6 +248,22 @@ export function extractCliInputParamsDetailed(schema: Schema): ParamInfo[] {
 	const jsonSchema = readJsonSchema(schema, 'input')
 	if (!jsonSchema) return []
 	return extractParamsFromJsonSchema(jsonSchema)
+}
+
+export function extractInputFieldDescriptors(
+	schema: Schema | undefined,
+): FieldDescriptor[] {
+	if (!schema) return []
+	const jsonSchema = readJsonSchema(schema, 'input')
+	if (!jsonSchema) return []
+	const properties = jsonSchema.properties as
+		| Record<string, JSONSchema>
+		| undefined
+	if (!properties) return []
+	const required = new Set((jsonSchema.required as string[]) ?? [])
+	return Object.entries(properties).map(([name, prop]) =>
+		buildFieldDescriptor(name, prop, required.has(name)),
+	)
 }
 
 export function extractOutputParamsDetailed(schema: Schema): ParamInfo[] {
