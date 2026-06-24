@@ -23,13 +23,13 @@ No shims; old paths deleted.
 
 ## 1. Thesis
 
-argc stops being a *CLI framework optimized for humans typing flags* and becomes a **typed
+argc stops being a _CLI framework optimized for humans typing flags_ and becomes a **typed
 command surface for agents that happens to be shell-invocable**. The schema (a TS type) is the
 single source of truth; every form is a projection of it.
 
 Why: in practice these tools are never hand-invoked — they are called by agents. The flag layer
 (camelCase↔snake, repeat-for-array, dot-for-nested, positional args, `--input`) was built well,
-but for an agent reader it is *loose, redundant encoding* that adds rules to learn and surfaces
+but for an agent reader it is _loose, redundant encoding_ that adds rules to learn and surfaces
 to hallucinate on. The ideal call is a single typed object literal.
 
 ### 1.1 The whole surface, in three forms
@@ -49,7 +49,7 @@ Read the type → write the object. One mental model.
 - **No skill (cold start):** `--help` → `@schema` → call.
   `--help` orients ("how do I call this, what context exists"); `@schema` is the working
   reference; the **error output is the correction loop**.
-- **With a skill:** `@schema` → call. The skill carries the *workflow*; the commands no longer
+- **With a skill:** `@schema` → call. The skill carries the _workflow_; the commands no longer
   need prose explanation — the type and the errors describe themselves.
 
 This is why §4 invests in three render targets — `--help`, `@schema`, and **errors** — over
@@ -67,7 +67,7 @@ cli                       # == cli --help
 ```
 
 - **`<path...>`** space-separated command/group segments (`g1 c2`). Keys **must be valid JS
-  identifiers** (§2.3.1) so the *same* key works as a path segment, an `@schema` method name, and
+  identifiers** (§2.3.1) so the _same_ key works as a path segment, an `@schema` method name, and
   a bare `@run` property (`g1.c2(...)`).
 - **`<input>`** exactly **one argv token**: a JSON5 object, or `@file` / `-` (stdin). Omitted =
   `{}`. Keys are **verbatim** schema keys (no case conversion). The object **must be a single
@@ -83,12 +83,13 @@ cli                       # == cli --help
   string quoting is irrecoverable (`'alice'` vs bare `alice`), so reassembly would be lossy and
   is rejected. Parse errors locate within the single token (§4.5). Two bare objects is an error —
   context goes via `--context`.
+
 - **`--context <ctx>`** the one surviving flag: a single object-valued, order-free slot for
   cross-cutting config. Default comes from `ARGC_CTX` env; `--context` overrides per call.
-  It is *not* the per-field flag layer we deleted — zero per-field machinery.
+  It is _not_ the per-field flag layer we deleted — zero per-field machinery.
 - **`@`-prefix** is reserved for framework commands at the **first token** (`cli @run`,
   `cli @schema`); enforced at `cli()` construction, non-overridable by default. An `@file` or
-  `-` in the **input slot** (after the resolved path) is a file/stdin input, *not* a built-in —
+  `-` in the **input slot** (after the resolved path) is a file/stdin input, _not_ a built-in —
   position disambiguates (app command keys are identifiers, never `@`-led).
 - **`run: false`** in `cli()` options disables `@run` (arbitrary code-exec gate); `@schema` /
   `@completions` stay available.
@@ -122,22 +123,22 @@ caller-side flag to `--ctx`. Absent that, verbatim wins (one less layer).
 
 ### 2.3 v1 → v2 delta (so reviewers don't match the old spec)
 
-Every v1 behavior below is **removed or changed**. Treat the v1 implementation as the *before*,
+Every v1 behavior below is **removed or changed**. Treat the v1 implementation as the _before_,
 not the contract — this table is the demolition plan Codex's first pass was missing.
 
-| v1 behavior (file) | v2 |
-| --- | --- |
-| `Handler` returns `void`; `CLI.run()` discards the result (`types.ts:104`, `cli.ts:505`) | **changed**: handlers return a value; argc serializes it to stdout (§3). `Handler`, `RunConfig`, and `findHandler` (`router.ts:11`) return types change. |
-| command/group keys may be any string incl. dashed `alert-create` (`schema.ts:311`, `schema-explorer.test.ts:25`) | **removed**: keys must be valid JS identifiers (§2.3.1), rejected at construction. |
-| command aliases: routing in `extractCommand()` (`cli.ts:578`) + alias completion (`complete.ts:180`) | **removed**: one command, one name. Touches routing, "unknown command" errors, and completion candidates. |
-| flag parsing / camelCase↔snake (`naming.ts`, `normalizeFlagsForFields`) | **removed** |
-| positional args `.args()` | **removed** (object subsumes) |
-| `--input` flag + `input`-field collision handling (`cli.ts:401`) | **removed** (the bare object *is* the input) |
-| CLI string→value coercion (`coerce.ts`) | **removed** (JSON5 carries types; schema transforms stay) |
-| `context: (globals) => …` transform | **removed** (§2.2) |
-| `@schema` CLI-syntax / case-conversion preamble | **removed** (§4.2) |
-| per-command prose `--help` | **removed** (→ `@schema`) |
-| verbose git-style did-you-mean block | **changed** → terse structured suggestion (§4.5) |
+| v1 behavior (file)                                                                                               | v2                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Handler` returns `void`; `CLI.run()` discards the result (`types.ts:104`, `cli.ts:505`)                         | **changed**: handlers return a value; argc serializes it to stdout (§3). `Handler`, `RunConfig`, and `findHandler` (`router.ts:11`) return types change. |
+| command/group keys may be any string incl. dashed `alert-create` (`schema.ts:311`, `schema-explorer.test.ts:25`) | **removed**: keys must be valid JS identifiers (§2.3.1), rejected at construction.                                                                       |
+| command aliases: routing in `extractCommand()` (`cli.ts:578`) + alias completion (`complete.ts:180`)             | **removed**: one command, one name. Touches routing, "unknown command" errors, and completion candidates.                                                |
+| flag parsing / camelCase↔snake (`naming.ts`, `normalizeFlagsForFields`)                                          | **removed**                                                                                                                                              |
+| positional args `.args()`                                                                                        | **removed** (object subsumes)                                                                                                                            |
+| `--input` flag + `input`-field collision handling (`cli.ts:401`)                                                 | **removed** (the bare object _is_ the input)                                                                                                             |
+| CLI string→value coercion (`coerce.ts`)                                                                          | **removed** (JSON5 carries types; schema transforms stay)                                                                                                |
+| `context: (globals) => …` transform                                                                              | **removed** (§2.2)                                                                                                                                       |
+| `@schema` CLI-syntax / case-conversion preamble                                                                  | **removed** (§4.2)                                                                                                                                       |
+| per-command prose `--help`                                                                                       | **removed** (→ `@schema`)                                                                                                                                |
+| verbose git-style did-you-mean block                                                                             | **changed** → terse structured suggestion (§4.5)                                                                                                         |
 
 #### 2.3.1 Command keys: identifiers only
 
@@ -156,7 +157,7 @@ application-owned"). For a typed command surface, output must be a contract:
 - A handler's **return value** is serialized to stdout. `cli g c "{…}"` and
   `@run "await g.c({…})"` therefore produce **identical** output.
 - **argc owns fd 1.** During handler / `@run` execution, `process.stdout` writes (incl.
-  `console.log`) are **rerouted to stderr**, so the *only* bytes on stdout are the serialized
+  `console.log`) are **rerouted to stderr**, so the _only_ bytes on stdout are the serialized
   return value. This keeps the result contract — and `@run --json` parseability — uncorrupted,
   while debug output still survives on stderr.
 - `emit()` remains the side-channel for structured progress / telemetry (hook events).
@@ -168,13 +169,13 @@ Serialization is one shared pipeline (direct calls and `@run`): **normalize → 
    Set→array, Date→ISO, function/`undefined`→omitted.
 2. **render**:
 
-| Return value | stdout |
-| --- | --- |
-| `undefined` | empty (pure side-effect) |
-| `string` | **raw, verbatim** — emitted *before* YAML, never quoted/escaped |
-| anything else | **block-style YAML** (`yaml` lib, `lineWidth: 0`) |
+| Return value  | stdout                                                          |
+| ------------- | --------------------------------------------------------------- |
+| `undefined`   | empty (pure side-effect)                                        |
+| `string`      | **raw, verbatim** — emitted _before_ YAML, never quoted/escaped |
+| anything else | **block-style YAML** (`yaml` lib, `lineWidth: 0`)               |
 
-Default output is **block YAML**, not `Bun.inspect` and not a flow dump: it is structured *and*
+Default output is **block YAML**, not `Bun.inspect` and not a flow dump: it is structured _and_
 readable — clean KV, real block scalars (`|`) for multiline — without the looseness of
 concatenated prose. (`Bun.YAML.stringify` is flow-only and mangles multiline, so we depend on the
 `yaml` lib.) The `string` case is **load-bearing and bypasses YAML** (YAML would quote/fold it): a
@@ -182,12 +183,12 @@ handler returning YAML / CSV / NDJSON / any custom text passes through **untouch
 renderer only ever sees non-strings. Success → stdout, error → stderr (§4.5), exit code matches.
 
 **`--json` is a `@run`-only flag — direct calls have no `--json`.** Default YAML is already
-readable *and* parseable; `--json` is the strict-JSON consume path. This encodes a
+readable _and_ parseable; `--json` is the strict-JSON consume path. This encodes a
 **read-vs-consume** split:
 
-- **Direct call** (`cli g c "{…}"`) — the *handler* owns the representation: `return` a string for
+- **Direct call** (`cli g c "{…}"`) — the _handler_ owns the representation: `return` a string for
   a custom format, or a value for the YAML view. The caller does not re-format.
-- **`@run … --json`** — the *caller* owns the final value (they wrote the expression), so they may
+- **`@run … --json`** — the _caller_ owns the final value (they wrote the expression), so they may
   ask for strict JSON (`normalize` + `JSON.stringify`) — for `jq` / chaining a stricter parser.
 
 Wanting strict-JSON output of one call is itself the atomic→composition boundary: escalate to
@@ -196,7 +197,7 @@ parseable, and a handler can `return` a JSON/YAML **string** for an exact repres
 
 ---
 
-## 4. Rendering design  ← primary review focus
+## 4. Rendering design ← primary review focus
 
 ### 4.0 Principles
 
@@ -204,7 +205,7 @@ parseable, and a handler can `return` a JSON/YAML **string** for an exact repres
 2. No human-CLI scaffolding (no flag syntax notes, no case-conversion notes, no prose tutorials).
 3. High signal / low noise. Where it is data, it is machine-shaped.
 4. **Errors speak the schema's vocabulary and teach the type** — they are the correction loop.
-5. **One output grammar: block YAML.** Command results *and* error envelopes (§4.5) are YAML —
+5. **One output grammar: block YAML.** Command results _and_ error envelopes (§4.5) are YAML —
    structured KV an agent parses, never loose prose. Tool-meta keys take a `$`-prefix (`$hint`).
    Help (§4.1) and `@schema` (§4.2) are the exception: an orientation card and a TS type, not
    data.
@@ -255,33 +256,33 @@ The v1 flag/array/object syntax preamble and all case-conversion notes are **rem
 // Context: { env: 'prod' | 'dev'; verbose?: boolean }  (--context / ARGC_CTX)
 
 type App = {
-  user: {
-    /** Create a user. */
-    // mcpx user create "{ name: 'alice', email: 'a@x.com' }"
-    create(input: { name: string; email?: string })
+	user: {
+		/** Create a user. */
+		// mcpx user create "{ name: 'alice', email: 'a@x.com' }"
+		create(input: { name: string; email?: string })
 
-    /** List users. */
-    list(input: { format?: 'json' | 'table' })
-  }
+		/** List users. */
+		list(input: { format?: 'json' | 'table' })
+	}
 
-  db: {
-    /** Seed the database from a JSON file. */
-    seed(input: { file: string })
-  }
+	db: {
+		/** Seed the database from a JSON file. */
+		seed(input: { file: string })
+	}
 }
 ```
 
 - Commands render as **method signatures** so the shape matches both the direct call and
   `@run`. No-input commands render `name()`.
 - **No return type — by design.** In a call→observe loop a declared output type is dead weight;
-  and since argc validates *input only* and never checks handler returns, any declared output
+  and since argc validates _input only_ and never checks handler returns, any declared output
   type would be an **unverified claim that can drift from the real return** — worse than nothing.
   Method signatures render without a return annotation (valid TS, implicit `any`); the agent
   reads the actual shape from the output it gets back.
 - Keys are verbatim. A `'json' | 'table'` literal union renders as-is — the agent sees exactly
   what is accepted.
 - Command keys are identifiers (§2.3.1), so method names render **unquoted**.
-- **Input field keys are *not* identifier-constrained** (they mirror real payloads, e.g.
+- **Input field keys are _not_ identifier-constrained** (they mirror real payloads, e.g.
   `content-type`). The renderer **quotes non-identifier property names** so the output stays valid
   TS: `create(input: { "content-type"?: string; name: string })`. (Command keys = our naming,
   identifiers; input keys = domain data, quoted-when-needed.)
@@ -349,7 +350,7 @@ with an `error` field on stdout.
 
 **Invalid input** — the most important one. `issues` is the **normalized Standard-Schema issue
 list, embedded as-is** (per-issue `at` = dotted path, `message` = verbatim) — no bespoke error
-vocabulary, and portable across zod/arktype/valibot. Raw lib issues are *not* embedded (valibot's
+vocabulary, and portable across zod/arktype/valibot. Raw lib issues are _not_ embedded (valibot's
 path segments echo the whole input object and carry lib-specific fields). argc's own unknown-key
 precheck (§5) contributes issues in the same shape.
 

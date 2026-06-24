@@ -17,8 +17,8 @@ This skill is a recipe guide, not a complete command list. The CLI schema is
 the source of truth:
 
 ```bash
-{{APP_NAME}} --schema              # full typed spec
-{{APP_NAME}} --schema=.subcommand  # drill into one command group
+{{APP_NAME}} @schema              # full typed spec
+{{APP_NAME}} @schema .subcommand  # drill into one command group
 ```
 
 ## Command Reference
@@ -37,16 +37,16 @@ the source of truth:
      One happy path with a clear default beats a menu of options. -->
 
 ```bash
-{{APP_NAME}} hello --name world
+{{APP_NAME}} hello "{ name: 'world' }"
 ```
 
 ## Long or Structured Input
 
-Pass full JSON/JSON5 input instead of many flags:
+Pass one quoted JSON5 input object, or hand off a file for larger payloads:
 
 ```bash
-{{APP_NAME}} cmd --input '{ name: "alice" }'
-{{APP_NAME}} cmd --input @payload.json
+{{APP_NAME}} cmd "{ name: 'alice' }"
+{{APP_NAME}} cmd @payload.json
 ```
 
 ## Anti-Patterns

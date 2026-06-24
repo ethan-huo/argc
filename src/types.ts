@@ -5,43 +5,29 @@ import type {
 
 import type { SchemaExplorer } from './schema-explorer'
 
-// Re-export Standard Schema types
 export type { StandardJSONSchemaV1, StandardSchemaV1 }
 
-// Schema type: validation + JSON Schema generation
-// This is what argc requires - a schema that can both validate AND generate JSON Schema
 export type Schema<TInput = unknown, TOutput = TInput> = StandardSchemaV1<
 	TInput,
 	TOutput
 > &
 	StandardJSONSchemaV1<TInput, TOutput>
 
-// ============ Command Types ============
-
 export type CommandMeta = {
 	description?: string
 	examples?: string[]
-	aliases?: string[]
 	deprecated?: boolean
 	hidden?: boolean
-}
-
-export type ArgDef = {
-	name: string
-	description?: string
 }
 
 export type CommandDef<TInput extends Schema = Schema> = {
 	'~argc': {
 		input?: TInput
 		meta: CommandMeta
-		args?: ArgDef[]
 	}
 }
 
 export type AnyCommand = CommandDef<Schema>
-
-// ============ Group Types ============
 
 export type GroupMeta = {
 	description?: string
@@ -63,29 +49,21 @@ export function isGroup(x: unknown): x is AnyGroup {
 	return x !== null && typeof x === 'object' && '~argc.group' in x
 }
 
-// ============ Router Types ============
-
 export type Router = AnyCommand | AnyGroup | { [key: string]: Router }
 
-// ============ CLI Options ============
+export type ContextOutput<TContext extends Schema | undefined> =
+	TContext extends Schema ? StandardSchemaV1.InferOutput<TContext> : undefined
 
-export type CLIOptions<
-	TGlobals extends Schema = Schema,
-	TContext = undefined,
-> = {
+export type CLIOptions<TContext extends Schema | undefined = undefined> = {
 	name: string
 	version: string
 	description?: string
 	schemaExplorer?: SchemaExplorer
-	globals?: TGlobals
-	context?: (
-		globals: StandardSchemaV1.InferOutput<TGlobals>,
-	) => TContext | Promise<TContext>
+	context?: TContext
+	run?: boolean
 	hook?: false | HookTransport
 	hookTimeoutMs?: number
 }
-
-// ============ Handler Types ============
 
 export type HandlerMeta = {
 	path: string[]
@@ -103,12 +81,11 @@ export type HandlerOptions<TInput, TContext> = {
 
 export type Handler<TInput, TContext> = (
 	options: HandlerOptions<TInput, TContext>,
-) => void | Promise<void>
+) => unknown | Promise<unknown>
 
-// Recursive handler type matching router structure
-export type Handlers<T extends Router, TContext> =
+export type Handlers<T extends Router, TContext extends Schema | undefined> =
 	T extends CommandDef<infer TInput>
-		? Handler<StandardSchemaV1.InferOutput<TInput>, TContext>
+		? Handler<StandardSchemaV1.InferOutput<TInput>, ContextOutput<TContext>>
 		: T extends GroupDef<infer TChildren>
 			? {
 					[K in keyof TChildren]: TChildren[K] extends Router
@@ -119,13 +96,12 @@ export type Handlers<T extends Router, TContext> =
 					[K in keyof T]: T[K] extends Router ? Handlers<T[K], TContext> : never
 				}
 
-// ============ Run Config ============
-
-export type RunConfig<TSchema extends Router, TContext> = {
+export type RunConfig<
+	TSchema extends Router,
+	TContext extends Schema | undefined,
+> = {
 	handlers: Handlers<TSchema, TContext>
 }
-
-// ============ Hook Types ============
 
 export type HookErrorData = {
 	name?: string
@@ -166,43 +142,15 @@ export type HookEvent =
 
 export type HookTransport = (events: HookEvent[]) => void | Promise<void>
 
-// ============ Utilities ============
-
 export function isCommand(x: unknown): x is AnyCommand {
 	return x !== null && typeof x === 'object' && '~argc' in x
 }
 
-// ============ Inference Helpers ============
-
-/**
- * Infer all handler types from a schema. Useful when handlers are split across
- * multiple files.
- *
- * @example
- * 	;```ts
- * 	// schema.ts
- * 	export const schema = { get: c.meta(...).input(...), ... }
- * 	export type AppHandlers = InferHandlers<typeof schema>
- *
- * 	// commands/get.ts
- * 	import type { AppHandlers } from '../schema'
- * 	export const runGet: AppHandlers['get'] = ({ input }) => { ... }
- * 	```
- */
 export type InferHandlers<
 	TSchema extends Router,
-	TContext = unknown,
+	TContext extends Schema | undefined = undefined,
 > = Handlers<TSchema, TContext>
 
-/**
- * Infer the input type for a specific command path.
- *
- * @example
- * 	;```ts
- * 	type GetInput = InferInput<typeof schema, 'get'>
- * 	type UserCreateInput = InferInput<typeof schema, 'user.create'>
- * 	```
- */
 export type InferInput<TSchema extends Router, TPath extends string> =
 	TSchema extends GroupDef<infer TChildren>
 		? InferInputFromRouter<TChildren, TPath>
@@ -214,7 +162,6 @@ export type InferInput<TSchema extends Router, TPath extends string> =
 				? InferInputFromRouter<TSchema, TPath>
 				: never
 
-// Helper: navigate through a plain router object
 type InferInputFromRouter<
 	TRouter extends { [key: string]: Router },
 	TPath extends string,
@@ -228,34 +175,16 @@ type InferInputFromRouter<
 		? TRouter[TPath] extends CommandDef<infer TInput>
 			? StandardSchemaV1.InferOutput<TInput>
 			: TRouter[TPath] extends GroupDef
-				? never // Group needs subcommand
+				? never
 				: never
 		: never
 
-/**
- * Infer the handler function type for a specific command path.
- *
- * @example
- * 	;```ts
- * 	type GetHandler = InferHandler<typeof schema, 'get'>
- * 	export const runGet: GetHandler = ({ input }) => { ... }
- * 	```
- */
 export type InferHandler<
 	TSchema extends Router,
 	TPath extends string,
-	TContext = unknown,
-> = Handler<InferInput<TSchema, TPath>, TContext>
+	TContext extends Schema | undefined = undefined,
+> = Handler<InferInput<TSchema, TPath>, ContextOutput<TContext>>
 
-/**
- * Flatten nested handlers to dot-notation paths.
- *
- * @example
- * 	;```ts
- * 	type AppHandlers = FlatHandlers<typeof app.Handlers>
- * 	const runGet: AppHandlers['user.get'] = ...  // instead of ['user']['get']
- * 	```
- */
 export type FlatHandlers<T, Prefix extends string = ''> =
 	T extends Handler<infer I, infer C>
 		? { [K in Prefix]: Handler<I, C> }
@@ -266,41 +195,14 @@ export type FlatHandlers<T, Prefix extends string = ''> =
 				>
 			}[keyof T & string]
 
-// Convert union to intersection: { a: 1 } | { b: 2 } → { a: 1 } & { b: 2 }
 type UnionToIntersection<U> = (
 	U extends unknown ? (k: U) => void : never
 ) extends (k: infer I) => void
 	? I
 	: never
 
-// Merge intersection into single object type
 type Simplify<T> = { [K in keyof T]: T[K] } & {}
 
-/**
- * Flatten nested handlers to dot-notation paths (as single object type).
- *
- * @example
- * 	;```ts
- * 	export type AppHandlers = FlattenHandlers<typeof app.Handlers>
- *
- * 	// commands/get.ts
- * 	const runGet: AppHandlers['user.get'] = ({ input, context }) => { ... }
- * 	```
- */
 export type FlattenHandlers<T> = Simplify<UnionToIntersection<FlatHandlers<T>>>
 
-/**
- * Combined handlers: both nested access and dot-notation paths.
- *
- * @example
- * 	;```ts
- * 	type AppHandlers = typeof app.Handlers
- *
- * 	// Dot-notation for single handlers
- * 	const runGet: AppHandlers['user.get'] = ...
- *
- * 	// Nested access for handler groups
- * 	const userHandlers: AppHandlers['user'] = { get: ..., create: ... }
- * 	```
- */
 export type CombinedHandlers<T> = T & FlattenHandlers<T>

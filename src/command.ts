@@ -1,5 +1,4 @@
 import type {
-	ArgDef,
 	CommandDef,
 	CommandMeta,
 	GroupDef,
@@ -35,18 +34,10 @@ export class CommandBuilder<
 			meta: { ...this['~argc'].meta, ...meta },
 		})
 	}
-
-	args(...args: (string | ArgDef)[]): CommandBuilder<TInput> {
-		return new CommandBuilder({
-			...this['~argc'],
-			args: args.map((a) => (typeof a === 'string' ? { name: a } : a)),
-		})
-	}
 }
 
 export const c = new CommandBuilder()
 
-// Group builder for defining command groups with metadata
 export class GroupBuilder<
 	TChildren extends { [key: string]: Router } = Record<string, never>,
 > implements GroupDef<TChildren> {

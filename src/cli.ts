@@ -5,6 +5,7 @@ import type {
 	AnyCommand,
 	CLIOptions,
 	CombinedHandlers,
+	ContextOutput,
 	Handlers,
 	HookTransport,
 	Router,
@@ -13,7 +14,6 @@ import type {
 	StandardSchemaV1,
 } from './types'
 
-import { coerceCliInput } from './coerce'
 import {
 	complete,
 	detectCurrentShell,
@@ -21,851 +21,577 @@ import {
 	getCompletionReloadHint,
 	installCompletionScript,
 } from './complete'
-import { normalizeArgName, showHelp, showValidationError } from './help'
+import { showHelp, renderNamespaceCommands } from './help'
 import { createHookDispatcher } from './hook'
-import { camelCase } from './naming'
-import { parseArgv } from './parser'
+import { parseInputSource, type InputSource } from './parser'
+import {
+	ArgcError,
+	formatRuntimeError,
+	renderError,
+	renderResult,
+	type ErrorIssue,
+	withStdoutRerouted,
+} from './render'
 import { getRouterChildren, findHandler } from './router'
-import { countSchemaCommands, extractCliInputParamsDetailed } from './schema'
+import { extractCliInputParamsDetailed, isValidIdentifier } from './schema'
 import { createDefaultSchemaExplorer } from './schema-explorer'
 import {
-	expandHome,
+	parseRunSource,
 	readStdin,
-	formatRuntimeError,
+	readTextInput,
 	runScriptMode,
 } from './script'
-import { formatSuggestion, suggestSimilar } from './suggest'
-import { fmt as colors } from './terminal'
-import { isCommand } from './types'
+import { suggestSimilar } from './suggest'
+import { isCommand, isGroup } from './types'
 
-// Reserved global option names that conflict with built-in flags
-const RESERVED_GLOBALS = new Set([
-	'help',
-	'h',
-	'version',
-	'v',
-	'schema',
-	'input',
-	'run',
-	'completions',
-	'_complete',
-])
-
-function parseCompletionIndex(flag: unknown): number {
-	if (typeof flag === 'number' && Number.isInteger(flag)) {
-		return flag
-	}
-
-	if (typeof flag === 'string') {
-		// The argv parser preserves explicit values as strings, so CLI internals
-		// that need numeric semantics must opt into that conversion explicitly.
-		const parsed = Number.parseInt(flag, 10)
-		if (!Number.isNaN(parsed)) {
-			return parsed
-		}
-	}
-
-	return 0
+type ParsedCall = {
+	commandPath: string[]
+	command: AnyCommand
+	input: InputSource
+	context: InputSource
+	raw: string[]
 }
 
-function mergeFlagValue(
-	flags: Record<string, unknown>,
-	key: string,
-	value: unknown,
-): void {
-	const existing = flags[key]
-	if (existing === undefined) {
-		flags[key] = value
-		return
-	}
-	if (Array.isArray(existing)) {
-		existing.push(value)
-		return
-	}
-	flags[key] = [existing, value]
-}
+const SYSTEM_CONTEXT: InputSource = { kind: 'omitted' }
 
 export class CLI<
 	TSchema extends Router,
-	TGlobals extends Schema = Schema,
-	TContext = undefined,
+	TContext extends Schema | undefined = undefined,
 > {
-	// Phantom type for external inference (e.g., typeof app.Handlers)
-	// Combined: both nested ['user']['get'] and flat ['user.get'] access
-	declare Handlers: CombinedHandlers<Handlers<TSchema, Awaited<TContext>>>
+	declare Handlers: CombinedHandlers<Handlers<TSchema, TContext>>
 
 	private schema: TSchema
-	private options: CLIOptions<TGlobals, TContext>
+	private options: CLIOptions<TContext>
 	private stdinTextPromise: Promise<string> | undefined
 
-	constructor(schema: TSchema, options: CLIOptions<TGlobals, TContext>) {
+	constructor(schema: TSchema, options: CLIOptions<TContext>) {
 		this.schema = schema
 		this.options = options
-
-		// Check for reserved global option names
-		if (options.globals) {
-			const globalParams = extractCliInputParamsDetailed(options.globals)
-			const conflicts = globalParams
-				.map((p) => p.name)
-				.filter((name) => RESERVED_GLOBALS.has(name))
-			if (conflicts.length > 0) {
-				console.error(colors.error('Invalid global options configuration'))
-				console.error()
-				console.error(
-					`  Reserved names: ${conflicts.map((n) => colors.option(`--${n}`)).join(', ')}`,
-				)
-				console.error(
-					colors.dim(
-						'  These conflict with built-in flags (-h, -v, --help, --version, --schema, --input, --run, --completions, --_complete)',
-					),
-				)
-				process.exit(1)
-			}
-		}
+		this.assertValidCommandKeys(schema, [])
 	}
 
 	async run(
-		runOptions: RunConfig<TSchema, Awaited<TContext>>,
+		runOptions: RunConfig<TSchema, TContext>,
 		argv: string[] = process.argv.slice(2),
 	): Promise<void> {
-		let parsed: ReturnType<typeof parseArgv>
 		try {
-			parsed = parseArgv(argv)
+			await this.runInner(runOptions, argv)
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error)
-			console.error(colors.error(`invalid arguments: ${message}`))
+			if (error instanceof ArgcError) {
+				process.stderr.write(renderError(error.envelope))
+				process.exit(1)
+			}
+			process.stderr.write(
+				renderError({
+					error: 'RUNTIME_ERROR',
+					detail: formatRuntimeError(error),
+				}),
+			)
 			process.exit(1)
 		}
+	}
 
-		// Handle shell completion (must be before all other flag handling)
-		if (parsed.flags._complete !== undefined) {
-			const cword = parseCompletionIndex(parsed.flags._complete)
-			const results = complete(this.schema, this.options.globals, {
-				words: parsed.positionals,
-				current: cword,
-			})
-			for (const r of results) console.log(r)
+	private async runInner(
+		runOptions: RunConfig<TSchema, TContext>,
+		argv: string[],
+	): Promise<void> {
+		if (argv.length === 0 || (argv.length === 1 && argv[0] === '--help')) {
+			showHelp(this.options)
+			return
+		}
+		if (argv.length === 1 && argv[0] === '--version') {
+			process.stdout.write(`${this.options.version}\n`)
+			return
+		}
+		if (argv[0] === '--_complete') {
+			const cword = Number.parseInt(argv[1] ?? '0', 10)
+			const sep = argv.indexOf('--')
+			const words = sep === -1 ? argv.slice(2) : argv.slice(sep + 1)
+			for (const result of complete(this.schema, { words, current: cword })) {
+				process.stdout.write(`${result}\n`)
+			}
+			return
+		}
+		if (argv[0]?.startsWith('@')) {
+			await this.runBuiltin(runOptions, argv)
 			return
 		}
 
-		// Handle --help (allowed at any level)
-		if (parsed.flags.help || parsed.flags.h) {
-			const { commandPath, router } = this.resolveRouter(parsed.positionals)
-			showHelp(this.options, commandPath, router)
+		const parsed = this.parseCall(argv)
+		const context = await this.resolveContext(parsed.context)
+		const result = await this.invokeCommand(
+			parsed.commandPath,
+			parsed.command,
+			parsed.input,
+			context,
+			runOptions.handlers as Record<string, unknown>,
+			parsed.raw,
+		)
+		process.stdout.write(renderResult(result))
+	}
+
+	private async runBuiltin(
+		runOptions: RunConfig<TSchema, TContext>,
+		argv: string[],
+	): Promise<void> {
+		const name = argv[0]
+		if (name === '@schema') {
+			await this.runSchema(argv.slice(1))
 			return
 		}
-
-		// Handle scripting mode (global): --run
-		if (parsed.flags.run !== undefined) {
-			if (parsed.flags.schema) {
-				console.log(colors.error("Invalid argument '--schema'"))
-				process.exit(1)
+		if (name === '@completions') {
+			await this.runCompletions(argv.slice(1))
+			return
+		}
+		if (name === '@run') {
+			if (this.options.run === false) {
+				throw new ArgcError({
+					error: 'RUN_DISABLED',
+					$hint: `this tool was built with { run: false }`,
+				})
 			}
-			if (parsed.flags.version || parsed.flags.v) {
-				console.log(colors.error("Invalid argument '--version'"))
-				process.exit(1)
-			}
+			const parsed = this.parseRun(argv)
+			const context = await this.resolveContext(SYSTEM_CONTEXT)
 			await runScriptMode(
 				this.schema,
-				this.options as {
-					globals?: Schema
-					context?: (globals: unknown) => unknown | Promise<unknown>
-				},
 				runOptions.handlers as Record<string, unknown>,
-				parsed,
-				this.options.name,
 				this.createHookDispatcher(),
+				{
+					source: parsed.source,
+					json: parsed.json,
+					args: parsed.args,
+					raw: argv,
+					context,
+					appName: this.options.name,
+				},
 			)
 			return
 		}
+		throw new ArgcError({
+			error: 'UNKNOWN_COMMAND',
+			got: name,
+			$hint: `${this.options.name} @schema`,
+		})
+	}
 
-		// Global flags only work at root level (no positionals yet)
-		const isRootLevel = parsed.positionals.length === 0
-
-		// Handle --completions (root only)
-		if (parsed.flags.completions !== undefined) {
-			if (isRootLevel) {
-				if (parsed.flags.completions === true) {
-					const shell = detectCurrentShell()
-					if (!shell) {
-						console.error(
-							colors.error(
-								'Could not detect shell. Pass one explicitly: --completions bash|zsh|fish',
-							),
-						)
-						process.exit(1)
-					}
-
-					try {
-						const path = await installCompletionScript(shell, this.options.name)
-						console.log(
-							colors.success(`Installed ${shell} completions to ${path}`),
-						)
-						console.log(colors.dim(getCompletionReloadHint(shell, path)))
-						return
-					} catch (error) {
-						const message =
-							error instanceof Error ? error.message : String(error)
-						console.error(
-							colors.error(`Failed to install completions: ${message}`),
-						)
-						process.exit(1)
-					}
-				}
-
-				const shell =
-					typeof parsed.flags.completions === 'string'
-						? parsed.flags.completions
-						: null
-				const script = shell
-					? generateCompletionScript(shell, this.options.name)
-					: null
-				if (!script) {
-					console.error(
-						colors.error(
-							shell
-								? `Unknown shell: ${shell}. Supported: bash, zsh, fish`
-								: 'Could not detect shell. Pass one explicitly: --completions bash|zsh|fish',
-						),
-					)
-					process.exit(1)
-				}
-				console.log(script)
-				return
+	private parseRun(argv: string[]): {
+		source: ReturnType<typeof parseRunSource>
+		json: boolean
+		args: string[]
+	} {
+		const sourceToken = argv[1]
+		let json = false
+		let args: string[] = []
+		for (let index = 2; index < argv.length; index++) {
+			const token = argv[index]!
+			if (token === '--') {
+				args = argv.slice(index + 1)
+				break
 			}
-			// Otherwise fall through - will be treated as command flag
-		}
-
-		// Handle --version (root only)
-		if (parsed.flags.version || parsed.flags.v) {
-			if (isRootLevel) {
-				console.log(this.options.version)
-				return
+			if (token === '--json') {
+				json = true
+				continue
 			}
-			// Otherwise fall through - will be treated as unknown flag
+			throw new ArgcError({
+				error: 'RUNTIME_ERROR',
+				detail: `unknown @run option: ${token}`,
+			})
 		}
+		return { source: parseRunSource(sourceToken), json, args }
+	}
 
-		// Handle --schema (root only, for AI agents)
-		if (parsed.flags.schema) {
-			if (isRootLevel) {
-				const schemaExplorer =
-					this.options.schemaExplorer ?? createDefaultSchemaExplorer()
-				let selection: SchemaSelectionResult | null = null
-				const renderOptions: {
-					name: string
-					description?: string
-					globals?: TGlobals
+	private async runSchema(argv: string[]): Promise<void> {
+		if (argv.length > 1) {
+			throw new ArgcError({
+				error: 'RUNTIME_ERROR',
+				detail: '@schema accepts at most one selector',
+			})
+		}
+		const selectorValue = argv[0]
+		const schemaExplorer =
+			this.options.schemaExplorer ?? createDefaultSchemaExplorer()
+		let selection: SchemaSelectionResult | null = null
+		let schemaOutput = schemaExplorer.render(this.schema, this.schemaOptions())
+		if (selectorValue) {
+			selection = schemaExplorer.select(this.schema, selectorValue)
+			if (selection.empty) {
+				throw new ArgcError({
+					error: 'UNKNOWN_COMMAND',
+					got: selectorValue,
+					$hint: `${this.options.name} @schema`,
+				})
+			}
+			schemaOutput = schemaExplorer.render(
+				selection.schema,
+				this.schemaOptions(),
+			)
+		}
+		const lines = schemaOutput.split('\n')
+		if (lines.length > schemaExplorer.maxLines) {
+			const outlineSchema = selection === null ? this.schema : selection.schema
+			process.stdout.write(
+				`// App is large: ${lines.length} lines across ${this.countCommands(outlineSchema)} commands. Drill in with a selector.\n\n`,
+			)
+			for (const line of schemaExplorer.outline(outlineSchema)) {
+				process.stdout.write(`${line}\n`)
+			}
+			const hint = schemaExplorer.hint(outlineSchema)
+			if (hint)
+				process.stdout.write(`\nnext: ${this.options.name} @schema .${hint}\n`)
+			return
+		}
+		process.stdout.write(`${schemaOutput}\n`)
+	}
+
+	private async runCompletions(argv: string[]): Promise<void> {
+		if (argv.length === 0) {
+			const shell = detectCurrentShell()
+			if (!shell) {
+				throw new ArgcError({
+					error: 'RUNTIME_ERROR',
+					detail: 'could not detect shell; pass bash, zsh, or fish',
+				})
+			}
+			const path = await installCompletionScript(shell, this.options.name)
+			process.stdout.write(
+				`installed: ${path}\n$hint: ${getCompletionReloadHint(shell, path)}\n`,
+			)
+			return
+		}
+		if (argv.length > 1) {
+			throw new ArgcError({
+				error: 'RUNTIME_ERROR',
+				detail: '@completions accepts at most one shell',
+			})
+		}
+		const script = generateCompletionScript(argv[0]!, this.options.name)
+		if (!script) {
+			throw new ArgcError({
+				error: 'RUNTIME_ERROR',
+				detail: `unknown shell: ${argv[0]}`,
+			})
+		}
+		process.stdout.write(`${script}\n`)
+	}
+
+	private parseCall(argv: string[]): ParsedCall {
+		let current: Router = this.schema
+		const commandPath: string[] = []
+		let index = 0
+		while (index < argv.length && !isCommand(current)) {
+			const token = argv[index]!
+			if (
+				token === '--context' ||
+				token.startsWith('{') ||
+				token.startsWith('@') ||
+				token === '-'
+			) {
+				break
+			}
+			const children = getRouterChildren(current)
+			if (!(token in children)) {
+				const similar = suggestSimilar(token, Object.keys(children))[0]
+				const envelope: {
+					error: 'UNKNOWN_COMMAND'
+					[key: string]: unknown
 				} = {
-					name: this.options.name,
+					error: 'UNKNOWN_COMMAND',
+					got: [...commandPath, token].join(' '),
+					$hint: `${this.options.name} @schema ${
+						commandPath.length > 0 ? `.${commandPath.join('.')}` : ''
+					}`.trim(),
 				}
-				if (this.options.description !== undefined) {
-					renderOptions.description = this.options.description
-				}
-				if (this.options.globals !== undefined) {
-					renderOptions.globals = this.options.globals
-				}
-				let schemaOutput = schemaExplorer.render(this.schema, renderOptions)
-				const selectorValue =
-					typeof parsed.flags.schema === 'string' ? parsed.flags.schema : null
-				if (selectorValue) {
-					try {
-						selection = schemaExplorer.select(this.schema, selectorValue)
-						if (selection.empty) {
-							console.log(
-								colors.error(`No schema matches selector: ${selectorValue}`),
-							)
-							process.exit(1)
-						}
-						schemaOutput = schemaExplorer.render(
-							selection.schema,
-							renderOptions,
-						)
-					} catch (error) {
-						const message =
-							error instanceof Error ? error.message : String(error)
-						console.log(colors.error(`Invalid schema selector: ${message}`))
-						process.exit(1)
-					}
-				}
-				const maxLines = schemaExplorer.maxLines
-				const lines = schemaOutput.split('\n')
-
-				if (lines.length > maxLines) {
-					const outlineSchema =
-						selection === null ? this.schema : selection.schema
-					const commandCount = countSchemaCommands(outlineSchema)
-					console.log(
-						`Schema status: compact outline only; full schema is ${lines.length} lines across ${commandCount} commands/tools.`,
-					)
-					console.log('Use a narrower selector to continue exploration.')
-					console.log()
-					for (const line of schemaExplorer.outline(outlineSchema)) {
-						console.log(line)
-					}
-					console.log()
-					const hintExample = schemaExplorer.hint(outlineSchema)
-					if (hintExample) {
-						console.log(`next: --schema=.${hintExample}`)
-					}
-					console.log('next: --schema=.namespace.{command1,command2}')
-					console.log(
-						'selector syntax: path, ."key", .["key"], *, {a,b}, ..name',
-					)
-					return
-				}
-
-				// Dim comment lines for readability
-				for (const line of lines) {
-					if (
-						line.trimStart().startsWith('//') ||
-						line.startsWith('Schema status:') ||
-						line.startsWith('CLI Syntax:') ||
-						line.startsWith('  flags:') ||
-						line.startsWith('  arrays:') ||
-						line.startsWith('  objects:')
-					) {
-						console.log(colors.dim(line))
-					} else {
-						console.log(line)
-					}
-				}
-				return
+				if (similar) envelope.did_you_mean = [...commandPath, similar].join(' ')
+				throw new ArgcError(envelope)
 			}
-			// Otherwise fall through
+			commandPath.push(token)
+			current = children[token]!
+			index++
 		}
 
-		// Extract command from positionals
-		const { commandPath, command, remaining, router, failedAt } =
-			this.extractCommand(parsed.positionals)
-
-		// Check for invalid root-only flags used with subcommands
-		if (commandPath.length > 0) {
-			if (parsed.flags.version || parsed.flags.v) {
-				console.log(colors.error("Invalid argument '-v'"))
-				console.log()
-				showHelp(this.options, commandPath, router)
-				process.exit(1)
+		if (!isCommand(current)) {
+			if (commandPath.length === 0) {
+				showHelp(this.options)
+				throw new ArgcError({
+					error: 'NOT_A_COMMAND',
+					namespace: '',
+					$hint: `${this.options.name} @schema`,
+				})
 			}
-			if (parsed.flags.schema) {
-				console.log(colors.error("Invalid argument '--schema'"))
-				console.log()
-				showHelp(this.options, commandPath, router)
-				process.exit(1)
-			}
+			throw new ArgcError({
+				error: 'NOT_A_COMMAND',
+				namespace: commandPath.join(' '),
+				commands: renderNamespaceCommands(current, commandPath),
+				$hint: `${this.options.name} @schema .${commandPath.join('.')}`,
+			})
 		}
 
-		if (!command) {
-			if (failedAt !== null) {
-				// User typed something wrong - git style message
-				const availableCommands = this.getAvailableCommands(router)
-				const similar = suggestSimilar(failedAt, availableCommands)
-				console.log(
-					`${this.options.name}: '${failedAt}' is not a ${this.options.name} command. See '${this.options.name} --help'.`,
-				)
-				const suggestionLines = formatSuggestion(similar)
-				if (suggestionLines.length > 0) {
-					console.log()
-					for (const line of suggestionLines) {
-						console.log(line)
-					}
+		let input: InputSource = { kind: 'omitted' }
+		let context: InputSource = SYSTEM_CONTEXT
+		let seenInput = false
+
+		while (index < argv.length) {
+			const token = argv[index]!
+			if (token === '--context') {
+				index++
+				if (index >= argv.length) {
+					throw new ArgcError({
+						error: 'BAD_INPUT_JSON',
+						detail: 'missing value after --context',
+					})
 				}
-				process.exit(1)
-			} else {
-				// Reached a group without specifying subcommand, show group help
-				showHelp(this.options, commandPath, router)
-				process.exit(commandPath.length === 0 ? 0 : 1)
+				context = parseInputSource(argv[index]!)
+				index++
+				continue
 			}
+			if (token.startsWith('--')) {
+				throw new ArgcError({
+					error: 'UNKNOWN_COMMAND',
+					got: token,
+					$hint: `${this.options.name} @schema .${commandPath.join('.')}`,
+				})
+			}
+			if (seenInput) {
+				throw new ArgcError({
+					error: 'TWO_INPUTS',
+					$hint: `a command takes one input object; pass context via --context:\n${this.options.name} ${commandPath.join(
+						' ',
+					)} <input> --context <ctx>`,
+				})
+			}
+			input = parseInputSource(token)
+			seenInput = true
+			index++
 		}
 
-		// Find handler
-		const handler = findHandler(
+		return {
 			commandPath,
-			runOptions.handlers as Record<string, unknown>,
-		)
+			command: current,
+			input,
+			context,
+			raw: argv,
+		}
+	}
+
+	private async invokeCommand(
+		commandPath: string[],
+		command: AnyCommand,
+		inputSource: InputSource,
+		context: ContextOutput<TContext>,
+		handlers: Record<string, unknown>,
+		raw: string[],
+	): Promise<unknown> {
+		const handler = findHandler(commandPath, handlers)
 		if (!handler) {
-			console.error(
-				colors.error(
-					`No handler for command: ${colors.command(commandPath.join(' '))}`,
-				),
-			)
-			process.exit(1)
+			throw new ArgcError({
+				error: 'RUNTIME_ERROR',
+				detail: `no handler for command: ${commandPath.join(' ')}`,
+			})
 		}
-
-		const commandDef = command['~argc']
-		const inputParams = commandDef.input
-			? extractCliInputParamsDetailed(commandDef.input)
-			: []
-		const inputFieldNames = new Set(inputParams.map((p) => p.name))
-		const globalOptionNames = this.getGlobalOptionNames()
-		const cliFieldNames = new Set([...inputFieldNames, ...globalOptionNames])
-		const allowSystemInput = !inputFieldNames.has('input')
-		const commandFlags = this.normalizeFlagsForFields(
-			parsed.flags,
-			cliFieldNames,
-		)
-		const allowedFlagNames = allowSystemInput
-			? new Set([...cliFieldNames, 'input'])
-			: cliFieldNames
-		this.assertKnownFlags(commandFlags, allowedFlagNames, commandPath)
-		this.assertKnownPositionals(remaining, commandDef.args, commandPath)
-
-		const { flagsWithoutInput, inputFlag } = allowSystemInput
-			? this.extractInputFlag(commandFlags)
-			: { flagsWithoutInput: commandFlags, inputFlag: undefined }
-		if (allowSystemInput && inputFlag !== undefined) {
-			this.assertJsonInputUsage(flagsWithoutInput, remaining)
-		}
-		let input = this.buildInput(flagsWithoutInput, remaining, commandDef.args)
-		if (allowSystemInput && inputFlag !== undefined) {
-			input = await this.parseJsonInput(inputFlag)
-			this.assertKnownJsonInput(input, inputFieldNames, commandPath)
-		} else {
-			// Only argv tokens need adaptation; --input is already structured schema input.
-			input = coerceCliInput(commandDef.input, input)
-		}
-
-		// Validate input with schema
-		let validatedInput = input
-		if (commandDef.input) {
-			const result = await commandDef.input['~standard'].validate(input)
-			if (result.issues) {
-				// Collect error fields
-				const errorFields = new Set<string>()
-				const errorMessages: Record<string, string> = {}
-				for (const issue of result.issues) {
-					const field = issue.path
-						?.map((p: { key: PropertyKey } | PropertyKey) =>
-							typeof p === 'object' ? p.key : p,
-						)
-						?.join('.')
-					if (field) {
-						errorFields.add(field)
-						errorMessages[field] = issue.message
-					}
-				}
-
-				// Show validation error summary + details
-				console.error(colors.error('invalid arguments'))
-				console.error()
-				showValidationError(
-					this.options.name,
-					commandPath,
-					command,
-					errorFields,
-					errorMessages,
-				)
-				process.exit(1)
-			}
-			validatedInput = result.value as Record<string, unknown>
-		}
-
-		// Parse and validate globals
-		let globals = flagsWithoutInput as StandardSchemaV1.InferOutput<TGlobals>
-		if (this.options.globals) {
-			const globalFlags = coerceCliInput(
-				this.options.globals,
-				this.normalizeFlagsForFields(
-					flagsWithoutInput,
-					this.getGlobalOptionNames(),
-				),
-			)
-			const result =
-				await this.options.globals['~standard'].validate(globalFlags)
-			if (result.issues) {
-				console.error(colors.error('Global options validation failed'))
-				for (const issue of result.issues) {
-					const path = issue.path
-						?.map((p: { key: PropertyKey } | PropertyKey) =>
-							typeof p === 'object' ? p.key : p,
-						)
-						?.join('.')
-					console.error(
-						`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
-					)
-				}
-				process.exit(1)
-			}
-			globals = result.value as StandardSchemaV1.InferOutput<TGlobals>
-		}
-
+		const input = await this.resolveInput(inputSource)
+		const validatedInput = await this.validateInput(commandPath, command, input)
 		const hookDispatcher = this.createHookDispatcher()
 		const hookCall = hookDispatcher.createCall(
 			commandPath,
 			commandPath.join(' '),
 		)
 		let ok = false
-		let shouldExit = false
 		try {
-			// Build context from options
-			let context: unknown = undefined
-			if (this.options.context) {
-				context = await this.options.context(globals)
-			}
-
-			// Call handler
-			await handler({
-				input: validatedInput,
-				context,
-				meta: {
-					path: commandPath,
-					command: commandPath.join(' '),
-					raw: parsed.raw,
-					callId: hookCall.callId,
-				},
-				emit: hookCall.emit,
+			const result = await withStdoutRerouted(async () => {
+				return await handler({
+					input: validatedInput,
+					context,
+					meta: {
+						path: commandPath,
+						command: commandPath.join(' '),
+						raw,
+						callId: hookCall.callId,
+					},
+					emit: hookCall.emit,
+				})
 			})
 			ok = true
+			return result
 		} catch (error) {
 			hookCall.error(error)
-			console.error(colors.error(formatRuntimeError(error)))
-			shouldExit = true
+			throw error
 		} finally {
 			hookCall.end(ok)
 			await hookDispatcher.drain()
 		}
+	}
 
-		if (shouldExit) {
-			process.exit(1)
+	private async resolveInput(source: InputSource): Promise<unknown> {
+		if (source.kind === 'omitted') return {}
+		let raw: string
+		if (source.kind === 'stdin') {
+			raw = await this.readStdinText()
+		} else if (source.kind === 'file') {
+			raw = await readTextInput(source.path)
+		} else {
+			raw = source.value
 		}
-	}
-
-	private resolveRouter(positionals: string[]): {
-		commandPath: string[]
-		router: Router
-	} {
-		let current: Router = this.schema
-		const commandPath: string[] = []
-
-		for (const segment of positionals) {
-			if (isCommand(current)) {
-				break
-			}
-			const children = getRouterChildren(current)
-			if (segment in children) {
-				commandPath.push(segment)
-				current = children[segment]!
-			} else {
-				break
-			}
-		}
-
-		return { commandPath, router: current }
-	}
-
-	private extractCommand(positionals: string[]): {
-		commandPath: string[]
-		command: AnyCommand | null
-		remaining: string[]
-		router: Router
-		failedAt: string | null
-	} {
-		let current: Router = this.schema
-		const commandPath: string[] = []
-
-		for (let i = 0; i < positionals.length; i++) {
-			const segment = positionals[i]!
-
-			if (isCommand(current)) {
-				return {
-					commandPath,
-					command: current,
-					remaining: positionals.slice(i),
-					router: current,
-					failedAt: null,
-				}
-			}
-
-			const children = getRouterChildren(current)
-			// Try direct match first
-			if (segment in children) {
-				commandPath.push(segment)
-				current = children[segment]!
-			} else {
-				// Try alias match
-				const aliasMatch = this.findByAlias(children, segment)
-				if (aliasMatch) {
-					commandPath.push(aliasMatch.name)
-					current = aliasMatch.router
-				} else {
-					// Failed to match - return current router for suggestions
-					return {
-						commandPath,
-						command: null,
-						remaining: [],
-						router: current,
-						failedAt: segment,
-					}
-				}
-			}
-		}
-
-		if (isCommand(current)) {
-			return {
-				commandPath,
-				command: current,
-				remaining: [],
-				router: current,
-				failedAt: null,
-			}
-		}
-
-		// Reached a router (group), not a command
-		return {
-			commandPath,
-			command: null,
-			remaining: [],
-			router: current,
-			failedAt: null,
-		}
-	}
-
-	private getAvailableCommands(router: Router): string[] {
-		if (isCommand(router)) return []
-		return Object.keys(getRouterChildren(router))
-	}
-
-	private buildInput(
-		flags: Record<string, unknown>,
-		positionals: string[],
-		argDefs?: { name: string }[],
-	): Record<string, unknown> {
-		const input: Record<string, unknown> = { ...flags }
-
-		if (argDefs) {
-			for (let i = 0; i < argDefs.length; i++) {
-				const argName = argDefs[i]!.name
-				const isVariadic = argName.endsWith('...')
-				const normalized = normalizeArgName(argName)
-
-				if (isVariadic) {
-					if (i !== argDefs.length - 1) {
-						console.log(
-							colors.error('Invalid args: variadic argument must be last'),
-						)
-						process.exit(1)
-					}
-					input[normalized] = positionals.slice(i)
-					return input
-				}
-
-				if (i < positionals.length) {
-					input[normalized] = positionals[i]!
-				}
-			}
-		}
-
-		if (positionals.length > (argDefs?.length ?? 0)) {
-			input._positionals = positionals.slice(argDefs?.length ?? 0)
-		}
-
-		return input
-	}
-
-	private assertKnownFlags(
-		flags: Record<string, unknown>,
-		allowedFields: Set<string>,
-		commandPath: string[],
-	): void {
-		const unknown = Object.keys(flags).filter(
-			(name) => !allowedFields.has(name),
-		)
-		if (unknown.length === 0) return
-
-		this.showUnknownArguments(
-			unknown.map((name) => `--${name}`),
-			commandPath,
-		)
-	}
-
-	private assertKnownPositionals(
-		positionals: string[],
-		argDefs: { name: string }[] | undefined,
-		commandPath: string[],
-	): void {
-		const variadicIndex = argDefs?.findIndex((arg) => arg.name.endsWith('...'))
-		if (
-			variadicIndex !== undefined &&
-			variadicIndex !== -1 &&
-			variadicIndex !== (argDefs?.length ?? 0) - 1
-		) {
-			console.log(colors.error('Invalid args: variadic argument must be last'))
-			process.exit(1)
-		}
-
-		if (!argDefs || argDefs.length === 0) {
-			if (positionals.length === 0) return
-			this.showUnknownArguments(positionals, commandPath)
-			return
-		}
-
-		const hasVariadic = argDefs[argDefs.length - 1]?.name.endsWith('...')
-		if (hasVariadic || positionals.length <= argDefs.length) return
-
-		this.showUnknownArguments(positionals.slice(argDefs.length), commandPath)
-	}
-
-	private assertKnownJsonInput(
-		input: Record<string, unknown>,
-		inputFieldNames: Set<string>,
-		commandPath: string[],
-	): void {
-		const unknown = Object.keys(input).filter(
-			(name) => !inputFieldNames.has(name),
-		)
-		if (unknown.length === 0) return
-
-		// Standard Schema libraries may strip unknown keys by default; argc must
-		// reject them before validation so agent-hallucinated parameters fail loudly.
-		this.showUnknownArguments(
-			unknown.map((name) => `--input.${name}`),
-			commandPath,
-		)
-	}
-
-	private showUnknownArguments(args: string[], commandPath: string[]): never {
-		const label = args.length === 1 ? 'Unknown argument' : 'Unknown arguments'
-		console.error(colors.error(`${label}: ${args.join(', ')}`))
-		console.error()
-		const cmdName =
-			commandPath.length > 0
-				? `${this.options.name} ${commandPath.join(' ')}`
-				: this.options.name
-		console.error(colors.dim(`Run '${cmdName} --help' for full usage.`))
-		process.exit(1)
-	}
-
-	private normalizeFlagsForFields(
-		flags: Record<string, unknown>,
-		fieldNames: Set<string>,
-	): Record<string, unknown> {
-		const normalized: Record<string, unknown> = {}
-		for (const [key, value] of Object.entries(flags)) {
-			const field = this.resolveFlagFieldName(key, fieldNames)
-			mergeFlagValue(normalized, field, value)
-		}
-		return normalized
-	}
-
-	private resolveFlagFieldName(key: string, fieldNames: Set<string>): string {
-		if (fieldNames.has(key)) return key
-
-		const camel = camelCase(key)
-		if (fieldNames.has(camel)) return camel
-
-		return key
-	}
-
-	private extractInputFlag(flags: Record<string, unknown>): {
-		flagsWithoutInput: Record<string, unknown>
-		inputFlag: unknown | undefined
-	} {
-		const { input, ...rest } = flags as Record<string, unknown>
-		return { flagsWithoutInput: rest, inputFlag: input }
-	}
-
-	private assertJsonInputUsage(
-		flagsWithoutInput: Record<string, unknown>,
-		positionals: string[],
-	): void {
-		const globalNames = this.getGlobalOptionNames()
-		const nonGlobalFlags = Object.keys(flagsWithoutInput).filter(
-			(name) => !globalNames.has(name),
-		)
-
-		if (positionals.length === 0 && nonGlobalFlags.length === 0) return
-
-		console.log(colors.error('Invalid --input usage'))
-		console.log()
-		if (positionals.length > 0) {
-			console.log('  Cannot use positional arguments with --input')
-		}
-		if (nonGlobalFlags.length > 0) {
-			console.log(
-				`  Cannot use flags with --input: ${nonGlobalFlags.map((name) => `--${name}`).join(', ')}`,
-			)
-		}
-		process.exit(1)
-	}
-
-	private getGlobalOptionNames(): Set<string> {
-		if (!this.options.globals) return new Set()
-		const params = extractCliInputParamsDetailed(this.options.globals)
-		return new Set(params.map((p) => p.name))
-	}
-
-	private async parseJsonInput(
-		flag: unknown,
-	): Promise<Record<string, unknown>> {
-		const raw =
-			flag === true
-				? await this.readStdinText()
-				: typeof flag === 'string'
-					? await this.readInputString(flag)
-					: null
-		if (raw === null) {
-			console.log(
-				colors.error(
-					'Invalid --input value (expected JSON string, @file, @-, or stdin)',
-				),
-			)
-			process.exit(1)
-		}
-
-		let parsed: unknown
 		try {
-			parsed = JSON5.parse(raw)
-		} catch {
-			console.log(
-				colors.error('Invalid JSON input (supports JSON/JSONC/JSON5)'),
-			)
-			process.exit(1)
+			const parsed = JSON5.parse(raw)
+			if (
+				parsed === null ||
+				typeof parsed !== 'object' ||
+				Array.isArray(parsed)
+			) {
+				throw new Error('input must be an object')
+			}
+			return parsed
+		} catch (error) {
+			throw new ArgcError({
+				error: 'BAD_INPUT_JSON',
+				detail: formatRuntimeError(error),
+			})
 		}
-
-		if (
-			parsed === null ||
-			typeof parsed !== 'object' ||
-			Array.isArray(parsed)
-		) {
-			console.log(colors.error('JSON input must be an object'))
-			process.exit(1)
-		}
-
-		return parsed as Record<string, unknown>
 	}
 
-	private async readInputString(value: string): Promise<string> {
-		if (value === '@-') {
-			return await this.readStdinText()
-		}
-		if (value.startsWith('@')) {
-			const path = expandHome(value.slice(1))
-			if (!path) {
-				console.log(colors.error('Invalid --input file path'))
-				process.exit(1)
+	private async resolveContext(
+		source: InputSource,
+	): Promise<ContextOutput<TContext>> {
+		if (!this.options.context) {
+			if (source.kind !== 'omitted') {
+				throw new ArgcError({
+					error: 'INVALID_INPUT',
+					command: '$context',
+					issues: [{ message: 'context is not declared by this CLI' }],
+				})
 			}
-			return await Bun.file(path).text()
+			return undefined as ContextOutput<TContext>
+		}
+		const env = process.env.ARGC_CTX
+		const actualSource =
+			source.kind === 'omitted' && env !== undefined
+				? ({ kind: 'inline', value: env } as InputSource)
+				: source
+		const input = await this.resolveInput(actualSource)
+		const issues = await this.validateObject(this.options.context, input)
+		if (issues.length > 0) {
+			throw new ArgcError({
+				error: 'INVALID_INPUT',
+				command: '$context',
+				issues,
+			})
+		}
+		const result = await this.options.context['~standard'].validate(input)
+		if (result.issues) {
+			throw new ArgcError({
+				error: 'INVALID_INPUT',
+				command: '$context',
+				issues: this.normalizeIssues(result.issues),
+			})
+		}
+		return result.value as ContextOutput<TContext>
+	}
+
+	private async validateInput(
+		commandPath: string[],
+		command: AnyCommand,
+		input: unknown,
+	): Promise<unknown> {
+		const issues = await this.validateObject(command['~argc'].input, input)
+		let schemaIssues: ErrorIssue[] = []
+		let value = input
+		if (command['~argc'].input) {
+			const result = await command['~argc'].input['~standard'].validate(input)
+			if (result.issues) {
+				schemaIssues = this.normalizeIssues(result.issues)
+			} else {
+				value = result.value
+			}
+		}
+		const allIssues = [...schemaIssues, ...issues]
+		if (allIssues.length > 0) {
+			throw new ArgcError({
+				error: 'INVALID_INPUT',
+				command: commandPath.join(' '),
+				issues: allIssues,
+				$hint: `${this.options.name} @schema .${commandPath.join('.')}`,
+			})
 		}
 		return value
 	}
 
-	private async readStdinText(): Promise<string> {
-		this.stdinTextPromise ??= readStdin()
-		return await this.stdinTextPromise
+	private async validateObject(
+		schema: Schema | undefined,
+		input: unknown,
+	): Promise<ErrorIssue[]> {
+		if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+			return [{ message: 'input must be an object' }]
+		}
+		const fields = new Set(
+			schema
+				? extractCliInputParamsDetailed(schema).map((param) => param.name)
+				: [],
+		)
+		return Object.keys(input as Record<string, unknown>)
+			.filter((key) => !fields.has(key))
+			.map((key) => ({ at: key, message: 'unknown key' }))
 	}
 
-	private findByAlias(
-		children: { [key: string]: Router },
-		alias: string,
-	): { name: string; router: Router } | null {
-		for (const [name, router] of Object.entries(children)) {
-			if (isCommand(router)) {
-				const aliases = router['~argc'].meta.aliases
-				if (aliases?.includes(alias)) {
-					return { name, router }
-				}
-			}
+	private normalizeIssues(
+		issues: readonly StandardSchemaV1.Issue[],
+	): ErrorIssue[] {
+		return issues.map((issue) => {
+			const normalized: ErrorIssue = { message: issue.message }
+			const at = issue.path
+				?.map((part: { key: PropertyKey } | PropertyKey) =>
+					typeof part === 'object' ? part.key : part,
+				)
+				.join('.')
+			if (at) normalized.at = at
+			return normalized
+		})
+	}
+
+	private schemaOptions() {
+		const options: {
+			name: string
+			description?: string
+			context?: TContext
+		} = { name: this.options.name }
+		if (this.options.description !== undefined) {
+			options.description = this.options.description
 		}
-		return null
+		if (this.options.context !== undefined) {
+			options.context = this.options.context
+		}
+		return options
+	}
+
+	private countCommands(router: Router): number {
+		if (isCommand(router)) return 1
+		return Object.values(getRouterChildren(router)).reduce(
+			(total, child) => total + this.countCommands(child),
+			0,
+		)
+	}
+
+	private readStdinText(): Promise<string> {
+		this.stdinTextPromise ??= readStdin()
+		return this.stdinTextPromise
+	}
+
+	private assertValidCommandKeys(router: Router, path: string[]): void {
+		if (isCommand(router)) {
+			const meta = router['~argc'].meta as Record<string, unknown>
+			if ('aliases' in meta) {
+				throw new Error(
+					`Command aliases are not supported in argc 7: ${path.join('.')}`,
+				)
+			}
+			return
+		}
+		const children = getRouterChildren(router)
+		for (const [key, child] of Object.entries(children)) {
+			if (key.startsWith('@') || !isValidIdentifier(key)) {
+				throw new Error(`Invalid command key: ${[...path, key].join('.')}`)
+			}
+			this.assertValidCommandKeys(child, [...path, key])
+		}
 	}
 
 	private createHookDispatcher() {
@@ -878,9 +604,7 @@ export class CLI<
 			app: this.options.name,
 			timeoutMs: this.options.hookTimeoutMs ?? 2000,
 		}
-		if (this.options.hook !== undefined) {
-			options.hook = this.options.hook
-		}
+		if (this.options.hook !== undefined) options.hook = this.options.hook
 		if (process.env.ARGC_HOOK_URL !== undefined) {
 			options.hookUrl = process.env.ARGC_HOOK_URL
 		}
@@ -890,11 +614,7 @@ export class CLI<
 
 export function cli<
 	TSchema extends Router,
-	TGlobals extends Schema = Schema,
-	TContext = undefined,
->(
-	schema: TSchema,
-	options: CLIOptions<TGlobals, TContext>,
-): CLI<TSchema, TGlobals, TContext> {
+	TContext extends Schema | undefined = undefined,
+>(schema: TSchema, options: CLIOptions<TContext>): CLI<TSchema, TContext> {
 	return new CLI(schema, options)
 }

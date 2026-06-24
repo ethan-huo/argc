@@ -10,21 +10,21 @@ describe('parseSchemaSelector', () => {
 		])
 	})
 
-	test('parses at-prefixed key', () => {
-		expect(parseSchemaSelector('.@add')).toEqual([
-			{ type: 'key', name: '@add' },
+	test('parses identifier key', () => {
+		expect(parseSchemaSelector('.addUser')).toEqual([
+			{ type: 'key', name: 'addUser' },
 		])
 	})
 
 	test('parses quoted key', () => {
-		expect(parseSchemaSelector('."@add"')).toEqual([
-			{ type: 'key', name: '@add' },
+		expect(parseSchemaSelector('."content-type"')).toEqual([
+			{ type: 'key', name: 'content-type' },
 		])
 	})
 
 	test('parses bracket key', () => {
-		expect(parseSchemaSelector('.["@add"]')).toEqual([
-			{ type: 'key', name: '@add' },
+		expect(parseSchemaSelector('.["content-type"]')).toEqual([
+			{ type: 'key', name: 'content-type' },
 		])
 	})
 
@@ -48,13 +48,13 @@ describe('parseSchemaSelector', () => {
 		])
 	})
 
-	test('parses set segment with at-prefixed and quoted keys', () => {
-		expect(parseSchemaSelector('.{"@add",@remove}')).toEqual([
+	test('parses set segment with quoted and identifier keys', () => {
+		expect(parseSchemaSelector('.{"content-type",removeUser}')).toEqual([
 			{
 				type: 'set',
 				branches: [
-					[{ type: 'key', name: '@add' }],
-					[{ type: 'key', name: '@remove' }],
+					[{ type: 'key', name: 'content-type' }],
+					[{ type: 'key', name: 'removeUser' }],
 				],
 			},
 		])
@@ -175,6 +175,13 @@ describe('parseSchemaSelector', () => {
 		)
 	})
 
+	test('rejects bare non-identifier keys', () => {
+		expect(() => parseSchemaSelector('.content-type')).toThrow(
+			'Unexpected character "-"',
+		)
+		expect(() => parseSchemaSelector('.@add')).toThrow('Expected identifier')
+	})
+
 	test('rejects empty selector', () => {
 		expect(() => parseSchemaSelector('')).toThrow('Selector is empty')
 	})
@@ -194,7 +201,7 @@ describe('parseSchemaSelector', () => {
 	})
 
 	test('rejects unterminated quoted key', () => {
-		expect(() => parseSchemaSelector('."@add')).toThrow(
+		expect(() => parseSchemaSelector('."content-type')).toThrow(
 			'Unterminated quoted selector key',
 		)
 	})

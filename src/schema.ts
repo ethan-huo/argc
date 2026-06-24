@@ -1,6 +1,3 @@
-// Schema generator - outputs TypeScript-like type definition for AI agents
-// Uses Standard JSON Schema (StandardJSONSchemaV1) for schema introspection
-
 import type { Router, Schema } from './types'
 
 import { getRouterChildren } from './router'
@@ -9,10 +6,28 @@ import { isCommand, isGroup } from './types'
 export type SchemaOptions = {
 	name: string
 	description?: string
-	globals?: Schema
+	context?: Schema
 }
 
 type JSONSchema = Record<string, unknown>
+
+export type ParamInfo = {
+	name: string
+	type: string
+	optional: boolean
+	default?: unknown
+	description?: string
+}
+
+const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
+export function isValidIdentifier(name: string): boolean {
+	return IDENTIFIER_RE.test(name)
+}
+
+function formatPropertyKey(name: string): string {
+	return isValidIdentifier(name) ? name : JSON.stringify(name)
+}
 
 function splitTopLevelTypes(type: string, operator: '|' | '&'): string[] {
 	const parts: string[] = []
@@ -33,7 +48,6 @@ function splitTopLevelTypes(type: string, operator: '|' | '&'): string[] {
 			}
 			continue
 		}
-
 		if (char === '"' || char === "'") {
 			quote = char
 			continue
@@ -59,37 +73,26 @@ function splitTopLevelTypes(type: string, operator: '|' | '&'): string[] {
 function joinUniqueTypes(types: string[], operator: '|' | '&'): string {
 	const seen = new Set<string>()
 	const unique: string[] = []
-
 	for (const type of types) {
-		// Flatten only top-level rendered variants so object field unions stay intact.
 		for (const part of splitTopLevelTypes(type, operator)) {
 			if (seen.has(part)) continue
 			seen.add(part)
 			unique.push(part)
 		}
 	}
-
 	return unique.join(` ${operator} `)
 }
 
-// Convert JSON Schema to TypeScript-like type string
 function jsonSchemaToTypeString(schema: JSONSchema): string {
 	const type = schema.type as string | undefined
 
-	// Handle const
-	if ('const' in schema) {
-		return JSON.stringify(schema.const)
-	}
-
-	// Handle enum
+	if ('const' in schema) return JSON.stringify(schema.const)
 	if (schema.enum) {
 		return joinUniqueTypes(
 			(schema.enum as unknown[]).map((v) => JSON.stringify(v)),
 			'|',
 		)
 	}
-
-	// Handle oneOf/anyOf (union types)
 	if (schema.oneOf || schema.anyOf) {
 		const variants = (schema.oneOf || schema.anyOf) as JSONSchema[]
 		return joinUniqueTypes(
@@ -97,8 +100,6 @@ function jsonSchemaToTypeString(schema: JSONSchema): string {
 			'|',
 		)
 	}
-
-	// Handle allOf (intersection types)
 	if (schema.allOf) {
 		const variants = schema.allOf as JSONSchema[]
 		return joinUniqueTypes(
@@ -106,11 +107,7 @@ function jsonSchemaToTypeString(schema: JSONSchema): string {
 			'&',
 		)
 	}
-
-	// Handle $ref (simplified - just show as unknown)
-	if (schema.$ref) {
-		return 'unknown'
-	}
+	if (schema.$ref) return 'unknown'
 
 	switch (type) {
 		case 'string':
@@ -124,42 +121,27 @@ function jsonSchemaToTypeString(schema: JSONSchema): string {
 			return 'null'
 		case 'array': {
 			const items = schema.items as JSONSchema | undefined
-			if (items) {
-				return `${jsonSchemaToTypeString(items)}[]`
-			}
-			return 'unknown[]'
+			return items ? `${jsonSchemaToTypeString(items)}[]` : 'unknown[]'
 		}
 		case 'object': {
 			const properties = schema.properties as
 				| Record<string, JSONSchema>
 				| undefined
 			if (!properties) return 'object'
-
 			const required = new Set((schema.required as string[]) ?? [])
 			const entries = Object.entries(properties)
-				.map(([k, v]) => {
-					const opt = required.has(k) ? '' : '?'
-					return `${k}${opt}: ${jsonSchemaToTypeString(v)}`
+				.map(([key, value]) => {
+					const opt = required.has(key) ? '' : '?'
+					return `${formatPropertyKey(key)}${opt}: ${jsonSchemaToTypeString(value)}`
 				})
-				.join(', ')
+				.join('; ')
 			return `{ ${entries} }`
 		}
 		default:
-			// No type specified, try to infer
-			if (schema.properties) {
+			if (schema.properties)
 				return jsonSchemaToTypeString({ ...schema, type: 'object' })
-			}
 			return 'unknown'
 	}
-}
-
-// Parameter info for help display and schema generation
-type ParamInfo = {
-	name: string
-	type: string
-	optional: boolean
-	default?: unknown
-	description?: string
 }
 
 function readJsonSchema(
@@ -173,142 +155,85 @@ function readJsonSchema(
 	}
 }
 
-function isPromiseLike(value: unknown): value is Promise<unknown> {
-	return (
-		value !== null &&
-		typeof value === 'object' &&
-		'then' in value &&
-		typeof (value as { then: unknown }).then === 'function'
-	)
-}
-
-function deriveOutputDefault(
-	schema: Schema,
-	name: string,
-	inputDefault: unknown,
-): unknown {
-	const result = schema['~standard'].validate({ [name]: inputDefault })
-	if (isPromiseLike(result) || result.issues) return undefined
-	const value = result.value
-	if (value === null || typeof value !== 'object' || !(name in value)) {
-		return undefined
-	}
-	return (value as Record<string, unknown>)[name]
-}
-
-// Extract CLI ingress parameters from the input side of the schema. This is
-// intentionally separate from the handler-facing contract rendered to agents.
-function extractCliInputParamsDetailed(schema: Schema): ParamInfo[] {
-	const jsonSchema = readJsonSchema(schema, 'input')
-	if (!jsonSchema) return []
-
-	return extractParamsFromJsonSchema(jsonSchema)
-}
-
-// Extract handler-facing parameters from the output side of the schema.
-function extractOutputParamsDetailed(schema: Schema): ParamInfo[] {
-	const inputJsonSchema = readJsonSchema(schema, 'input')
-	const outputJsonSchema = readJsonSchema(schema, 'output')
-	if (!outputJsonSchema) return []
-
-	const params = extractParamsFromJsonSchema(outputJsonSchema)
-	const inputProperties = inputJsonSchema?.properties as
-		| Record<string, JSONSchema>
-		| undefined
-
-	return params.map((param) => {
-		const inputProperty = inputProperties?.[param.name]
-		const inputDefault = inputProperty?.default
-		let next = param
-		if (
-			next.description === undefined &&
-			inputProperty?.description !== undefined
-		) {
-			next = { ...next, description: inputProperty.description as string }
-		}
-		if (inputDefault === undefined) return next
-
-		const outputDefault = deriveOutputDefault(schema, param.name, inputDefault)
-		if (outputDefault !== undefined) {
-			return { ...next, default: outputDefault }
-		}
-		return next
-	})
-}
-
 function extractParamsFromJsonSchema(jsonSchema: JSONSchema): ParamInfo[] {
-	const params: ParamInfo[] = []
 	const properties = jsonSchema.properties as
 		| Record<string, JSONSchema>
 		| undefined
 	if (!properties) return []
 
 	const required = new Set((jsonSchema.required as string[]) ?? [])
-
-	for (const [name, prop] of Object.entries(properties)) {
-		const isOptional = !required.has(name)
-		const typeStr = jsonSchemaToTypeString(prop)
-		const description = prop.description as string | undefined
-		const defaultVal = prop.default
-
+	return Object.entries(properties).map(([name, prop]) => {
 		const param: ParamInfo = {
 			name,
-			type: typeStr,
-			optional: isOptional,
+			type: jsonSchemaToTypeString(prop),
+			optional: !required.has(name),
 		}
-		if (defaultVal !== undefined) {
-			param.default = defaultVal
-		}
-		if (description !== undefined) {
-			param.description = description
-		}
-
-		params.push(param)
-	}
-
-	return params
+		if (prop.default !== undefined) param.default = prop.default
+		if (prop.description !== undefined)
+			param.description = prop.description as string
+		return param
+	})
 }
 
-// Format params as function signature
-function extractInputParams(schema: Schema): string {
-	const params = extractOutputParamsDetailed(schema)
-	return formatParams(params)
+export function extractCliInputParamsDetailed(schema: Schema): ParamInfo[] {
+	const jsonSchema = readJsonSchema(schema, 'input')
+	if (!jsonSchema) return []
+	return extractParamsFromJsonSchema(jsonSchema)
 }
 
-// Export for cli.ts help display
+export function extractOutputParamsDetailed(schema: Schema): ParamInfo[] {
+	const jsonSchema = readJsonSchema(schema, 'output')
+	if (!jsonSchema) return []
+	return extractParamsFromJsonSchema(jsonSchema)
+}
+
 function formatParams(params: ParamInfo[]): string {
 	return params
-		.map((p) => {
-			let str = p.name
-			if (p.optional) str += '?'
-			str += `: ${p.type}`
-			if (p.default !== undefined) {
-				str += ` = ${JSON.stringify(p.default)}`
-			}
-			return str
+		.map((param) => {
+			const opt = param.optional ? '?' : ''
+			return `${formatPropertyKey(param.name)}${opt}: ${param.type}`
 		})
-		.join(', ')
+		.join('; ')
 }
 
 export function getInputTypeHint(schema: Schema): string {
-	const params = extractOutputParamsDetailed(schema)
-	if (params.length === 0) return 'object'
-	const parts = params.map((p) => {
-		const typeHint = formatInputHintType(p.type)
-		const key = p.optional ? `${p.name}?` : p.name
-		return `${key}: ${typeHint}`
-	})
-	return `{ ${parts.join(', ')} }`
+	return `{ ${formatParams(extractOutputParamsDetailed(schema))} }`
 }
 
-// Export for cli.ts help display
-export {
-	extractCliInputParamsDetailed,
-	extractOutputParamsDetailed,
-	type ParamInfo,
+function pascalCase(name: string): string {
+	return name
+		.split(/[-_\s]+/)
+		.filter(Boolean)
+		.map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+		.join('')
+}
+
+function sampleValue(type: string): string {
+	if (type.includes('|')) return sampleValue(type.split('|')[0]!.trim())
+	if (type === 'number') return '1'
+	if (type === 'boolean') return 'true'
+	if (type.endsWith('[]')) return '[]'
+	if (type.startsWith('{')) return '{}'
+	return "'value'"
+}
+
+function exampleInput(params: ParamInfo[]): string {
+	if (params.length === 0) return '{}'
+	return `{ ${params
+		.map(
+			(param) => `${formatPropertyKey(param.name)}: ${sampleValue(param.type)}`,
+		)
+		.join(', ')} }`
+}
+
+function pushDoc(lines: string[], indent: string, text: string): void {
+	const normalized = text.replaceAll('*/', '* /')
+	lines.push(`${indent}/** ${normalized} */`)
 }
 
 function generateCommandSchema(
+	appName: string,
+	path: string[],
 	name: string,
 	router: Router,
 	indent: string,
@@ -318,88 +243,65 @@ function generateCommandSchema(
 	if (isCommand(router)) {
 		const meta = router['~argc'].meta
 		const input = router['~argc'].input
-
-		// Comments
-		if (meta.description) {
-			const deprecatedTag = meta.deprecated ? ' [DEPRECATED]' : ''
-			lines.push(`${indent}// ${meta.description}${deprecatedTag}`)
+		const params = input ? extractOutputParamsDetailed(input) : []
+		if (meta.description) pushDoc(lines, indent, meta.description)
+		if (params.length > 0) {
+			lines.push(
+				`${indent}// ${appName} ${path.join(' ')} "${exampleInput(params)}"`,
+			)
+			lines.push(`${indent}${name}(input: { ${formatParams(params)} })`)
+		} else {
+			lines.push(`${indent}${name}()`)
 		}
-		if (meta.examples?.length) {
-			for (const ex of meta.examples) {
-				lines.push(`${indent}// $ ${ex}`)
-			}
-		}
-
-		// Extract params from input schema
-		const params = input ? extractInputParams(input) : ''
-		lines.push(`${indent}${name}(${params})`)
 		return lines
 	}
 
 	if (isGroup(router)) {
 		const meta = router['~argc.group'].meta
-
-		if (meta.description) {
-			lines.push(`${indent}// ${meta.description}`)
-		}
-
+		if (meta.description) pushDoc(lines, indent, meta.description)
 		lines.push(`${indent}${name}: {`)
 		for (const [key, child] of Object.entries(router['~argc.group'].children)) {
-			const childLines = generateCommandSchema(key, child, `${indent}  `)
-			lines.push(...childLines)
+			lines.push(
+				...generateCommandSchema(
+					appName,
+					[...path, key],
+					key,
+					child,
+					`${indent}  `,
+				),
+			)
 		}
 		lines.push(`${indent}}`)
 		return lines
 	}
 
-	// Plain object router (group without meta)
 	lines.push(`${indent}${name}: {`)
 	for (const [key, child] of Object.entries(router)) {
-		const childLines = generateCommandSchema(key, child, `${indent}  `)
-		lines.push(...childLines)
+		lines.push(
+			...generateCommandSchema(
+				appName,
+				[...path, key],
+				key,
+				child,
+				`${indent}  `,
+			),
+		)
 	}
 	lines.push(`${indent}}`)
-
 	return lines
 }
 
 export function generateSchema(schema: Router, options: SchemaOptions): string {
 	const lines: string[] = []
-
-	// Put the agent decision signal before syntax details so a full selector
-	// result does not look like an invitation to keep drilling down.
-	if (options.description) {
-		lines.push(options.description)
-		lines.push('')
+	if (options.description) lines.push(`// ${options.description}`)
+	if (options.context) {
+		lines.push(
+			`// Context: ${getInputTypeHint(options.context)}  (--context / ARGC_CTX)`,
+		)
 	}
-	lines.push('Schema status: fully output; no drill-down query is needed.')
-	lines.push('')
-
-	// CLI syntax hint for AI agents
-	lines.push('CLI Syntax:')
-	lines.push(
-		'  flags:   --skip-build matches skip-build, or falls back to skipBuild',
-	)
-	lines.push('  arrays:  --tag a --tag b             → tag: ["a", "b"]')
-	lines.push(
-		'  objects: --user.name x --user.age 1  → user: { name: "x", age: 1 }',
-	)
-	lines.push('')
-
-	// Type declaration
+	if (lines.length > 0) lines.push('')
 	lines.push(`type ${pascalCase(options.name)} = {`)
 
-	// Global options
-	if (options.globals) {
-		const globalsParams = extractInputParams(options.globals)
-		if (globalsParams) {
-			lines.push(`  // Global options available to all commands`)
-			lines.push(`  $globals: { ${globalsParams} }`)
-			lines.push('')
-		}
-	}
-
-	// Commands
 	const children = isGroup(schema)
 		? schema['~argc.group'].children
 		: isCommand(schema)
@@ -407,12 +309,9 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 			: schema
 
 	for (const [key, child] of Object.entries(children)) {
-		const childLines = generateCommandSchema(key, child, '  ')
-		lines.push(...childLines)
+		lines.push(...generateCommandSchema(options.name, [key], key, child, '  '))
 	}
-
 	lines.push('}')
-
 	return lines.join('\n')
 }
 
@@ -428,49 +327,33 @@ export function generateSchemaOutline(
 	schema: Router,
 	depth: number = 2,
 ): string[] {
-	const children = getRouterChildren(schema)
-	const lines: string[] = []
-	for (const [name, child] of Object.entries(children)) {
-		lines.push(renderOutlineNode(name, child, depth))
+	const lines: string[] = ['App']
+	const walk = (
+		router: Router,
+		indent: string,
+		remainingDepth: number,
+	): number => {
+		if (isCommand(router)) return 1
+		let total = 0
+		for (const [key, child] of Object.entries(getRouterChildren(router))) {
+			const count = countSchemaCommands(child)
+			total += count
+			if (remainingDepth > 0) {
+				lines.push(
+					`${indent}${key}${isCommand(child) ? '' : `  ${count} commands`}`,
+				)
+				if (!isCommand(child)) walk(child, `${indent}  `, remainingDepth - 1)
+			}
+		}
+		return total
 	}
+	walk(schema, '  ', depth)
 	return lines
 }
 
 export function generateSchemaHintExample(schema: Router): string | null {
-	const children = getRouterChildren(schema)
-	const entries = Object.entries(children)
-	for (const [name, child] of entries) {
-		const deep = findDeepPath(child, [name], 3)
-		if (deep) return deep.join('.')
-	}
-	for (const [name, child] of entries) {
-		const two = findDeepPath(child, [name], 2)
-		if (two) return two.join('.')
-	}
-	if (entries.length > 0) return entries[0]![0]
-	return null
-}
-
-function pascalCase(str: string): string {
-	return str
-		.split(/[-_\s]+/)
-		.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-		.join('')
-}
-
-function renderOutlineNode(
-	name: string,
-	router: Router,
-	depth: number,
-): string {
-	if (depth <= 0) return name
-	if (isCommand(router)) return name
-	const children = getRouterChildren(router)
-	const parts = Object.entries(children).map(([childName, child]) =>
-		renderOutlineNode(childName, child, depth - 1),
-	)
-	if (parts.length === 0) return `${name}{}`
-	return `${name}{${parts.join(',')}}`
+	const path = findDeepPath(schema, [], 1)
+	return path ? path.join('.') : null
 }
 
 function findDeepPath(
@@ -478,51 +361,10 @@ function findDeepPath(
 	path: string[],
 	minDepth: number,
 ): string[] | null {
-	if (minDepth <= 1) return path
-	if (isCommand(router)) return null
-	const children = getRouterChildren(router)
-	for (const [name, child] of Object.entries(children)) {
-		const found = findDeepPath(child, [...path, name], minDepth - 1)
+	if (path.length >= minDepth && !isCommand(router)) return path
+	for (const [key, child] of Object.entries(getRouterChildren(router))) {
+		const found = findDeepPath(child, [...path, key], minDepth)
 		if (found) return found
 	}
 	return null
-}
-
-function formatInputHintType(type: string): string {
-	const trimmed = type.trim()
-	if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-		return 'object'
-	}
-	if (isLiteralUnion(trimmed)) {
-		return 'enum'
-	}
-	if (trimmed.endsWith('[]')) {
-		const inner = trimmed.slice(0, -2).trim()
-		if (inner.startsWith('{') && inner.endsWith('}')) return 'object[]'
-		if (isLiteralUnion(inner)) return 'enum[]'
-	}
-	return type
-}
-
-function isLiteralUnion(type: string): boolean {
-	const parts = type.split('|').map((part) => part.trim())
-	if (parts.length < 2) return false
-	return parts.every((part) => isLiteralToken(part))
-}
-
-function isLiteralToken(part: string): boolean {
-	if (
-		(part.startsWith('"') && part.endsWith('"')) ||
-		(part.startsWith("'") && part.endsWith("'"))
-	) {
-		return true
-	}
-	if (part === 'true' || part === 'false' || part === 'null') return true
-	return isNumberLiteral(part)
-}
-
-function isNumberLiteral(part: string): boolean {
-	if (part === '') return false
-	const num = Number(part)
-	return !Number.isNaN(num) && String(num) === part
 }

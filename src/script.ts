@@ -1,47 +1,28 @@
+import { readFile } from 'node:fs/promises'
 import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { parseSync } from 'oxc-parser'
 
 import type { HookDispatcher } from './hook'
-import type { parseArgv } from './parser'
+import type { ErrorIssue } from './render'
 import type { Router, Schema } from './types'
 
-import { showValidationError } from './help'
+import { ArgcError, renderResult, withStdoutRerouted } from './render'
 import { getRouterChildren, findHandler } from './router'
-import { fmt as colors } from './terminal'
+import { extractCliInputParamsDetailed } from './schema'
 import { isCommand } from './types'
-
-export function expandHome(path: string): string {
-	if (path.startsWith('~/')) {
-		const home = process.env.HOME
-		if (!home) return path
-		return `${home}${path.slice(1)}`
-	}
-	return path
-}
 
 export async function readStdin(): Promise<string> {
 	return await new Response(Bun.stdin).text()
 }
 
-export function formatRuntimeError(error: unknown): string {
-	if (error instanceof Error) {
-		const msg = error.message || String(error)
-		const prefix =
-			error.name && error.name !== 'Error' && !msg.startsWith(`${error.name}:`)
-				? `${error.name}: `
-				: ''
-		return `${prefix}${msg}`
-	}
-	return String(error)
-}
-
 type ScriptFn = (input?: unknown) => Promise<unknown>
 type ScriptHandlers = ScriptFn | { [key: string]: ScriptHandlers }
 
-type ScriptAPI = {
+export type ScriptAPI = {
 	handlers: ScriptHandlers
 	call: Record<string, ScriptFn>
-	globals: unknown
+	context: unknown
 	args: string[]
 	raw: string[]
 }
@@ -51,154 +32,146 @@ type RunSource =
 	| { kind: 'inline'; code: string }
 	| { kind: 'module'; path: string }
 
-const BUILTIN_FLAG_KEYS = new Set([
-	'help',
-	'h',
-	'version',
-	'v',
-	'schema',
-	'input',
-	'run',
-	'completions',
-	'_complete',
-])
-
-function stripBuiltinFlags(
-	flags: Record<string, unknown>,
-): Record<string, unknown> {
-	const out: Record<string, unknown> = {}
-	for (const [k, v] of Object.entries(flags)) {
-		if (BUILTIN_FLAG_KEYS.has(k)) continue
-		out[k] = v
-	}
-	return out
+export type ScriptRunOptions = {
+	source: RunSource
+	json: boolean
+	args: string[]
+	raw: string[]
+	context: unknown
+	appName: string
 }
 
-function flattenHandlerTree(
-	handlers: ScriptHandlers,
-): Record<string, ScriptFn> {
-	const out: Record<string, ScriptFn> = {}
-	const walk = (node: ScriptHandlers, prefix: string): void => {
-		if (typeof node === 'function') {
-			out[prefix] = node as ScriptFn
-			return
-		}
-		for (const [k, v] of Object.entries(node)) {
-			walk(v, prefix ? `${prefix}.${k}` : k)
-		}
+function expandHome(path: string): string {
+	if (path.startsWith('~/')) {
+		const home = process.env.HOME
+		if (!home) return path
+		return `${home}${path.slice(1)}`
 	}
-	walk(handlers, '')
-	return out
+	return path
 }
 
-function parseRunSource(flag: unknown): RunSource {
-	if (flag === true || flag === '-') return { kind: 'stdin' }
-	if (typeof flag === 'string') {
-		if (flag.startsWith('@')) {
-			const path = flag.slice(1)
-			if (!path) {
-				console.log(
-					colors.error('Invalid --run value (expected @<file> after @)'),
-				)
-				process.exit(1)
+export function parseRunSource(token: string | undefined): RunSource {
+	if (token === undefined || token === '-') return { kind: 'stdin' }
+	if (token.startsWith('@')) {
+		const path = token.slice(1)
+		if (!path) throw new Error('expected a file path after @')
+		return { kind: 'module', path }
+	}
+	return { kind: 'inline', code: token }
+}
+
+function pathFromIssuePath(path: unknown): string | undefined {
+	if (!Array.isArray(path)) return undefined
+	return path
+		.map((part) => {
+			if (typeof part === 'object' && part !== null && 'key' in part) {
+				return String((part as { key: PropertyKey }).key)
 			}
-			return { kind: 'module', path }
+			return String(part)
+		})
+		.filter(Boolean)
+		.join('.')
+}
+
+function normalizeIssues(issues: unknown): ErrorIssue[] {
+	if (!Array.isArray(issues)) return []
+	return issues.map((issue) => {
+		const record = issue as { path?: unknown; message?: unknown }
+		const normalized: ErrorIssue = {
+			message:
+				typeof record.message === 'string' ? record.message : String(issue),
 		}
-		return { kind: 'inline', code: flag }
-	}
-	console.log(
-		colors.error('Invalid --run value (expected code, -, stdin, or @<file>)'),
+		const at = pathFromIssuePath(record.path)
+		if (at) normalized.at = at
+		return normalized
+	})
+}
+
+function unknownKeyIssues(
+	input: Record<string, unknown>,
+	schema: Schema | undefined,
+): ErrorIssue[] {
+	if (!schema)
+		return Object.keys(input).map((key) => ({
+			at: key,
+			message: 'unknown key',
+		}))
+	const fields = new Set(
+		extractCliInputParamsDetailed(schema).map((param) => param.name),
 	)
-	process.exit(1)
+	return Object.keys(input)
+		.filter((key) => !fields.has(key))
+		.map((key) => ({ at: key, message: 'unknown key' }))
 }
 
-async function runEval(code: string, api: ScriptAPI): Promise<void> {
-	const fn = new Function(
-		'argc',
-		`"use strict"; return (async () => {\n${code}\n})();`,
-	) as (argc: ScriptAPI) => Promise<unknown>
-	await fn(api)
-}
-
-async function runScriptFile(path: string, api: ScriptAPI): Promise<void> {
-	const expanded = expandHome(path)
-	const fullPath = resolvePath(process.cwd(), expanded)
-	const url = pathToFileURL(fullPath).href
-
-	const mod = (await import(url)) as Record<string, unknown>
-	const maybeDefault = mod.default
-	if (typeof maybeDefault === 'function') {
-		await (maybeDefault as (argc: ScriptAPI) => unknown)(api)
-		return
-	}
-	const maybeMain = mod.main
-	if (typeof maybeMain === 'function') {
-		await (maybeMain as (argc: ScriptAPI) => unknown)(api)
-		return
+async function validateInput(
+	commandPath: string[],
+	schema: Schema | undefined,
+	input: unknown,
+): Promise<unknown> {
+	const objectInput =
+		input === undefined ? ({} as Record<string, unknown>) : input
+	if (
+		objectInput === null ||
+		typeof objectInput !== 'object' ||
+		Array.isArray(objectInput)
+	) {
+		throw new ArgcError({
+			error: 'INVALID_INPUT',
+			command: commandPath.join(' '),
+			issues: [{ message: 'input must be an object' }],
+			$hint: `cli @schema .${commandPath.join('.')}`,
+		})
 	}
 
-	throw new Error('--run @file module must export default or main')
+	const unknown = unknownKeyIssues(
+		objectInput as Record<string, unknown>,
+		schema,
+	)
+	let schemaIssues: ErrorIssue[] = []
+	let value: unknown = objectInput
+	if (schema) {
+		const result = await schema['~standard'].validate(objectInput)
+		if (result.issues) {
+			schemaIssues = normalizeIssues(result.issues)
+		} else {
+			value = result.value
+		}
+	}
+	const issues = [...schemaIssues, ...unknown]
+	if (issues.length > 0) {
+		throw new ArgcError({
+			error: 'INVALID_INPUT',
+			command: commandPath.join(' '),
+			issues,
+			$hint: `cli @schema .${commandPath.join('.')}`,
+		})
+	}
+	return value
 }
 
 function buildScriptHandlerTree(
 	path: string[],
 	router: Router,
 	handlers: Record<string, unknown>,
-	getContext: () => Promise<unknown>,
+	context: unknown,
 	rawArgv: string[],
 	appName: string,
 	hookDispatcher: HookDispatcher,
 ): ScriptHandlers {
 	if (isCommand(router)) {
-		const command = router
 		const handler = findHandler(path, handlers)
 		const commandName = path.join(' ')
-
 		return (async (input?: unknown) => {
-			if (!handler) {
-				throw new Error(`No handler for command: ${commandName}`)
-			}
-
-			const providedInput =
-				input === undefined ? ({} as Record<string, unknown>) : input
-
-			let validatedInput = providedInput
-			const def = command['~argc']
-			if (def.input) {
-				const result = await def.input['~standard'].validate(providedInput)
-				if (result.issues) {
-					const errorFields = new Set<string>()
-					const errorMessages: Record<string, string> = {}
-					for (const issue of result.issues) {
-						const field = issue.path
-							?.map((p: { key: PropertyKey } | PropertyKey) =>
-								typeof p === 'object' ? p.key : p,
-							)
-							?.join('.')
-						if (field) {
-							errorFields.add(field)
-							errorMessages[field] = issue.message
-						}
-					}
-
-					console.error(colors.error('invalid arguments'))
-					console.error()
-					showValidationError(
-						appName,
-						path,
-						command,
-						errorFields,
-						errorMessages,
-					)
-					process.exit(1)
-				}
-				validatedInput = result.value as Record<string, unknown>
-			}
-
+			if (!handler) throw new Error(`No handler for command: ${commandName}`)
+			const validatedInput = await validateInput(
+				path,
+				router['~argc'].input,
+				input,
+			)
 			const hookCall = hookDispatcher.createCall(path, commandName)
 			let ok = false
 			try {
-				const context = await getContext()
 				const result = await handler({
 					input: validatedInput,
 					context,
@@ -227,7 +200,7 @@ function buildScriptHandlerTree(
 			[...path, key],
 			child,
 			handlers,
-			getContext,
+			context,
 			rawArgv,
 			appName,
 			hookDispatcher,
@@ -236,12 +209,28 @@ function buildScriptHandlerTree(
 	return out
 }
 
+function flattenHandlerTree(
+	handlers: ScriptHandlers,
+): Record<string, ScriptFn> {
+	const out: Record<string, ScriptFn> = {}
+	const walk = (node: ScriptHandlers, prefix: string): void => {
+		if (typeof node === 'function') {
+			out[prefix] = node as ScriptFn
+			return
+		}
+		for (const [key, value] of Object.entries(node)) {
+			walk(value, prefix ? `${prefix}.${key}` : key)
+		}
+	}
+	walk(handlers, '')
+	return out
+}
+
 function buildScriptApi(
 	router: Router,
 	handlers: Record<string, unknown>,
-	getContext: () => Promise<unknown>,
+	context: unknown,
 	rawArgv: string[],
-	globals: unknown,
 	args: string[],
 	appName: string,
 	hookDispatcher: HookDispatcher,
@@ -250,92 +239,96 @@ function buildScriptApi(
 		[],
 		router,
 		handlers,
-		getContext,
+		context,
 		rawArgv,
 		appName,
 		hookDispatcher,
 	)
-	const call = flattenHandlerTree(handlerTree)
-	return { handlers: handlerTree, call, globals, args, raw: rawArgv }
+	return {
+		handlers: handlerTree,
+		call: flattenHandlerTree(handlerTree),
+		context,
+		args,
+		raw: rawArgv,
+	}
+}
+
+async function runInline(
+	code: string,
+	scope: Record<string, unknown>,
+): Promise<unknown> {
+	const parsed = parseSync('snippet.js', code, { lang: 'js' })
+	if (parsed.errors.length > 0) {
+		throw new SyntaxError(
+			parsed.errors.map((error) => error.message).join('\n'),
+		)
+	}
+
+	let body = code
+	const last = parsed.program.body.at(-1)
+	if (last?.type === 'ExpressionStatement') {
+		const expression = last.expression
+		body = `${code.slice(0, last.start)}return (${code.slice(
+			expression.start,
+			expression.end,
+		)})`
+	}
+
+	const AsyncFunction = (async () => {}).constructor as new (
+		...args: string[]
+	) => (...values: unknown[]) => Promise<unknown>
+	const names = Object.keys(scope)
+	const fn = new AsyncFunction(...names, body)
+	return await fn(...names.map((name) => scope[name]))
+}
+
+async function runScriptFile(path: string, api: ScriptAPI): Promise<unknown> {
+	const fullPath = resolvePath(process.cwd(), expandHome(path))
+	const mod = (await import(pathToFileURL(fullPath).href)) as Record<
+		string,
+		unknown
+	>
+	if (typeof mod.default === 'function') {
+		return await (mod.default as (argc: ScriptAPI) => unknown)(api)
+	}
+	if (typeof mod.main === 'function') {
+		return await (mod.main as (argc: ScriptAPI) => unknown)(api)
+	}
+	throw new Error('@run @file module must export default or main')
 }
 
 export async function runScriptMode(
 	schema: Router,
-	options: {
-		globals?: Schema
-		context?: (globals: unknown) => unknown | Promise<unknown>
-	},
 	handlers: Record<string, unknown>,
-	parsed: ReturnType<typeof parseArgv>,
-	appName: string,
 	hookDispatcher: HookDispatcher,
+	options: ScriptRunOptions,
 ): Promise<void> {
-	const flagsWithoutBuiltins = stripBuiltinFlags(parsed.flags)
-
-	// Parse + validate globals (same behavior as normal mode)
-	let globals: unknown = flagsWithoutBuiltins
-	if (options.globals) {
-		const result =
-			await options.globals['~standard'].validate(flagsWithoutBuiltins)
-		if (result.issues) {
-			console.error(colors.error('Global options validation failed'))
-			for (const issue of result.issues) {
-				const path = issue.path
-					?.map((p: { key: PropertyKey } | PropertyKey) =>
-						typeof p === 'object' ? p.key : p,
-					)
-					?.join('.')
-				console.error(
-					`  ${path ? `${colors.option(path)}: ` : ''}${issue.message}`,
-				)
-			}
-			process.exit(1)
-		}
-		globals = result.value
-	}
-
-	let contextPromise: Promise<unknown> | null = null
-	const getContext = async (): Promise<unknown> => {
-		if (!options.context) return undefined
-		if (!contextPromise)
-			contextPromise = Promise.resolve(options.context(globals))
-		return await contextPromise
-	}
-
 	const api = buildScriptApi(
 		schema,
 		handlers,
-		getContext,
-		parsed.raw,
-		globals,
-		parsed.positionals,
-		appName,
+		options.context,
+		options.raw,
+		options.args,
+		options.appName,
 		hookDispatcher,
 	)
-
-	let shouldExit = false
-	try {
-		if (parsed.flags.run !== undefined) {
-			const source = parseRunSource(parsed.flags.run)
-			if (source.kind === 'stdin') {
-				await runEval(await readStdin(), api)
-				return
-			}
-			if (source.kind === 'inline') {
-				await runEval(source.code, api)
-				return
-			}
-			await runScriptFile(source.path, api)
-			return
-		}
-	} catch (error) {
-		console.error(colors.error(formatRuntimeError(error)))
-		shouldExit = true
-	} finally {
-		await hookDispatcher.drain()
+	const scope: Record<string, unknown> = {
+		argc: api,
+		...((typeof api.handlers === 'object' && api.handlers !== null
+			? api.handlers
+			: {}) as Record<string, unknown>),
 	}
+	const result = await withStdoutRerouted(async () => {
+		if (options.source.kind === 'stdin')
+			return await runInline(await readStdin(), scope)
+		if (options.source.kind === 'inline')
+			return await runInline(options.source.code, scope)
+		return await runScriptFile(options.source.path, api)
+	})
+	await hookDispatcher.drain()
+	process.stdout.write(renderResult(result, options.json ? 'json' : 'yaml'))
+}
 
-	if (shouldExit) {
-		process.exit(1)
-	}
+export async function readTextInput(path: string): Promise<string> {
+	return await readFile(resolvePath(process.cwd(), expandHome(path)), 'utf8')
 }

@@ -11,24 +11,23 @@ export function getRouterChildren(router: Router): { [key: string]: Router } {
 export function findHandler(
 	path: string[],
 	handlers: Record<string, unknown>,
-): ((opts: unknown) => Promise<void> | void) | null {
+): ((opts: unknown) => unknown | Promise<unknown>) | null {
 	const joined = path.join('.')
 	if (joined in handlers && typeof handlers[joined] === 'function') {
-		return handlers[joined] as (opts: unknown) => Promise<void> | void
+		return handlers[joined] as (opts: unknown) => unknown | Promise<unknown>
 	}
 
 	let current: unknown = handlers
-
 	for (const segment of path) {
 		if (typeof current === 'object' && current !== null && segment in current) {
 			current = (current as Record<string, unknown>)[segment]
-		} else {
-			return null
+			continue
 		}
+		return null
 	}
 
 	if (typeof current === 'function') {
-		return current as (opts: unknown) => Promise<void> | void
+		return current as (opts: unknown) => unknown | Promise<unknown>
 	}
 
 	return null

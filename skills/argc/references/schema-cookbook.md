@@ -1,148 +1,117 @@
 # Schema Cookbook
 
-How argc turns argv into typed handler input, and copy-paste recipes for the
-schema shapes that come up when building agent-facing CLIs. Read alongside the
-README sections _Transform: Schema Superpowers_, _Arrays & Nested Objects_, and
-_JSON Input_ (`node_modules/argc/README.md`).
+How to model typed input for argc 7 commands. Read this when designing the
+object passed as the single command input token.
 
-## How coercion works (and why it never throws)
+## Mental Model
 
-argc keeps argv parsing **lexical** — every flag value starts as a string. Before
-validation, it adapts explicit flag values to the schema's _input_ JSON type
-(`src/coerce.ts`):
+argc does not coerce shell flags in v7. A command receives one structured JSON5
+value, then the Standard Schema validator owns type checking, defaults, and
+transforms.
 
-| Schema input type | argv `"5"` / `"true"` becomes | Notes                                         |
-| ----------------- | ----------------------------- | --------------------------------------------- |
-| `string`          | unchanged                     | —                                             |
-| `number`          | `5`                           | non-numeric strings pass through unchanged    |
-| `integer`         | `5`                           | non-integers (`"5.5"`) pass through unchanged |
-| `boolean`         | `true`                        | only `"true"`/`"false"` (case-insensitive)    |
-| `array`           | each item coerced to `items`  | repeated flags: `--tag a --tag b`             |
-| `object`          | each property coerced         | dot notation: `--db.port 5432`                |
+```bash
+myapp user create "{ name: 'alice', tags: ['admin', 'dev'] }"
+myapp user create @payload.json
+printf "{ name: 'alice' }" | myapp user create -
+```
 
-**Coercion never throws.** A value that can't be coerced is passed through
-untouched so the _validator_ produces the error message — you get
-`expected number, received "abc"` from your schema library, not an opaque parse
-crash. This is why you should let the schema own constraints (`v.minValue`,
-`v.email`) rather than pre-checking in handlers.
+Bare braces are a shell error, not an argc feature. Quote object input.
 
-Coercion is **type-directed and shallow per field**; it does not run transforms.
+## Transforms
 
-## Transforms run during validation, lazily
-
-`v.transform` (valibot) / `.transform` (zod) run inside the standard-schema
-validate step, **only for the executed command**. Coercion handles primitives;
-transforms handle rich values. Rule of thumb:
-
-- **Primitive (`number`, `boolean`, `integer`)** → declare the type, coercion
-  handles it. No transform needed.
-- **Rich value (`File`, `Date`, `URL`, `Glob`, parsed JSON)** → string input +
-  `transform`.
+`v.transform` (valibot), `.transform` (zod), and equivalent Standard Schema
+transforms run during validation for the executed command only.
 
 ```typescript
-import * as v from 'valibot'
-
-// string → parsed JSON file (async transform is fine; handler awaits input.file)
 file: v.pipe(
 	v.string(),
 	v.endsWith('.json'),
-	v.transform((p) => Bun.file(p).json()),
+	v.transform((path) => Bun.file(path).json()),
 )
 
-// string → Date
 since: v.pipe(
 	v.string(),
-	v.transform((s) => new Date(s)),
+	v.transform((value) => new Date(value)),
 )
 
-// string → validated URL object
 endpoint: v.pipe(
 	v.string(),
 	v.url(),
-	v.transform((s) => new URL(s)),
-)
-
-// string → glob matcher
-pattern: v.pipe(
-	v.string(),
-	v.transform((p) => new Bun.Glob(p)),
+	v.transform((value) => new URL(value)),
 )
 ```
 
-The handler receives the transformed value (a `Promise` if the transform is
-async — `await input.file`). Validation/transform cost is paid only for the
-command that actually runs.
+The handler receives transformed values. Async transforms produce promises; keep
+that choice intentional because it leaks into handler code.
 
-## Recipes
+## Defaults
 
-### Optional flag with a default
-
-```typescript
-loud: v.optional(v.boolean(), false) // --loud / --no-loud, default false
-format: v.optional(v.picklist(['json', 'table']), 'table')
-```
-
-`--schema` renders these as `loud?: boolean = false` — the default is visible to
-the agent. Prefer defaults over required flags wherever a sane default exists.
-
-### Enums an agent can discover
+Use schema defaults when the tool has a sane default:
 
 ```typescript
-env: v.picklist(['dev', 'staging', 'prod']) // → env: "dev" | "staging" | "prod"
+format: v.optional(v.picklist(['yaml', 'json']), 'yaml')
+limit: v.optional(v.number(), 20)
 ```
 
-Picklists surface every legal value in `--schema`; free-form strings don't.
-Reach for a picklist whenever the input is a closed set.
+Defaults are visible in `@schema`, so agents can omit routine choices without
+guessing.
 
-### Arrays (repeat the flag)
+## Closed Sets
+
+Prefer picklists for finite choices:
 
 ```typescript
-tags: v.array(v.string()) // --tags a --tags b → ['a','b']
-ports: v.array(v.number()) // --ports 80 --ports 443 → [80, 443] (coerced)
+environment: v.picklist(['dev', 'staging', 'prod'])
 ```
 
-### Nested objects (dot notation)
+Closed sets are high-signal in `@schema`; free-form strings are not.
+
+## Arrays and Objects
+
+Arrays and nested objects are ordinary JSON5:
 
 ```typescript
-db: v.object({ host: v.string(), port: v.number() })
-// --db.host localhost --db.port 5432 → { host: 'localhost', port: 5432 }
+tags: v.array(v.string())
+db: v.object({
+	host: v.string(),
+	port: v.number(),
+})
 ```
 
-Keep nesting shallow. Deep trees are awkward on the command line; for complex
-payloads prefer `--input` (below).
+```bash
+myapp deploy "{ tags: ['api', 'prod'], db: { host: 'localhost', port: 5432 } }"
+```
 
-### Constrained primitives
+Do not invent flag-like parallel syntax. If the payload is too large for a
+single readable command, put it in a file and pass `@payload.json`.
+
+## Non-Identifier Field Names
+
+Command and group keys must be JavaScript identifiers. Input field names are
+domain data and may be non-identifiers:
 
 ```typescript
-name: v.pipe(v.string(), v.minLength(2))
-count: v.pipe(v.number(), v.minValue(1), v.maxValue(100))
-email: v.pipe(v.string(), v.email())
+headers: v.object({
+	'content-type': v.string(),
+})
 ```
 
-Let the schema enforce constraints — the error messages are free and the
-constraint shows up in `--schema`.
+`@schema` quotes those keys:
 
-## When to use `--input` instead of flags
+```typescript
+type Input = {
+	'content-type': string
+}
+```
 
-Every command accepts a full JSON/JSON5 object via `--input` (README: _JSON
-Input_). Reach for it when:
+## Schema Library Choice
 
-- the payload is large or generated (agents, scripts): `--input @payload.json`,
-  `--input '{...}'`, or `--input @-` (stdin)
-- the shape is deeply nested (dot notation gets unwieldy)
+argc needs Standard Schema validation plus JSON Schema introspection for
+`@schema`.
 
-`--input` is **exclusive** with other command flags and positionals (globals are
-still allowed). Don't design a command that must mix `--input` with individual
-flags — pick one model per command.
+- zod and arktype can usually be passed directly.
+- valibot needs `toStandardJsonSchema` from `@valibot/to-json-schema` around
+  every schema passed to `.input()` or `context`.
 
-## Schema library choice
-
-argc needs both `StandardSchemaV1` (validate) and `StandardJSONSchemaV1`
-(introspection for `--schema`):
-
-- **zod**, **arktype** — work bare: `c.input(z.object({ … }))`.
-- **valibot** — wrap every schema in `toStandardJsonSchema` from
-  `@valibot/to-json-schema`. Forgetting the wrapper fails at the type level with
-  a confusing error. The templates default to valibot + this wrapper (aliased
-  `s`); the choice is to keep argc's own bundle dependency-light, not a quality
-  judgment — use whichever library the project already uses.
+The templates use valibot + `toStandardJsonSchema` to keep argc's own runtime
+small. Use the schema library the project already uses when that is clearer.

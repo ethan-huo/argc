@@ -30,7 +30,6 @@ export type {
 export type {
 	AnyCommand,
 	AnyGroup,
-	ArgDef,
 	CLIOptions,
 	CombinedHandlers,
 	CommandDef,

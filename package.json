@@ -1,6 +1,6 @@
 {
 	"name": "argc",
-	"version": "6.0.1",
+	"version": "7.0.0",
 	"type": "module",
 	"types": "./dist/index.d.ts",
 	"exports": {
@@ -22,6 +22,10 @@
 		"typecheck": "tsgo --noEmit",
 		"fmt": "oxfmt",
 		"fmt:check": "oxfmt --check"
+	},
+	"dependencies": {
+		"oxc-parser": "0.137.0",
+		"yaml": "2.9.0"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.3.14",

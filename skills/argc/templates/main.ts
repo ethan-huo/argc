@@ -12,7 +12,7 @@ const schema = {
 	hello: c
 		.meta({
 			description: 'Say hello',
-			examples: ['{{APP_NAME}} hello --name world --loud'],
+			examples: [`{{APP_NAME}} hello "{ name: 'world', loud: true }"`],
 		})
 		.input(
 			s(
@@ -34,7 +34,7 @@ await app.run({
 	handlers: {
 		hello: ({ input }) => {
 			const msg = `Hello, ${input.name}!`
-			console.log(input.loud ? msg.toUpperCase() : msg)
+			return input.loud ? msg.toUpperCase() : msg
 		},
 	},
 })

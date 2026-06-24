@@ -1,11 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
-import type { Router, Schema } from './types'
+import type { Router } from './types'
 
-import { camelCase, kebabCase } from './naming'
 import { getRouterChildren } from './router'
-import { extractCliInputParamsDetailed, type ParamInfo } from './schema'
 import { isCommand, isGroup } from './types'
 
 export type CompletionContext = {
@@ -15,189 +13,46 @@ export type CompletionContext = {
 
 export type SupportedShell = 'bash' | 'zsh' | 'fish'
 
-function findByAlias(
-	children: { [key: string]: Router },
-	alias: string,
-): Router | null {
-	for (const [, router] of Object.entries(children)) {
-		if (isCommand(router)) {
-			if (router['~argc'].meta.aliases?.includes(alias)) return router
-		}
-	}
-	return null
-}
-
 function walkRouter(router: Router, words: string[]): Router {
 	let current = router
-	let i = 0
-
-	while (i < words.length) {
-		const word = words[i]!
-
-		if (word.startsWith('-')) {
-			i++
-			// Peek: if next word exists, doesn't start with -, and isn't a valid
-			// child of the current router, treat it as the flag's value and skip it.
-			if (
-				i < words.length &&
-				!words[i]!.startsWith('-') &&
-				!isCommand(current)
-			) {
-				const children = getRouterChildren(current)
-				const next = words[i]!
-				if (!(next in children) && !findByAlias(children, next)) {
-					i++
-				}
-			}
-			continue
-		}
-
+	for (const word of words) {
+		if (word.startsWith('-') || word.startsWith('@')) break
 		if (isCommand(current)) break
-
 		const children = getRouterChildren(current)
-
-		if (word in children) {
-			current = children[word]!
-			i++
-			continue
-		}
-
-		const aliased = findByAlias(children, word)
-		if (aliased) {
-			current = aliased
-			i++
-			continue
-		}
-
-		break
+		if (!(word in children)) break
+		current = children[word]!
 	}
-
 	return current
-}
-
-function extractEnumValues(typeStr: string): string[] {
-	const parts = typeStr.split('|').map((p) => p.trim())
-	const values: string[] = []
-	for (const part of parts) {
-		if (
-			(part.startsWith('"') && part.endsWith('"')) ||
-			(part.startsWith("'") && part.endsWith("'"))
-		) {
-			values.push(part.slice(1, -1))
-		}
-	}
-	return values.length === parts.length ? values : []
-}
-
-function collectParams(
-	router: Router,
-	globals: Schema | undefined,
-): ParamInfo[] {
-	const params: ParamInfo[] = []
-
-	if (isCommand(router) && router['~argc'].input) {
-		const inputParams = extractCliInputParamsDetailed(router['~argc'].input)
-		const argNames = new Set(
-			(router['~argc'].args ?? []).map((a) =>
-				a.name.endsWith('...') ? a.name.slice(0, -3) : a.name,
-			),
-		)
-		for (const p of inputParams) {
-			if (!argNames.has(p.name)) {
-				params.push(p)
-			}
-		}
-	}
-
-	if (globals) {
-		params.push(...extractCliInputParamsDetailed(globals))
-	}
-
-	return params
-}
-
-const BUILTIN_FLAGS = [
-	'--help',
-	'-h',
-	'--version',
-	'-v',
-	'--schema',
-	'--input',
-	'--run',
-	'--completions',
-]
-
-function getFlagCandidates(
-	router: Router,
-	globals: Schema | undefined,
-): string[] {
-	const flags = [...BUILTIN_FLAGS]
-	const params = collectParams(router, globals)
-	for (const p of params) {
-		flags.push(`--${kebabCase(p.name)}`)
-	}
-	return flags
 }
 
 function filterByPrefix(candidates: string[], prefix: string): string[] {
 	if (!prefix) return candidates
-	return candidates.filter((c) => c.startsWith(prefix))
+	return candidates.filter((candidate) => candidate.startsWith(prefix))
 }
 
-export function complete(
-	router: Router,
-	globals: Schema | undefined,
-	ctx: CompletionContext,
-): string[] {
+export function complete(router: Router, ctx: CompletionContext): string[] {
 	const { words, current } = ctx
 	const currentWord =
 		current >= 0 && current < words.length ? (words[current] ?? '') : ''
 	const preceding = words.slice(0, Math.max(0, current))
 
-	const resolved = walkRouter(router, preceding)
-
-	// Check if previous word is a non-boolean flag expecting a value
-	if (current > 0 && !currentWord.startsWith('-')) {
-		const prevWord = words[current - 1]
-		if (prevWord && prevWord.startsWith('--')) {
-			const rawFlagName = prevWord.slice(2)
-			const params = collectParams(resolved, globals)
-			const param = params.find(
-				(p) => p.name === rawFlagName || p.name === camelCase(rawFlagName),
-			)
-			if (param && param.type !== 'boolean') {
-				const enumValues = extractEnumValues(param.type)
-				if (enumValues.length > 0) {
-					return filterByPrefix(enumValues, currentWord)
-				}
-				return []
-			}
-		}
+	if (preceding.length === 0 && currentWord.startsWith('@')) {
+		return filterByPrefix(['@run', '@schema', '@completions'], currentWord)
 	}
 
+	const resolved = walkRouter(router, preceding)
 	const candidates: string[] = []
-
-	// Subcommands (if at router/group, not at command leaf)
 	if (!isCommand(resolved)) {
-		const children = getRouterChildren(resolved)
-		for (const [name, child] of Object.entries(children)) {
+		for (const [name, child] of Object.entries(getRouterChildren(resolved))) {
 			const hidden = isCommand(child)
 				? child['~argc'].meta.hidden
 				: isGroup(child)
 					? child['~argc.group'].meta.hidden
 					: false
-			if (!hidden) {
-				candidates.push(name)
-				if (isCommand(child) && child['~argc'].meta.aliases) {
-					candidates.push(...child['~argc'].meta.aliases)
-				}
-			}
+			if (!hidden) candidates.push(name)
 		}
 	}
-
-	// Flags
-	candidates.push(...getFlagCandidates(resolved, globals))
-
+	if (preceding.length === 0) candidates.push('@run', '@schema', '@completions')
 	return filterByPrefix(candidates, currentWord)
 }
 
@@ -207,9 +62,7 @@ function sanitizeName(name: string): string {
 
 function normalizeShellName(value: string): SupportedShell | null {
 	const shell = basename(value.trim()).replace(/^-+/, '')
-	if (shell === 'bash' || shell === 'zsh' || shell === 'fish') {
-		return shell
-	}
+	if (shell === 'bash' || shell === 'zsh' || shell === 'fish') return shell
 	return null
 }
 
@@ -233,7 +86,6 @@ export function getCompletionInstallPath(
 ): string | null {
 	const home = process.env.HOME
 	if (!home) return null
-
 	switch (shell) {
 		case 'bash':
 			return join(
@@ -257,10 +109,8 @@ export async function installCompletionScript(
 ): Promise<string> {
 	const script = generateCompletionScript(shell, programName)
 	const path = getCompletionInstallPath(shell, programName)
-	if (!script || !path) {
+	if (!script || !path)
 		throw new Error('Unable to resolve completion install path')
-	}
-
 	await mkdir(dirname(path), { recursive: true })
 	await writeFile(path, `${script}\n`)
 	return path
@@ -270,8 +120,6 @@ export function getCompletionReloadHint(
 	shell: SupportedShell,
 	path: string,
 ): string {
-	// A child process cannot source into the parent shell, so the best we can do
-	// is install to the standard autoload path and print the exact reload command.
 	switch (shell) {
 		case 'fish':
 			return `Current shell: run 'source ${path}' if the new completions do not appear immediately.`
@@ -322,7 +170,6 @@ compdef _${fn} ${name}`
 function generateFishScript(name: string): string {
 	const fn = sanitizeName(name)
 	return `# fish completion for ${name}
-# Clear stale generated or hand-written rules before installing the dynamic handler.
 complete -c ${name} -e
 
 function __${fn}_complete
@@ -332,7 +179,6 @@ function __${fn}_complete
   if test -z "$cur"
     command ${name} --_complete (count $tokens) -- $tokens "" 2>/dev/null
   else
-    # fish keeps the current token separate from -opc, so pass it explicitly.
     command ${name} --_complete (count $tokens) -- $tokens $cur 2>/dev/null
   end
 end

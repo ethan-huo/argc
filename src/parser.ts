@@ -1,159 +1,24 @@
-// Argv parser - performs lexical parsing and leaves explicit values as strings.
+export type InputSource =
+	| { kind: 'omitted' }
+	| { kind: 'inline'; value: string }
+	| { kind: 'file'; path: string }
+	| { kind: 'stdin' }
 
 export type ParsedArgs = {
-	flags: Record<string, unknown>
-	positionals: string[]
 	raw: string[]
 }
 
-const UNSAFE_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
-
 export function parseArgv(argv: string[]): ParsedArgs {
-	const result: ParsedArgs = {
-		flags: {},
-		positionals: [],
-		raw: argv,
-	}
-
-	let i = 0
-
-	while (i < argv.length) {
-		const arg = argv[i]!
-
-		if (arg === '--') {
-			// Everything after -- is positional
-			i++
-			while (i < argv.length) {
-				result.positionals.push(argv[i]!)
-				i++
-			}
-			break
-		}
-
-		if (arg.startsWith('--no-')) {
-			// Boolean negation keeps the raw flag name; schema-aware normalization
-			// happens after command resolution so kebab-case schema keys can match.
-			const key = arg.slice(5)
-			assertSafeFlagPath(key)
-			result.flags[key] = false
-			i++
-			continue
-		}
-
-		if (arg.startsWith('--')) {
-			const eqIndex = arg.indexOf('=')
-			if (eqIndex !== -1) {
-				// --key=value
-				const key = arg.slice(2, eqIndex)
-				assertSafeFlagPath(key)
-				const value = arg.slice(eqIndex + 1)
-				setFlag(result.flags, key, value)
-			} else {
-				// --key or --key value
-				const key = arg.slice(2)
-				assertSafeFlagPath(key)
-				const next = argv[i + 1]
-				if (next !== undefined && !next.startsWith('-')) {
-					setFlag(result.flags, key, next)
-					i++
-				} else {
-					// Boolean flag
-					result.flags[key] = true
-				}
-			}
-			i++
-			continue
-		}
-
-		if (arg.startsWith('-') && arg.length === 2) {
-			// Short flag: -v or -v value
-			const key = arg[1]!
-			const next = argv[i + 1]
-			if (next !== undefined && !next.startsWith('-')) {
-				setFlag(result.flags, key, next)
-				i++
-			} else {
-				result.flags[key] = true
-			}
-			i++
-			continue
-		}
-
-		if (arg.startsWith('-') && arg.length > 2) {
-			// Combined short flags: -abc -> a: true, b: true, c: true
-			for (const char of arg.slice(1)) {
-				result.flags[char] = true
-			}
-			i++
-			continue
-		}
-
-		// Positional argument (could be command or actual positional)
-		result.positionals.push(arg)
-		i++
-	}
-
-	return result
+	return { raw: argv }
 }
 
-function setFlag(
-	flags: Record<string, unknown>,
-	key: string,
-	value: unknown,
-): void {
-	// Handle dot notation: --user.name john -> { user: { name: 'john' } }
-	if (key.includes('.')) {
-		setNestedFlag(flags, key.split('.'), value)
-		return
+export function parseInputSource(token: string | undefined): InputSource {
+	if (token === undefined) return { kind: 'omitted' }
+	if (token === '-') return { kind: 'stdin' }
+	if (token.startsWith('@')) {
+		const path = token.slice(1)
+		if (!path) throw new Error('expected a file path after @')
+		return { kind: 'file', path }
 	}
-
-	const existing = flags[key]
-	if (existing !== undefined) {
-		// Multiple values -> array
-		if (Array.isArray(existing)) {
-			existing.push(value)
-		} else {
-			flags[key] = [existing, value]
-		}
-	} else {
-		flags[key] = value
-	}
-}
-
-function assertSafeFlagPath(key: string): void {
-	for (const segment of key.split('.')) {
-		if (UNSAFE_PATH_SEGMENTS.has(segment)) {
-			throw new Error(`Invalid flag path segment: ${segment}`)
-		}
-	}
-}
-
-function setNestedFlag(
-	obj: Record<string, unknown>,
-	path: string[],
-	value: unknown,
-): void {
-	const key = path[0]!
-
-	if (path.length === 1) {
-		// Leaf node - handle array merging
-		const existing = obj[key]
-		if (existing !== undefined) {
-			if (Array.isArray(existing)) {
-				existing.push(value)
-			} else {
-				obj[key] = [existing, value]
-			}
-		} else {
-			obj[key] = value
-		}
-		return
-	}
-
-	// Intermediate node - ensure object exists
-	if (!(key in obj) || typeof obj[key] !== 'object' || obj[key] === null) {
-		obj[key] = {}
-	}
-
-	setNestedFlag(obj[key] as Record<string, unknown>, path.slice(1), value)
+	return { kind: 'inline', value: token }
 }

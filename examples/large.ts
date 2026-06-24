@@ -1,88 +1,73 @@
-/*
-Large CLI demo for agent schema exploration.
-
-Usage:
-  bun examples/large.ts --schema
-  bun examples/large.ts --schema=.compute
-  bun examples/large.ts --schema=.compute.alpha
-  bun examples/large.ts --schema=.compute.alpha.list
-  bun examples/large.ts --schema=..create
-
-Selector (jq-like):
-  .a.b            path
-  .a.*            wildcard (one level)
-  .a.{b,c}        set selection
-  ..name          recursive descent (match any depth)
-
-Input (JSON):
-  bun examples/large.ts compute alpha create --input '{"name":"x","region":"us-east-1"}'
-  bun examples/large.ts compute alpha create --input @payload.json
-  bun examples/large.ts compute alpha create --input @- <<'JSON'
-  {"name":"x"}
-  JSON
-*/
-
 import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import * as v from 'valibot'
 
-import { c, cli, createDefaultSchemaExplorer, group, type Router } from '../src'
+import { c, cli, group } from '../src/index'
 
 const s = toStandardJsonSchema
 
-const topGroups = [
-	'compute',
-	'storage',
-	'network',
-	'iam',
-	'database',
-	'analytics',
-]
-const subGroups = ['alpha', 'beta', 'gamma', 'delta']
-const commands = ['list', 'get', 'create', 'update', 'delete']
-
-function makeCommand(description: string) {
-	return c.meta({ description }).input(
-		s(
-			v.object({
-				region: v.optional(v.string()),
-				name: v.optional(v.string()),
-				dryRun: v.optional(v.boolean(), false),
-			}),
-		),
+function service(name: string) {
+	return group(
+		{ description: `${name} service` },
+		{
+			list: c.input(s(v.object({ region: v.optional(v.string()) }))),
+			get: c.input(s(v.object({ id: v.string() }))),
+			create: c.input(s(v.object({ name: v.string(), region: v.string() }))),
+		},
 	)
 }
 
-function makeSubGroup(parent: string, sub: string): Router {
-	const children: Record<string, Router> = {}
-	for (const cmd of commands) {
-		children[cmd] = makeCommand(`${parent} ${sub} ${cmd}`)
-	}
-	return group({ description: `${parent} ${sub} operations` }, children)
-}
-
-const schema: Record<string, Router> = {}
-for (const top of topGroups) {
-	const children: Record<string, Router> = {}
-	for (const sub of subGroups) {
-		children[sub] = makeSubGroup(top, sub)
-	}
-	schema[top] = group({ description: `${top} services` }, children)
+const schema = {
+	compute: group(
+		{ description: 'Compute resources' },
+		{
+			alpha: service('alpha compute'),
+			beta: service('beta compute'),
+		},
+	),
+	storage: group(
+		{ description: 'Storage resources' },
+		{
+			bucket: service('bucket'),
+			object: service('object'),
+		},
+	),
 }
 
 const app = cli(schema, {
-	name: 'gclude',
-	version: '0.0.1',
-	description: 'Large demo CLI with 120 commands for agent schema exploration',
-	schemaExplorer: createDefaultSchemaExplorer({ maxLines: 100 }),
-	globals: s(
-		v.object({
-			env: v.optional(v.picklist(['dev', 'staging', 'prod']), 'dev'),
-			verbose: v.optional(v.boolean(), false),
-		}),
-	),
+	name: 'large',
+	version: '7.0.0',
+	description: 'Large schema demo',
 })
 
-// This example is meant for schema exploration. For execution, provide real handlers.
-app.run({
-	handlers: {} as Record<string, never>,
+function handler(path: string) {
+	return ({ input }: { input: Record<string, unknown> }) => ({ path, input })
+}
+
+await app.run({
+	handlers: {
+		compute: {
+			alpha: {
+				list: handler('compute.alpha.list'),
+				get: handler('compute.alpha.get'),
+				create: handler('compute.alpha.create'),
+			},
+			beta: {
+				list: handler('compute.beta.list'),
+				get: handler('compute.beta.get'),
+				create: handler('compute.beta.create'),
+			},
+		},
+		storage: {
+			bucket: {
+				list: handler('storage.bucket.list'),
+				get: handler('storage.bucket.get'),
+				create: handler('storage.bucket.create'),
+			},
+			object: {
+				list: handler('storage.object.list'),
+				get: handler('storage.object.get'),
+				create: handler('storage.object.create'),
+			},
+		},
+	},
 })

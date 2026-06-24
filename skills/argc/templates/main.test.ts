@@ -38,16 +38,14 @@ afterAll(() => {
 test('hello', async () => {
 	const { stdout, stderr, exitCode } = await run(
 		'hello',
-		'--name',
-		'world',
-		'--loud',
+		"{ name: 'world', loud: true }",
 	)
 	expect(exitCode, stderr).toBe(0)
 	expect(stdout).toContain('HELLO, WORLD!')
 })
 
-test('--schema is agent-readable', async () => {
-	const { stdout, stderr, exitCode } = await run('--schema')
+test('@schema is agent-readable', async () => {
+	const { stdout, stderr, exitCode } = await run('@schema')
 	expect(exitCode, stderr).toBe(0)
 	expect(stdout).toContain('hello(')
 })

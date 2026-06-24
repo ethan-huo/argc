@@ -12,7 +12,8 @@ export type SelectorStep =
 	| { type: 'set'; branches: SelectorStep[][] }
 	| { type: 'recursive' }
 
-const BARE_KEY_CHAR_RE = /[A-Za-z0-9_@-]/
+const BARE_KEY_START_RE = /[A-Za-z_$]/
+const BARE_KEY_CHAR_RE = /[A-Za-z0-9_$]/
 
 export type SelectorMatch = {
 	path: string[]
@@ -323,7 +324,7 @@ function parseKey(
 		return parseQuotedKey(input, start)
 	}
 
-	if (!BARE_KEY_CHAR_RE.test(ch)) {
+	if (!BARE_KEY_START_RE.test(ch)) {
 		throw new Error(`Expected identifier at ${start}`)
 	}
 

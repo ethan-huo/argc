@@ -156,7 +156,7 @@ if [[ "$SKIP_CHECK" != "true" ]]; then
   # so the rendered files need one oxfmt pass to satisfy fmt:check.
   (cd "$DIR" && bun install && bun run fmt && bun run check && bun run build)
   echo
-  echo "Verified: check + build pass. Try: $DIR/dist/$NAME --schema"
+  echo "Verified: check + build pass. Try: $DIR/dist/$NAME @schema"
 fi
 
 cat <<EOF

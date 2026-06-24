@@ -14,7 +14,7 @@ import { isGroup, isCommand } from './types'
 const s = toStandardJsonSchema
 
 const schema = {
-	'@add': c.input(s(v.object({ name: v.string() }))),
+	addUser: c.input(s(v.object({ name: v.string() }))),
 	user: group(
 		{ description: 'User' },
 		{
@@ -153,11 +153,11 @@ describe('selectSchema', () => {
 		expect(result.schema).toEqual({})
 	})
 
-	test('selects at-prefixed keys', () => {
-		const result = selectSchema(schema, '.@add')
+	test('selects identifier keys', () => {
+		const result = selectSchema(schema, '.addUser')
 
 		expect(result.empty).toBe(false)
-		expect(result.matches.map((match) => match.path)).toEqual([['@add']])
-		expect((result.schema as Record<string, unknown>)['@add']).toBeDefined()
+		expect(result.matches.map((match) => match.path)).toEqual([['addUser']])
+		expect((result.schema as Record<string, unknown>)['addUser']).toBeDefined()
 	})
 })
