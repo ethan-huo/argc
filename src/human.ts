@@ -174,7 +174,8 @@ export function parseHumanArgs(
 			let value = flag.value
 			if (value === undefined) {
 				index++
-				if (index >= argv.length) missingFlagValue(options.commandPath, flag.name)
+				if (index >= argv.length)
+					missingFlagValue(options.commandPath, flag.name)
 				value = argv[index]!
 			}
 			setField(input, field, coerceValue(value, field))

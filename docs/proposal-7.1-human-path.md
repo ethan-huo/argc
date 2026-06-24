@@ -27,7 +27,7 @@ description: >
 > handled before the dispatch split — not human flags; the `--help` / `-h` discovery path is a
 > control short-circuit that reaches **no handler**; fixed the stale L8 row (verbatim `--tags`, no
 > singular) and the stale §7 Q-numbering; §7 isolation now reads "no change to agent schema
-> *rendering*" (`schema.ts` gains only the additive structured descriptor).
+> _rendering_" (`schema.ts` gains only the additive structured descriptor).
 >
 > **Changes in 0.4 (from Codex review v3):** removed the `--no-*` negation namespace — it collided
 > with verbatim `no-`-prefixed keys (e.g. `no-cache`); boolean `false` is now the attached
@@ -68,7 +68,7 @@ embedded in an error `$schema` slice, never documented in the skill. The human f
 door, for humans only; it is not one of the three isomorphic agent forms and is not claimed to be.
 
 **Decided premise (not under evaluation):** the human path lives **in core**, and all
-schema-bearing surfaces remain agent-only. For the human it is *hidden knowledge* — rediscovered
+schema-bearing surfaces remain agent-only. For the human it is _hidden knowledge_ — rediscovered
 via habit and `--help`, never pushed into agent-facing material.
 
 What Codex evaluates is **only §4 (is the partition safe?)** and **§5 (is coercion reliable?)**.
@@ -89,14 +89,14 @@ first and are NOT part of the dispatch split:**
 Everything else is the **input slot**, whose first token selects the dispatch path — and the two
 token sets are **disjoint by construction**:
 
-| First input-slot token            | Path                | Form                                  |
-| --------------------------------- | ------------------- | ------------------------------------- |
-| *(absent)*                        | agent               | `{}`                                  |
-| starts with `{`                   | agent               | JSON5 object literal (7.0, unchanged) |
-| starts with `@`                   | agent               | `@file` input (7.0, unchanged)        |
-| exactly `-`                       | agent               | stdin (7.0, unchanged)                |
-| any other `--flag`                | **human**           | a flag → schema-driven desugar        |
-| any other bare word               | **human**           | a positional → schema-driven desugar  |
+| First input-slot token | Path      | Form                                  |
+| ---------------------- | --------- | ------------------------------------- |
+| _(absent)_             | agent     | `{}`                                  |
+| starts with `{`        | agent     | JSON5 object literal (7.0, unchanged) |
+| starts with `@`        | agent     | `@file` input (7.0, unchanged)        |
+| exactly `-`            | agent     | stdin (7.0, unchanged)                |
+| any other `--flag`     | **human** | a flag → schema-driven desugar        |
+| any other bare word    | **human** | a positional → schema-driven desugar  |
 
 (The control tokens above are excluded from this table by definition — "any other" means after
 `--context` / `--help` / `-h` are accounted for.)
@@ -117,7 +117,7 @@ It reads the resolved command's input JSON Schema (`readJsonSchema(schema, 'inpu
 
 - **positionals** → declared positional fields, in order (§3.3);
 - **`--flag`** on a boolean field → `true`; **`--flag=false`** → `false` — the **attached `=` form
-  only**, because a boolean never consumes the *next* token (L4); there is **no** `--no-*` namespace
+  only**, because a boolean never consumes the _next_ token (L4); there is **no** `--no-*` namespace
   (L11 / §5.3);
 - **`--key value`** / **`--key=value`** → that field, value coerced by declared type (§5);
 - **repeatable** `--tags a --tags b` on an array field → `['a','b']` — the flag is the **schema
@@ -132,10 +132,10 @@ The result is fed to the **existing** validation and rendering pipeline unchange
 ### 3.3 Positional declaration
 
 Flags can be derived automatically from the schema (flag name = schema key, verbatim — §5.3).
-Positional *order*, however, is not in the schema, so a command opts in:
+Positional _order_, however, is not in the schema, so a command opts in:
 
 ```ts
-command({ input: ReadInput }).positional('file')   // file → positional[0]
+command({ input: ReadInput }).positional('file') // file → positional[0]
 ```
 
 A command with no `.positional(...)` is flag-only on the human path. (Builder shape is
@@ -146,7 +146,7 @@ illustrative; Codex may propose a better surface.)
 `@schema` stays agent-only and object-only. The human gets a separate, **pull-based** view:
 
 - `claw <path> --help` / `claw <path> -h` → a usage block (positionals, flags, types,
-  descriptions) regenerated from the schema. This is the *only* place the human form is visible.
+  descriptions) regenerated from the schema. This is the _only_ place the human form is visible.
   It is a **control short-circuit after the path resolves**: it renders and exits, never entering
   the handler or the input pipeline (§3.1).
 
@@ -157,24 +157,24 @@ It is not advertised in `SKILL.md`, the README agent sections, or `@schema` outp
 The partition in §3.1 is only safe if every leak is closed or consciously accepted. Reviewed once
 (Codex v1); the verdicts below stand, with **L10 added** — the fourth-class overlap review caught.
 
-| #  | Case                                                | Risk                                             | Proposed verdict                                                                                  |
-| -- | --------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| L1 | positional value is exactly `-`                     | collides with stdin                              | `-` is reserved for stdin; a literal `-` positional must go through a flag or object form. Accept. |
-| L2 | positional value starts with `@` (`@scope/pkg`)     | collides with `@file`                            | `@`-leading positional = `@file`. Literal `@…` value → use `--flag @…` or object form. Accept.     |
-| L3 | positional value starts with `{`                    | collides with object literal                     | `{`-leading = object form. Literal brace value → flag or object form. Accept.                      |
-| L4 | `--bool nextword` (boolean flag before a positional)| old schema-blind lexer ate the positional        | **single-pass schema-aware parse**: a boolean field never consumes a value (§5.1). Must verify.    |
-| L5 | a field literally named `context`                   | collides with the surviving `--context` slot     | `--context` is always the cross-cutting slot; field `context` is reachable only via object form.   |
-| L6 | mixing forms: `<path> "{…}" --toc`                  | reintroduces object⊕flag merge (cf. `070e5e5`)   | **forbidden.** Object form takes only `--context`; flag form takes no `{…}`. One door per call.    |
-| L7 | reserved flag names `--help`/`-h`/`--context`       | a same-named field is unreachable by flag        | reserved; same-named fields reachable only via object form. Document in `--help`.                  |
-| L8 | array arity / `--tag` vs `--tags`                   | the bug class behind `0e26bb2`                   | **decided:** array field → repeatable flag at the **verbatim** key (`--tags`); no singularization (§5.3). |
-| L9 | human typo (`--tocc`) error shape                   | should it be human text or the agent YAML envelope? | **open** (§6 Q3). Default: reuse the YAML envelope to avoid doubling machinery.                  |
-| L10| positional value starts with `--` (`--weird.md`, `--help`) | routed as a flag / help, never a positional | **decided:** no positional may start with `--`; such a value uses a named flag or the object form. (A `--` terminator is the heavier alternative if a real need appears.) |
-| L11| `--no-cache` when the schema has a `no-cache` (or `no-*`) key | a `--no-*` negation namespace collides with a verbatim `no-`-prefixed key | **decided:** there is **no** `--no-*` namespace. `false` is `--key=false`. So every `no-`-prefixed key stays verbatim and unambiguous (`--no-cache` sets key `no-cache`, not `cache: false`). |
+| #   | Case                                                          | Risk                                                                      | Proposed verdict                                                                                                                                                                              |
+| --- | ------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L1  | positional value is exactly `-`                               | collides with stdin                                                       | `-` is reserved for stdin; a literal `-` positional must go through a flag or object form. Accept.                                                                                            |
+| L2  | positional value starts with `@` (`@scope/pkg`)               | collides with `@file`                                                     | `@`-leading positional = `@file`. Literal `@…` value → use `--flag @…` or object form. Accept.                                                                                                |
+| L3  | positional value starts with `{`                              | collides with object literal                                              | `{`-leading = object form. Literal brace value → flag or object form. Accept.                                                                                                                 |
+| L4  | `--bool nextword` (boolean flag before a positional)          | old schema-blind lexer ate the positional                                 | **single-pass schema-aware parse**: a boolean field never consumes a value (§5.1). Must verify.                                                                                               |
+| L5  | a field literally named `context`                             | collides with the surviving `--context` slot                              | `--context` is always the cross-cutting slot; field `context` is reachable only via object form.                                                                                              |
+| L6  | mixing forms: `<path> "{…}" --toc`                            | reintroduces object⊕flag merge (cf. `070e5e5`)                            | **forbidden.** Object form takes only `--context`; flag form takes no `{…}`. One door per call.                                                                                               |
+| L7  | reserved flag names `--help`/`-h`/`--context`                 | a same-named field is unreachable by flag                                 | reserved; same-named fields reachable only via object form. Document in `--help`.                                                                                                             |
+| L8  | array arity / `--tag` vs `--tags`                             | the bug class behind `0e26bb2`                                            | **decided:** array field → repeatable flag at the **verbatim** key (`--tags`); no singularization (§5.3).                                                                                     |
+| L9  | human typo (`--tocc`) error shape                             | should it be human text or the agent YAML envelope?                       | **open** (§6 Q3). Default: reuse the YAML envelope to avoid doubling machinery.                                                                                                               |
+| L10 | positional value starts with `--` (`--weird.md`, `--help`)    | routed as a flag / help, never a positional                               | **decided:** no positional may start with `--`; such a value uses a named flag or the object form. (A `--` terminator is the heavier alternative if a real need appears.)                     |
+| L11 | `--no-cache` when the schema has a `no-cache` (or `no-*`) key | a `--no-*` negation namespace collides with a verbatim `no-`-prefixed key | **decided:** there is **no** `--no-*` namespace. `false` is `--key=false`. So every `no-`-prefixed key stays verbatim and unambiguous (`--no-cache` sets key `no-cache`, not `cache: false`). |
 
 **The central safety claim:** because a JSON5 object always starts with `{`, file input with `@`,
 and stdin is exactly `-`, the agent token set `{ {…}, @…, -, absent }` and the human token set
 `{ --flag, bareword }` are **disjoint at the first input-slot token**. The only overlaps are on
-the *value* of a positional — L1–L3 (`-` / `@` / `{`) and L10 (`--`) — all closeable by "such a
+the _value_ of a positional — L1–L3 (`-` / `@` / `{`) and L10 (`--`) — all closeable by "such a
 value uses a named flag or the object form." Review (Codex v1) confirmed no fifth case, and that
 the architecture is safe **provided** the human parser is entered only after the path resolves to
 a command (`cli.ts:330-353`), leaving agent dispatch byte-identical.
@@ -188,13 +188,13 @@ This is the problem the user named, and the one with the longest scar history.
 argv lexing yields strings. With `input: { a: string; b: number }`, `--b 1` lexes `b = "1"`. The
 field's declared type drives coercion:
 
-| declared type        | `"1"` →     | `"true"` →  | failure mode                                  |
-| -------------------- | ----------- | ----------- | --------------------------------------------- |
-| `string`             | `"1"`       | `"true"`    | —                                             |
-| `number` / `integer` | `1`         | *(stays `"true"`)* | non-numeric stays string → normal `INVALID_INPUT` |
-| `boolean`            | *(stays `"1"`)* | `true`  | `--b` alone = `true`; `--no-b` = `false`      |
-| `array<T>`           | `[coerce(T)]` per element | | repeatable flag accumulates                   |
-| union / `anyOf`      | unchanged (string) | | ambiguous target → leave to schema validation |
+| declared type        | `"1"` →                   | `"true"` →         | failure mode                                      |
+| -------------------- | ------------------------- | ------------------ | ------------------------------------------------- |
+| `string`             | `"1"`                     | `"true"`           | —                                                 |
+| `number` / `integer` | `1`                       | _(stays `"true"`)_ | non-numeric stays string → normal `INVALID_INPUT` |
+| `boolean`            | _(stays `"1"`)_           | `true`             | `--b` alone = `true`; `--no-b` = `false`          |
+| `array<T>`           | `[coerce(T)]` per element |                    | repeatable flag accumulates                       |
+| union / `anyOf`      | unchanged (string)        |                    | ambiguous target → leave to schema validation     |
 
 Coercion is **best-effort and never throws**: it only narrows a string where the schema names a
 single scalar type; anything it cannot narrow passes through untouched and is caught by the
@@ -202,7 +202,7 @@ single scalar type; anything it cannot narrow passes through untouched and is ca
 correctness is owned by validation, not by the coercer — the coercer only removes the
 "everything-from-argv-is-a-string" impedance.
 
-Crucially this must run **before/with** parsing, not after (the historical design coerced *after*
+Crucially this must run **before/with** parsing, not after (the historical design coerced _after_
 a schema-blind lex — the source of L4 and the arity bugs). Knowing `b` is `boolean` is what lets
 the parser decide `--b` takes no value.
 
@@ -215,13 +215,13 @@ raw material it stood on — but **neither public helper is parser-grade** (Code
   actually needs (`type` / `items` / `properties`), but it is **private**.
 - `extractCliInputParamsDetailed` → `ParamInfo { name, type, optional }` (`schema.ts:182`) is
   **display-only**: `type` is a rendered string (`"string[]"`, `'"dev" | "prod"'`). Driving the
-  parser off those strings would make the schema *renderer* an implicit ABI — a display tweak would
+  parser off those strings would make the schema _renderer_ an implicit ABI — a display tweak would
   silently change parsing. Forbidden.
 
 **Prerequisite (new work, not free reuse):** a **structured field descriptor** for the parser —
 `{ name, required, kind, itemKind, enum, rawSchema }` — derived from the raw JSON schema;
 `ParamInfo` stays display-only and the parser must never read it. The old `coerce.ts` (commit
-`9df72f6`) is the reference for the *coercion rules* (it read the raw schema directly), but 7.1
+`9df72f6`) is the reference for the _coercion rules_ (it read the raw schema directly), but 7.1
 must expose that structure deliberately rather than lean on the private reader or the display
 strings.
 
@@ -233,19 +233,19 @@ already permits non-identifier input keys rendered quoted in `@schema` (`{ "cont
 so `content-type` → `--content-type` is natural with zero mapping, and `maxDepth` → `--maxDepth`.
 Removing the bidirectional map removes the entire `b42e792`/`7d7b60d` bug class. Verbatim also
 forecloses a `--no-*` namespace — it would collide with `no-`-prefixed keys (L11) — so a boolean's
-`false` is the attached `--key=false` form, not `--no-key` (decided #9). *Review v3 confirmed
-verbatim.*
+`false` is the attached `--key=false` form, not `--no-key` (decided #9). _Review v3 confirmed
+verbatim._
 
 ### 5.4 Scar inventory — re-incurred hazards (Codex must check each is closed)
 
-| commit    | what it fixed (then)                                      | does the §5.1 single-pass design re-incur it? |
-| --------- | -------------------------------------------------------- | --------------------------------------------- |
-| `9df72f6` | schema-driven coercion (string→typed)                    | reused verbatim — verify against 7.0 introspection |
-| `859b65e` | arrays (repeated flags) + nested (dot notation)          | arrays kept; deep nesting punted to object form (§3.2) |
-| `0e26bb2` | singular `--tag` for repeatable array flags              | **dropped** — array flag = schema key verbatim (`--tags`); no singularization (§5.3) |
-| `070e5e5` | field named `input` colliding with `--input`             | `--input` is gone; check no analogous reserved-name leak beyond L5/L7 |
-| `b42e792` | kebab flags respect schema field names                   | obviated by §5.3 (verbatim, no mapping)       |
-| `7d7b60d` | help flag display aligned to schema names                | re-applies to the new `--help` view (§3.4)    |
+| commit    | what it fixed (then)                            | does the §5.1 single-pass design re-incur it?                                        |
+| --------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `9df72f6` | schema-driven coercion (string→typed)           | reused verbatim — verify against 7.0 introspection                                   |
+| `859b65e` | arrays (repeated flags) + nested (dot notation) | arrays kept; deep nesting punted to object form (§3.2)                               |
+| `0e26bb2` | singular `--tag` for repeatable array flags     | **dropped** — array flag = schema key verbatim (`--tags`); no singularization (§5.3) |
+| `070e5e5` | field named `input` colliding with `--input`    | `--input` is gone; check no analogous reserved-name leak beyond L5/L7                |
+| `b42e792` | kebab flags respect schema field names          | obviated by §5.3 (verbatim, no mapping)                                              |
+| `7d7b60d` | help flag display aligned to schema names       | re-applies to the new `--help` view (§3.4)                                           |
 
 ## 6. Decisions to lock vs. open questions
 
@@ -270,10 +270,10 @@ verbatim.*
 
 **Open (Codex to resolve):**
 
-- **Q1.** *Confirmed by review:* entering the human parser only after the path resolves to a
+- **Q1.** _Confirmed by review:_ entering the human parser only after the path resolves to a
   command keeps agent dispatch byte-identical and reopens no space-path. Implementation must hold
   this — any first-token case that misroutes agent input into the human branch is a blocker.
-- **Q2.** *Confirmed by review:* single-pass schema-aware parse is the right shape (it is what
+- **Q2.** _Confirmed by review:_ single-pass schema-aware parse is the right shape (it is what
   closes L4 and the arity class). Confirm in implementation that it does not relocate the bug.
 - **Q3.** Error shape on the human path (L9): reuse the agent YAML envelope, or emit human text?
   Trade isolation purity against machinery.
@@ -298,7 +298,7 @@ verbatim.*
 - `src/complete.ts` — only if Q5 chooses flag completion.
 - **No change** to **agent schema rendering** (`schema-explorer.ts`, and the `@schema` / outline
   output of `schema.ts`), `render.ts` agent rendering, `script.ts` (`@run`), or `SKILL.md` / README
-  agent sections — isolation is verified by their *non-diff*. (`schema.ts` gains **only** the
+  agent sections — isolation is verified by their _non-diff_. (`schema.ts` gains **only** the
   additive structured descriptor above; its rendering output is byte-unchanged.)
 
 Verification beyond unit tests: re-run the full `spec-7.0-behavior.md` matrix unchanged (proves no

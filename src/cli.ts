@@ -504,7 +504,9 @@ export class CLI<
 	}
 
 	private hasCommandHelpToken(argv: string[], start: number): boolean {
-		return argv.slice(start).some((token) => token === '--help' || token === '-h')
+		return argv
+			.slice(start)
+			.some((token) => token === '--help' || token === '-h')
 	}
 
 	private isInputToken(token: string): boolean {

@@ -173,10 +173,10 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).toContain('context:')
 		expect(result.stdout).toContain('fully shown')
 		expect(result.stdout).toContain('call:')
-			expect(result.stdout).not.toContain('program:')
-			expect(result.stdout).not.toContain('selectors:')
-			expect(result.stdout).not.toContain('--toc')
-		})
+		expect(result.stdout).not.toContain('program:')
+		expect(result.stdout).not.toContain('selectors:')
+		expect(result.stdout).not.toContain('--toc')
+	})
 
 	test('unknown object keys fail before schema validation can strip them', async () => {
 		const { app, handlers } = makeApp()
@@ -366,9 +366,9 @@ describe('argc 7 command surface', () => {
 		).toEqual([])
 	})
 
-		test('help renders YAML examples from the shared schema source', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() => app.run({ handlers }, ['--help']))
+	test('help renders YAML examples from the shared schema source', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() => app.run({ handlers }, ['--help']))
 
 		expect(result.exitCode).toBe(0)
 		expect(result.stdout).toContain('program: mcpx')
@@ -379,118 +379,120 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).toContain('mcpx user.create')
 		// selectors live inside the help block, not as a floating top-level key
 		expect(result.stdout).toContain('selectors:')
-			expect(result.stdout).not.toContain('$selectors:')
-			expect(result.stdout).not.toContain('CALL')
-		})
-
-		test('human path desugars positionals and flags into the same input object', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() =>
-				app.run({ handlers }, [
-					'read',
-					'docs/spec-7.0-behavior.md',
-					'--toc',
-					'--tags',
-					'docs',
-					'--tags=spec',
-					'--depth',
-					'2',
-					'--context',
-					"{ env: 'prod' }",
-				]),
-			)
-
-			expect(result.exitCode).toBe(0)
-			expect(result.stdout).toContain('file: docs/spec-7.0-behavior.md')
-			expect(result.stdout).toContain('toc: true')
-			expect(result.stdout).toContain('depth: 2')
-			expect(result.stdout).toContain('- docs')
-			expect(result.stdout).toContain('- spec')
-			expect(result.stdout).toContain('env: prod')
-		})
-
-		test('human booleans use attached false and keep no-prefixed keys verbatim', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() =>
-				app.run({ handlers }, [
-					'read',
-					'docs/spec.md',
-					'--toc=false',
-					'--no-cache',
-					'--context',
-					"{ env: 'dev' }",
-				]),
-			)
-
-			expect(result.exitCode).toBe(0)
-			expect(result.stdout).toContain('toc: false')
-			expect(result.stdout).toContain('no-cache: true')
-			expect(result.stdout).not.toContain('cache: false')
-		})
-
-		test('human context can appear before the positional slot', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() =>
-				app.run({ handlers }, [
-					'read',
-					'--context',
-					"{ env: 'dev' }",
-					'docs/spec.md',
-					'--toc',
-				]),
-			)
-
-			expect(result.exitCode).toBe(0)
-			expect(result.stdout).toContain('file: docs/spec.md')
-			expect(result.stdout).toContain('toc: true')
-			expect(result.stdout).toContain('env: dev')
-		})
-
-		test('human path fails fast on unknown flags', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() =>
-				app.run({ handlers }, ['read', 'docs/spec.md', '--tocc']),
-			)
-
-			expect(result.exitCode).toBe(1)
-			expect(result.stderr).toContain('error: INVALID_INPUT')
-			expect(result.stderr).toContain('at: tocc')
-			expect(result.stderr).toContain('message: unknown flag')
-		})
-
-		test('object input cannot mix with human flags', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() =>
-				app.run({ handlers }, ['read', "{ file: 'docs/spec.md' }", '--toc']),
-			)
-
-			expect(result.exitCode).toBe(1)
-			expect(result.stderr).toContain('error: TWO_INPUTS')
-		})
-
-		test('per-command human help is a control path and reaches no handler', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() => app.run({ handlers }, ['read', '--help']))
-
-			expect(result.exitCode).toBe(0)
-			expect(result.stdout).toContain('usage:')
-			expect(result.stdout).toContain('mcpx read <file>')
-			expect(result.stdout).toContain('--toc')
-			expect(result.stdout).toContain('--no-cache')
-			expect(result.stdout).not.toContain('file: docs')
-		})
-
-		test('per-command human help short-circuits after a positional token', async () => {
-			const { app, handlers } = makeApp()
-			const result = await capture(() =>
-				app.run({ handlers }, ['read', 'docs/spec.md', '--help']),
-			)
-
-			expect(result.exitCode).toBe(0)
-			expect(result.stdout).toContain('mcpx read <file>')
-			expect(result.stdout).not.toContain('file: docs/spec.md')
-		})
+		expect(result.stdout).not.toContain('$selectors:')
+		expect(result.stdout).not.toContain('CALL')
 	})
+
+	test('human path desugars positionals and flags into the same input object', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, [
+				'read',
+				'docs/spec-7.0-behavior.md',
+				'--toc',
+				'--tags',
+				'docs',
+				'--tags=spec',
+				'--depth',
+				'2',
+				'--context',
+				"{ env: 'prod' }",
+			]),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toContain('file: docs/spec-7.0-behavior.md')
+		expect(result.stdout).toContain('toc: true')
+		expect(result.stdout).toContain('depth: 2')
+		expect(result.stdout).toContain('- docs')
+		expect(result.stdout).toContain('- spec')
+		expect(result.stdout).toContain('env: prod')
+	})
+
+	test('human booleans use attached false and keep no-prefixed keys verbatim', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, [
+				'read',
+				'docs/spec.md',
+				'--toc=false',
+				'--no-cache',
+				'--context',
+				"{ env: 'dev' }",
+			]),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toContain('toc: false')
+		expect(result.stdout).toContain('no-cache: true')
+		expect(result.stdout).not.toContain('cache: false')
+	})
+
+	test('human context can appear before the positional slot', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, [
+				'read',
+				'--context',
+				"{ env: 'dev' }",
+				'docs/spec.md',
+				'--toc',
+			]),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toContain('file: docs/spec.md')
+		expect(result.stdout).toContain('toc: true')
+		expect(result.stdout).toContain('env: dev')
+	})
+
+	test('human path fails fast on unknown flags', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['read', 'docs/spec.md', '--tocc']),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toContain('error: INVALID_INPUT')
+		expect(result.stderr).toContain('at: tocc')
+		expect(result.stderr).toContain('message: unknown flag')
+	})
+
+	test('object input cannot mix with human flags', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['read', "{ file: 'docs/spec.md' }", '--toc']),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toContain('error: TWO_INPUTS')
+	})
+
+	test('per-command human help is a control path and reaches no handler', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['read', '--help']),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toContain('usage:')
+		expect(result.stdout).toContain('mcpx read <file>')
+		expect(result.stdout).toContain('--toc')
+		expect(result.stdout).toContain('--no-cache')
+		expect(result.stdout).not.toContain('file: docs')
+	})
+
+	test('per-command human help short-circuits after a positional token', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['read', 'docs/spec.md', '--help']),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toContain('mcpx read <file>')
+		expect(result.stdout).not.toContain('file: docs/spec.md')
+	})
+})
 
 describe('argc 7 selector & context errors (spec)', () => {
 	test('@schema selector matching nothing → BAD_SELECTOR + embedded schema', async () => {
