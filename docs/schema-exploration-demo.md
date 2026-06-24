@@ -29,14 +29,14 @@ paths, typed input objects, defaults, descriptions, and examples.
 ## Focus a Command
 
 ```bash
-demo @schema user.create
-demo @schema user.create.input
+demo @schema .user.create
+demo @schema .user.create.input
 ```
 
 Command examples must show quoted object input:
 
 ```bash
-demo user create "{ name: 'john', tags: ['admin', 'dev'] }"
+demo user.create "{ name: 'john', tags: ['admin', 'dev'] }"
 ```
 
 ## Explore Large Trees
@@ -44,8 +44,8 @@ demo user create "{ name: 'john', tags: ['admin', 'dev'] }"
 For large command trees, use selectors:
 
 ```bash
-demo @schema deploy
-demo @schema deploy.aws
+demo @schema .deploy
+demo @schema .deploy.aws
 demo @schema ..create
 ```
 

@@ -118,9 +118,8 @@ async function validateInput(
 	) {
 		throw new ArgcError({
 			error: 'INVALID_INPUT',
-			command: commandPath.join(' '),
+			command: commandPath.join('.'),
 			issues: [{ message: 'input must be an object' }],
-			$hint: `cli @schema .${commandPath.join('.')}`,
 		})
 	}
 
@@ -142,9 +141,8 @@ async function validateInput(
 	if (issues.length > 0) {
 		throw new ArgcError({
 			error: 'INVALID_INPUT',
-			command: commandPath.join(' '),
+			command: commandPath.join('.'),
 			issues,
-			$hint: `cli @schema .${commandPath.join('.')}`,
 		})
 	}
 	return value
@@ -161,7 +159,7 @@ function buildScriptHandlerTree(
 ): ScriptHandlers {
 	if (isCommand(router)) {
 		const handler = findHandler(path, handlers)
-		const commandName = path.join(' ')
+		const commandName = path.join('.')
 		return (async (input?: unknown) => {
 			if (!handler) throw new Error(`No handler for command: ${commandName}`)
 			const validatedInput = await validateInput(

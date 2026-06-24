@@ -29,6 +29,10 @@ function formatPropertyKey(name: string): string {
 	return isValidIdentifier(name) ? name : JSON.stringify(name)
 }
 
+function formatExamplePropertyKey(name: string): string {
+	return isValidIdentifier(name) ? name : `'${name.replaceAll("'", "\\'")}'`
+}
+
 function splitTopLevelTypes(type: string, operator: '|' | '&'): string[] {
 	const parts: string[] = []
 	let start = 0
@@ -210,6 +214,15 @@ function pascalCase(name: string): string {
 
 function sampleValue(type: string): string {
 	if (type.includes('|')) return sampleValue(type.split('|')[0]!.trim())
+	if (type.startsWith('"') && type.endsWith('"')) {
+		try {
+			const value = JSON.parse(type) as string
+			return `'${value.replaceAll("'", "\\'")}'`
+		} catch {
+			return "'value'"
+		}
+	}
+	if (type.startsWith("'") && type.endsWith("'")) return type
 	if (type === 'number') return '1'
 	if (type === 'boolean') return 'true'
 	if (type.endsWith('[]')) return '[]'
@@ -221,7 +234,8 @@ function exampleInput(params: ParamInfo[]): string {
 	if (params.length === 0) return '{}'
 	return `{ ${params
 		.map(
-			(param) => `${formatPropertyKey(param.name)}: ${sampleValue(param.type)}`,
+			(param) =>
+				`${formatExamplePropertyKey(param.name)}: ${sampleValue(param.type)}`,
 		)
 		.join(', ')} }`
 }
@@ -229,6 +243,69 @@ function exampleInput(params: ParamInfo[]): string {
 function pushDoc(lines: string[], indent: string, text: string): void {
 	const normalized = text.replaceAll('*/', '* /')
 	lines.push(`${indent}/** ${normalized} */`)
+}
+
+function getCommandInputExample(router: Router): string {
+	if (!isCommand(router)) return '{}'
+	const input = router['~argc'].input
+	const params = input ? extractOutputParamsDetailed(input) : []
+	return exampleInput(params)
+}
+
+function getSchemaInputExample(schema: Schema): string {
+	return exampleInput(extractOutputParamsDetailed(schema))
+}
+
+function findFirstCommand(
+	router: Router,
+	path: string[] = [],
+): { path: string[]; router: Router } | null {
+	if (isCommand(router)) return { path, router }
+	for (const [key, child] of Object.entries(getRouterChildren(router))) {
+		const found = findFirstCommand(child, [...path, key])
+		if (found) return found
+	}
+	return null
+}
+
+function findFirstNamespace(
+	router: Router,
+	path: string[] = [],
+): string[] | null {
+	if (isCommand(router)) return null
+	if (path.length > 0) return path
+	for (const [key, child] of Object.entries(getRouterChildren(router))) {
+		const found = findFirstNamespace(child, [...path, key])
+		if (found) return found
+	}
+	return null
+}
+
+export function buildSurfaceExamples(
+	schema: Router,
+	options: SchemaOptions,
+): string[] {
+	const command = findFirstCommand(schema)
+	const namespace = findFirstNamespace(schema)
+	if (!command) {
+		return [`${options.name} @schema`]
+	}
+	const dottedPath = command.path.join('.')
+	const input = getCommandInputExample(command.router)
+	const direct = `${options.name} ${dottedPath} "${input}"`
+	const examples = [direct]
+	if (options.context) {
+		examples.push(
+			`${direct} --context "${getSchemaInputExample(options.context)}"`,
+		)
+	}
+	examples.push(`${options.name} @run "await ${dottedPath}(${input})" --json`)
+	examples.push(
+		`${options.name} @schema ${
+			namespace ? `.${namespace.join('.')}` : `.${dottedPath}`
+		}`,
+	)
+	return examples
 }
 
 function generateCommandSchema(
@@ -247,7 +324,7 @@ function generateCommandSchema(
 		if (meta.description) pushDoc(lines, indent, meta.description)
 		if (params.length > 0) {
 			lines.push(
-				`${indent}// ${appName} ${path.join(' ')} "${exampleInput(params)}"`,
+				`${indent}// ${appName} ${path.join('.')} "${exampleInput(params)}"`,
 			)
 			lines.push(`${indent}${name}(input: { ${formatParams(params)} })`)
 		} else {
@@ -292,15 +369,10 @@ function generateCommandSchema(
 }
 
 export function generateSchema(schema: Router, options: SchemaOptions): string {
-	const lines: string[] = []
-	if (options.description) lines.push(`// ${options.description}`)
-	if (options.context) {
-		lines.push(
-			`// Context: ${getInputTypeHint(options.context)}  (--context / ARGC_CTX)`,
-		)
-	}
-	if (lines.length > 0) lines.push('')
-	lines.push(`type ${pascalCase(options.name)} = {`)
+	// Body only: the typed API. Tool name, call tutorial, and context live in the
+	// OKF frontmatter the @schema handler wraps around this — no logic to repeat
+	// the tool's identity inside its own API surface.
+	const lines: string[] = [`type ${pascalCase(options.name)} = {`]
 
 	const children = isGroup(schema)
 		? schema['~argc.group'].children
@@ -323,37 +395,49 @@ export function countSchemaCommands(schema: Router): number {
 	)
 }
 
+// One flat line per top-level namespace: `name{child1,child2,...}` (v6 format).
+// Not an indented tree — that is unparseable noise and was never the rendering.
 export function generateSchemaOutline(
 	schema: Router,
 	depth: number = 2,
 ): string[] {
-	const lines: string[] = ['App']
-	const walk = (
-		router: Router,
-		indent: string,
-		remainingDepth: number,
-	): number => {
-		if (isCommand(router)) return 1
-		let total = 0
-		for (const [key, child] of Object.entries(getRouterChildren(router))) {
-			const count = countSchemaCommands(child)
-			total += count
-			if (remainingDepth > 0) {
-				lines.push(
-					`${indent}${key}${isCommand(child) ? '' : `  ${count} commands`}`,
-				)
-				if (!isCommand(child)) walk(child, `${indent}  `, remainingDepth - 1)
-			}
-		}
-		return total
+	const children = getRouterChildren(schema)
+	const lines: string[] = []
+	for (const [name, child] of Object.entries(children)) {
+		lines.push(renderOutlineNode(name, child, depth))
 	}
-	walk(schema, '  ', depth)
 	return lines
 }
 
+function renderOutlineNode(
+	name: string,
+	router: Router,
+	depth: number,
+): string {
+	if (depth <= 0) return name
+	if (isCommand(router)) return name
+	const children = getRouterChildren(router)
+	const parts = Object.entries(children).map(([childName, child]) =>
+		renderOutlineNode(childName, child, depth - 1),
+	)
+	if (parts.length === 0) return `${name}{}`
+	return `${name}{${parts.join(',')}}`
+}
+
+// Concrete deep path (e.g. `posthog.switch-organization`), not just a top key —
+// a runnable next step beats a bare namespace name.
 export function generateSchemaHintExample(schema: Router): string | null {
-	const path = findDeepPath(schema, [], 1)
-	return path ? path.join('.') : null
+	const entries = Object.entries(getRouterChildren(schema))
+	for (const [name, child] of entries) {
+		const deep = findDeepPath(child, [name], 3)
+		if (deep) return deep.join('.')
+	}
+	for (const [name, child] of entries) {
+		const two = findDeepPath(child, [name], 2)
+		if (two) return two.join('.')
+	}
+	if (entries.length > 0) return entries[0]![0]
+	return null
 }
 
 function findDeepPath(
@@ -361,9 +445,10 @@ function findDeepPath(
 	path: string[],
 	minDepth: number,
 ): string[] | null {
-	if (path.length >= minDepth && !isCommand(router)) return path
-	for (const [key, child] of Object.entries(getRouterChildren(router))) {
-		const found = findDeepPath(child, [...path, key], minDepth)
+	if (minDepth <= 1) return path
+	if (isCommand(router)) return null
+	for (const [name, child] of Object.entries(getRouterChildren(router))) {
+		const found = findDeepPath(child, [...path, name], minDepth - 1)
 		if (found) return found
 	}
 	return null

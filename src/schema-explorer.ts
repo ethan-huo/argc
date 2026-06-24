@@ -47,5 +47,5 @@ function resolveSelectionDepth(
 	if (typeof selectionDepth === 'function') {
 		return selectionDepth(selector)
 	}
-	return selectionDepth ?? 1
+	return selectionDepth ?? 2
 }

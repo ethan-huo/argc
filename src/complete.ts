@@ -13,21 +13,27 @@ export type CompletionContext = {
 
 export type SupportedShell = 'bash' | 'zsh' | 'fish'
 
-function walkRouter(router: Router, words: string[]): Router {
-	let current = router
-	for (const word of words) {
-		if (word.startsWith('-') || word.startsWith('@')) break
-		if (isCommand(current)) break
-		const children = getRouterChildren(current)
-		if (!(word in children)) break
-		current = children[word]!
-	}
-	return current
-}
-
 function filterByPrefix(candidates: string[], prefix: string): string[] {
 	if (!prefix) return candidates
 	return candidates.filter((candidate) => candidate.startsWith(prefix))
+}
+
+function collectPaths(
+	router: Router,
+	prefix: string[] = [],
+	out: string[] = [],
+): string[] {
+	if (prefix.length > 0) out.push(prefix.join('.'))
+	if (isCommand(router)) return out
+	for (const [name, child] of Object.entries(getRouterChildren(router))) {
+		const hidden = isCommand(child)
+			? child['~argc'].meta.hidden
+			: isGroup(child)
+				? child['~argc.group'].meta.hidden
+				: false
+		if (!hidden) collectPaths(child, [...prefix, name], out)
+	}
+	return out
 }
 
 export function complete(router: Router, ctx: CompletionContext): string[] {
@@ -40,18 +46,7 @@ export function complete(router: Router, ctx: CompletionContext): string[] {
 		return filterByPrefix(['@run', '@schema', '@completions'], currentWord)
 	}
 
-	const resolved = walkRouter(router, preceding)
-	const candidates: string[] = []
-	if (!isCommand(resolved)) {
-		for (const [name, child] of Object.entries(getRouterChildren(resolved))) {
-			const hidden = isCommand(child)
-				? child['~argc'].meta.hidden
-				: isGroup(child)
-					? child['~argc.group'].meta.hidden
-					: false
-			if (!hidden) candidates.push(name)
-		}
-	}
+	const candidates = preceding.length === 0 ? collectPaths(router) : []
 	if (preceding.length === 0) candidates.push('@run', '@schema', '@completions')
 	return filterByPrefix(candidates, currentWord)
 }

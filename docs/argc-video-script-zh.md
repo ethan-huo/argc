@@ -8,7 +8,7 @@ structured input token。不要再讲 v1 的 flags、positionals、`--input` 或
 
 1. 开场：argc 是为 agent 设计的 schema-first CLI。
 2. 最小示例：`c.input(...)`、`cli(commands)`、handler return value。
-3. 调用模型：`tool user create "{ name: 'alice' }"`、`@file`、`-`。
+3. 调用模型：`tool user.create "{ name: 'alice' }"`、`@file`、`-`。
 4. Agent 合同：`@schema`、`@run`、`@completions`。
 5. 输出合同：return value 到 stdout；日志和进度到 stderr；默认 YAML。
 
@@ -64,8 +64,8 @@ message: HELLO, World!
 
 ```bash
 hello @schema
-hello @schema greet
-hello @schema greet.input
+hello @schema .greet
+hello @schema .greet.input
 ```
 
 复杂输入直接传 JSON5：

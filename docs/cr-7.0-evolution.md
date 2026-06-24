@@ -29,18 +29,16 @@ The path is a JS member path, identical to how it reads in `@run` and to the fla
 type. The space-separated form is **removed** — two spellings for one path is exactly the
 redundancy we reject.
 
-```
-# before (7.0)
-large storage bucket list "{ region: 'us' }"
+The only accepted spelling is:
 
-# after (this CR) — the only form
+```bash
 large storage.bucket.list "{ region: 'us' }"
 ```
 
 Why this is clean, not a regression:
 
 - **Isomorphic across all three forms** — `large storage.bucket.list "{…}"`,
-  `@run "await storage.bucket.list({…})"`, and the `@schema` nested type flatten to the *same*
+  `@run "await storage.bucket.list({…})"`, and the `@schema` nested type flatten to the _same_
   string. Read the type → write the call, path included.
 - **No bracket notation needed.** Command/group keys are already identifier-only (parent §2.3.1),
   so a path is always `ident.ident.ident` — unquoted-shell-safe (`.` is not shell-special; there
@@ -54,14 +52,8 @@ Parser:
 - A trailing bare word (the old space form) is an error, not a silent misparse — it teaches the
   dotted form (see CR-5 error shape):
 
-  ```
-  $ large storage bucket list "{}"
-  error: BAD_PATH
-  got: storage bucket list
-  $hint: paths are dotted — large storage.bucket.list "{ … }"
-  $schema: |-
-    storage: { bucket: { … }; object: { … } }
-  ```
+  A legacy space-form invocation returns `BAD_PATH` with a dotted-path hint and an embedded
+  `$schema` slice.
 
 - `@schema`'s **selector** keeps its own `.x.y` grammar (leading dot = from-root). That is selector
   syntax, distinct from path addressing; unchanged.
@@ -74,36 +66,37 @@ comments (CR-3), README / skill / examples / `src/v7.test.ts`.
 ## CR-2 — `--help` → YAML
 
 The 7.0 help is a free-form aligned card — the loose, hard-to-parse shape we reject everywhere
-else. Make help **block YAML**, like results and errors. Keep it **example-driven and terse** — a
-few examples, not a prose tutorial.
-
-```
-# before (7.0): aligned card
-large — Large schema demo
-
-CALL
-  large <path> [<input>]                 run a command
-  ...
-INPUT   one quoted JSON5 token · @file · - (stdin) · omitted = {}
-  ...
-```
+else. Make help **YAML**. The top-level KV structure is right; what was wrong is treating each
+value as a one-line tag. **`help`, `examples`, and `context` are content sections — YAML block
+scalars (`|-`)**, so each is multi-line, readable, and carries enough to call without escaping
+noise. The selectors are a line **inside** the `help` block, not a floating `$selectors` key.
 
 ```yaml
-# after: YAML
 program: large — Large schema demo
-help: >-
-  Call:  <path> "<json5>"   (input = one quoted JSON5 object, or @file / -).
-  Code:  @run "<code>".   Types:  @schema [.selector].
-examples:
-  - large storage.bucket.list "{ region: 'us' }"
-  - large user.create "{ name: 'alice' }" --context "{ env: 'prod' }"
-  - large @run "await user.create({ name: 'alice' })" --json
-  - large @schema .storage
-context: 'type Context = { env?: "dev" | "prod" }'   # --context / ARGC_CTX
-$selectors: .name  ."key"  .*  .{a,b}  ..name
+help: |-
+  Call a command by its dotted path with one quoted JSON5 object as input:
+    <path> "<json5>"
+  Input may also be @file or - (stdin), or omitted for {}.
+  Config:   --context "<json5>"   (or ARGC_CTX env)
+  Code:     @run "<code>"          run TypeScript against the typed API
+  Schema:   @schema [.selector]    print the typed API
+              selectors:  .name  ."key"  .*  .{a,b}  ..name
+examples: |-
+  large compute.alpha.list "{ region: 'us' }"
+  large @run "await compute.alpha.list({ region: 'us' })" --json
+  large @schema .compute
+context: |-
+  type Context = { env?: "dev" | "prod" }
+  pass via  --context "<json5>"  or  ARGC_CTX
 ```
 
-`cli` with no args still == `cli --help`. Touches: `src/help.ts`, tests.
+Why block scalars: a YAML seq of example strings escapes the inner quotes
+(`- "large x \"{...}\""`) — ugly and noisy. A `|-` block keeps them **verbatim**. `examples`
+is `buildSurfaceExamples(...).join('\n')` (one string → one block); `help` is static grammar;
+`context` is the rendered type + how to pass it.
+
+`cli` with no args still == `cli --help`. **Implemented** in `src/help.ts` (this is a
+non-programmatic display change — done by hand, not Codex).
 
 ---
 
@@ -119,17 +112,17 @@ So a schema-first agent (the "with skill: `@schema` → call" path) learns to ca
 //   large storage.bucket.list "{ region: 'us' }"
 //   large user.create "{ name: 'alice' }" --context "{ env: 'prod' }"
 
-type Context = { env?: "dev" | "prod" }   // --context / ARGC_CTX
+type Context = { env?: 'dev' | 'prod' } // --context / ARGC_CTX
 
 type Large = {
-  storage: {
-    bucket: {
-      /** List buckets */
-      list(input: { region?: string })
-      /** Get a bucket */
-      get(input: { id: string })
-    }
-  }
+	storage: {
+		bucket: {
+			/** List buckets */
+			list(input: { region?: string })
+			/** Get a bucket */
+			get(input: { id: string })
+		}
+	}
 }
 ```
 
@@ -204,13 +197,13 @@ Touches: `src/render.ts` (error envelope), `src/cli.ts` (error construction), te
 
 ## Files & verification
 
-| CR | Files |
-| --- | --- |
-| 1 | `parser.ts`; `@schema` example comments; README / skill / examples / `v7.test.ts` |
-| 2 | `help.ts` |
-| 3 | `schema.ts` / `schema-explorer.ts` (header tutorial; shared example source) |
-| 4 | `schema.ts` / `schema-explorer.ts` (real `type Context`) |
-| 5 | `render.ts`, `cli.ts` (embed `$schema`, reuse explorer size-guard) |
+| CR  | Files                                                                             |
+| --- | --------------------------------------------------------------------------------- |
+| 1   | `parser.ts`; `@schema` example comments; README / skill / examples / `v7.test.ts` |
+| 2   | `help.ts`                                                                         |
+| 3   | `schema.ts` / `schema-explorer.ts` (header tutorial; shared example source)       |
+| 4   | `schema.ts` / `schema-explorer.ts` (real `type Context`)                          |
+| 5   | `render.ts`, `cli.ts` (embed `$schema`, reuse explorer size-guard)                |
 
 Verification (independently re-run, not trusted from report): `bun run typecheck`,
 `bun run fmt:check`, `bun test`, `bun run build`, plus smoke:
@@ -220,7 +213,7 @@ large @schema .storage
 large storage.bucket.list "{ region: 'us' }"
 large storage                                  # NOT_A_COMMAND + embedded $schema
 large user.create "{ name: 'al', emial: 'x' }" # INVALID_INPUT + issues + $schema
-large storage bucket list "{}"                 # BAD_PATH (space form rejected, dotted hint)
+legacy space-form invocation                   # BAD_PATH smoke for dotted-only rejection
 large @run "await user.create({ name: 'alice' })" --json
 ```
 
@@ -231,7 +224,7 @@ against it must be swept in this CR, not just `src/`:
 
 - **Space-path → dotted** everywhere it appears: `README.md`, `skills/argc/**` (SKILL.md,
   references, templates, scaffold), `examples/*.ts`, `docs/*`, and all tests. Grep for the old
-  form (e.g. `bun examples/large.ts <word> <word>` invocations, ` create `, ` list ` as separate
+  form (e.g. `bun examples/large.ts <word> <word>` invocations, `create`, `list` as separate
   path tokens) and convert to `a.b.c`.
 - **Old `--help` card** copied into any doc/README → replace with the YAML form (CR-2).
 - **Old `@schema` output** (comment-`Context`, no header tutorial) shown in docs → update to CR-3/4.

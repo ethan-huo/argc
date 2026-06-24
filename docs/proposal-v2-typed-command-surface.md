@@ -38,7 +38,7 @@ All three share **one object shape**, isomorphic to what `@schema` prints:
 
 ```
 cli @schema .g1.c2                →  c2(input: { name: string })
-cli g1 c2 "{ name: 'x' }"          →  the same call (no code, auditable, no code-exec needed)
+cli g1.c2 "{ name: 'x' }"          →  the same call (no code, auditable, no code-exec needed)
 cli @run "await g1.c2({ name: 'x' })"  →  the same call, composable
 ```
 
@@ -58,7 +58,7 @@ everything else.
 ## 2. Call contract
 
 ```
-cli <path...> [<input>] [--context <ctx>]
+cli <path> [<input>] [--context <ctx>]
 cli @run '<code>' [--json] [-- <args>...]
 cli @schema [.selector]
 cli @completions [shell]
@@ -66,7 +66,7 @@ cli --help | --version
 cli                       # == cli --help
 ```
 
-- **`<path...>`** space-separated command/group segments (`g1 c2`). Keys **must be valid JS
+- **`<path>`** one dotted command path token (`g1.c2`). Keys **must be valid JS
   identifiers** (§2.3.1) so the _same_ key works as a path segment, an `@schema` method name, and
   a bare `@run` property (`g1.c2(...)`).
 - **`<input>`** exactly **one argv token**: a JSON5 object, or `@file` / `-` (stdin). Omitted =
@@ -74,9 +74,9 @@ cli                       # == cli --help
   shell token — quote it**:
 
   ```
-  cli user create "{ name: 'alice', tags: ['admin'] }"   # JSON5 single-quotes nest in shell ""
-  cli db seed @payload.json                                # large/complex → file
-  cli db seed -                                            # or stdin
+  cli user.create "{ name: 'alice', tags: ['admin'] }"   # JSON5 single-quotes nest in shell ""
+  cli db.seed @payload.json                                # large/complex → file
+  cli db.seed -                                            # or stdin
   ```
 
   argc does **not** reassemble brace-split tokens: once a shell word-splits `{ name: 'alice' }`,
@@ -207,39 +207,25 @@ parseable, and a handler can `return` a JSON/YAML **string** for an exact repres
 4. **Errors speak the schema's vocabulary and teach the type** — they are the correction loop.
 5. **One output grammar: block YAML.** Command results _and_ error envelopes (§4.5) are YAML —
    structured KV an agent parses, never loose prose. Tool-meta keys take a `$`-prefix (`$hint`).
-   Help (§4.1) and `@schema` (§4.2) are the exception: an orientation card and a TS type, not
-   data.
+   Help (§4.1) and `@schema` (§4.2) are the exception: YAML orientation and a TS type.
 
 ### 4.1 `cli` and `cli --help`
 
-`cli` with no args == `cli --help`. Not per-command help — an orientation card: how to call,
-the context type, and a pointer into `@schema`.
+`cli` with no args == `cli --help`. Not per-command help — a YAML orientation block: how to
+call, the context type, and examples shared with `@schema`.
 
-```
-mcpx — media pipeline control
-
-CALL
-  mcpx <path> [<input>]                 run a command
-  mcpx <path> [<input>] --context <obj> with cross-cutting context
-  mcpx @run '<code>'                    run code against the typed API
-  mcpx @schema [.selector]              print the typed API
-
-INPUT   one quoted JSON5 token · @file · - (stdin) · omitted = {}
-        mcpx user create "{ name: 'alice', tags: ['admin'] }"
-        mcpx db seed @payload.json
-
-CONTEXT  --context <obj>  or  ARGC_CTX env
-  type Context = {
-    env: 'prod' | 'dev'
-    verbose?: boolean
-  }
-
-EXPLORE  mcpx @schema            whole API
-         mcpx @schema .user      one namespace
-         mcpx @schema ..create   recursive search
-  selector: .name  ."key"  .*  .{a,b}  ..name
-
-built-ins  @run  @schema  @completions   ·   --help  --version
+```yaml
+program: mcpx — media pipeline control
+help: >-
+  Call:  <path> "<json5>"   (input = one quoted JSON5 object, or @file / -).
+  Code:  @run "<code>".   Types:  @schema [.selector].
+examples:
+  - mcpx user.create "{ name: 'alice', tags: ['admin'] }"
+  - mcpx user.create "{ name: 'alice' }" --context "{ env: 'prod' }"
+  - mcpx @run "await user.create({ name: 'alice' })" --json
+  - mcpx @schema .user
+context: 'type Context = { env: "prod" | "dev"; verbose?: boolean }'
+$selectors: .name  ."key"  .*  .{a,b}  ..name
 ```
 
 Design notes: example-driven, not prose. The Context type is rendered inline (it is the one
@@ -253,12 +239,16 @@ The v1 flag/array/object syntax preamble and all case-conversion notes are **rem
 
 ```ts
 // mcpx — media pipeline control
-// Context: { env: 'prod' | 'dev'; verbose?: boolean }  (--context / ARGC_CTX)
+//
+// Call:  <path> "<json5>"   ·   @run "<code>"   ·   @schema [.selector]
+//   mcpx user.create "{ name: 'alice', email: 'a@x.com' }"
+
+type Context = { env: 'prod' | 'dev'; verbose?: boolean } // --context / ARGC_CTX
 
 type App = {
 	user: {
 		/** Create a user. */
-		// mcpx user create "{ name: 'alice', email: 'a@x.com' }"
+		// mcpx user.create "{ name: 'alice', email: 'a@x.com' }"
 		create(input: { name: string; email?: string })
 
 		/** List users. */
@@ -305,7 +295,7 @@ The handler's return value, serialized per §3 — **block YAML** for structured
 call has no `--json`; the `@run … --json` path is strict JSON.
 
 ```
-$ mcpx user list "{ format: 'table' }"     # array of objects → block YAML (read view)
+$ mcpx user.list "{ format: 'table' }"     # array of objects → block YAML (read view)
 - id: 1
   name: alice
   role: admin
@@ -313,18 +303,18 @@ $ mcpx user list "{ format: 'table' }"     # array of objects → block YAML (re
   name: bob
   role: user
 
-$ mcpx job status "{ id: 42 }"             # object → YAML; multiline value → block scalar
+$ mcpx job.status "{ id: 42 }"             # object → YAML; multiline value → block scalar
 id: 42
 state: failed
 log: |-
   step 1 ok
   step 2 failed: timeout
 
-$ mcpx config export "{ format: 'yaml' }"  # handler returns a YAML string → raw, untouched
+$ mcpx config.export "{ format: 'yaml' }"  # handler returns a YAML string → raw, untouched
 env: prod
 replicas: 3
 
-$ mcpx cache clear "{ all: true }"         # returns undefined → empty output, exit 0
+$ mcpx cache.clear "{ all: true }"         # returns undefined → empty output, exit 0
 
 $ mcpx @run 'await user.list({ format: "json" })' --json   # consume view: strict JSON
 [
@@ -355,9 +345,9 @@ path segments echo the whole input object and carry lib-specific fields). argc's
 precheck (§5) contributes issues in the same shape.
 
 ```
-$ mcpx user create "{ name: 'al', emial: 'a@x.com' }"
+$ mcpx user.create "{ name: 'al', emial: 'a@x.com' }"
 error: INVALID_INPUT
-command: user create
+command: user.create
 issues:
   - at: name
     message: "Invalid length: Expected >=3 but received 2"
@@ -365,17 +355,19 @@ issues:
     message: required
   - at: emial
     message: unknown key
-$hint: cli @schema .user.create
+$schema: |-
+  create(input: { name: string; email?: string })
 ```
 
 **Unknown command / typo** — terse suggestion, not the old prose block:
 
 ```
-$ mcpx user creat "{ name: 'alice' }"
+$ mcpx user.creat "{ name: 'alice' }"
 error: UNKNOWN_COMMAND
-got: user creat
-did_you_mean: user create
-$hint: cli @schema .user
+got: user.creat
+did_you_mean: user.create
+$schema: |-
+  user: { create(input: { name: string }) }
 ```
 
 **Path stops at a namespace** — list the namespace's commands:
@@ -387,13 +379,14 @@ namespace: user
 commands:
   - user.create
   - user.list
-$hint: cli @schema .user
+$schema: |-
+  user: { create(input: { name: string }); list(input: { format?: string }) }
 ```
 
 **Malformed input object** — surface the JSON5 parse failure verbatim:
 
 ```
-$ mcpx user create "{ name: 'al"
+$ mcpx user.create "{ name: 'al"
 error: BAD_INPUT_JSON
 detail: |-
   unterminated string
@@ -404,11 +397,11 @@ detail: |-
 **Two bare objects** — the contract violation, with the corrected form:
 
 ```
-$ mcpx user create "{ name: 'a' }" "{ env: 'prod' }"
+$ mcpx user.create "{ name: 'a' }" "{ env: 'prod' }"
 error: TWO_INPUTS
 $hint: |-
   a command takes one input object; pass context via --context:
-  mcpx user create "{ name: 'a' }" --context "{ env: 'prod' }"
+  mcpx user.create "{ name: 'a' }" --context "{ env: 'prod' }"
 ```
 
 **`@run` runtime error** — the thrown error; an `INVALID_INPUT` thrown by a called handler keeps
@@ -417,7 +410,7 @@ its own envelope:
 ```
 $ mcpx @run "await user.create({ name: 'al' })"
 error: INVALID_INPUT
-command: user create
+command: user.create
 issues:
   - at: name
     message: "Invalid length: Expected >=3 but received 2"

@@ -8,8 +8,11 @@ export type ErrorIssue = {
 export type ErrorEnvelope = {
 	error:
 		| 'INVALID_INPUT'
+		| 'INVALID_CONTEXT'
 		| 'UNKNOWN_COMMAND'
 		| 'NOT_A_COMMAND'
+		| 'BAD_PATH'
+		| 'BAD_SELECTOR'
 		| 'BAD_INPUT_JSON'
 		| 'TWO_INPUTS'
 		| 'RUN_DISABLED'

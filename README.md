@@ -6,7 +6,7 @@ handlers, predictable stdout, and an agent-readable `@schema`.
 ## Install
 
 ```bash
-bun add github:ethan-huo/argc#v7.0.0
+bun add github:ethan-huo/argc#v7.0.0-beta.1
 ```
 
 Use release tags for downstream projects. `main` is the source branch and does
@@ -29,7 +29,7 @@ const commands = {
 			create: c
 				.meta({
 					description: 'Create a user',
-					examples: ['myapp user create "{ name: \'alice\' }"'],
+					examples: ['myapp user.create "{ name: \'alice\' }"'],
 				})
 				.input(
 					s(
@@ -45,7 +45,7 @@ const commands = {
 
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.0.0',
+	version: '7.0.0-beta.1',
 	description: 'Example argc CLI',
 })
 
@@ -60,7 +60,7 @@ await app.run({
 ```
 
 ```bash
-$ myapp user create "{ name: 'alice', role: 'admin' }"
+$ myapp user.create "{ name: 'alice', role: 'admin' }"
 ok: true
 user:
   name: alice
@@ -71,7 +71,7 @@ user:
 
 argc 7 is a clean-break typed command surface:
 
-- Commands are addressed by path: `myapp user create`
+- Commands are addressed by dotted path: `myapp user.create`
 - Input is one quoted JSON5 object token: `"{ name: 'alice' }"`
 - Large input can come from a file or stdin: `@payload.json` or `-`
 - `@schema`, `@run`, and `@completions` are builtins
@@ -87,19 +87,19 @@ There are no command aliases, `.args()`, input flags, `--input`, `--schema`,
 Quote object input so the shell passes it as one argv token:
 
 ```bash
-myapp user create "{ name: 'alice', tags: ['admin', 'dev'] }"
+myapp user.create "{ name: 'alice', tags: ['admin', 'dev'] }"
 ```
 
 Use files for reusable payloads:
 
 ```bash
-myapp user create @payload.json
+myapp user.create @payload.json
 ```
 
 Use stdin when another process generates the payload:
 
 ```bash
-printf "{ name: 'alice' }" | myapp user create -
+printf "{ name: 'alice' }" | myapp user.create -
 ```
 
 Bare braces are rejected because the shell splits them before argc can parse the
@@ -113,7 +113,7 @@ injected into handlers as `context`.
 ```typescript
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.0.0',
+	version: '7.0.0-beta.1',
 	context: s(
 		v.object({
 			token: v.string(),
@@ -125,8 +125,8 @@ const app = cli(commands, {
 Pass context with `--context` or `ARGC_CTX`:
 
 ```bash
-myapp user create "{ name: 'alice' }" --context "{ token: 'secret' }"
-ARGC_CTX="{ token: 'secret' }" myapp user create "{ name: 'alice' }"
+myapp user.create "{ name: 'alice' }" --context "{ token: 'secret' }"
+ARGC_CTX="{ token: 'secret' }" myapp user.create "{ name: 'alice' }"
 ```
 
 ## Output
@@ -138,7 +138,7 @@ and structured values use block-style YAML.
 handlers: {
 	'user.create': ({ input }) => ({
 		created: input.name,
-		next: ['myapp user get "{ name: \'alice\' }"'],
+		next: ['myapp user.get "{ name: \'alice\' }"'],
 	}),
 }
 ```
@@ -161,8 +161,8 @@ issues:
 
 ```bash
 myapp @schema
-myapp @schema user.create
-myapp @schema user.create.input
+myapp @schema .user.create
+myapp @schema .user.create.input
 ```
 
 Schema output is TypeScript-like and includes quoted JSON5 examples. Command

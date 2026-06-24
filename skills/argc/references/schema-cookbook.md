@@ -10,9 +10,9 @@ value, then the Standard Schema validator owns type checking, defaults, and
 transforms.
 
 ```bash
-myapp user create "{ name: 'alice', tags: ['admin', 'dev'] }"
-myapp user create @payload.json
-printf "{ name: 'alice' }" | myapp user create -
+myapp user.create "{ name: 'alice', tags: ['admin', 'dev'] }"
+myapp user.create @payload.json
+printf "{ name: 'alice' }" | myapp user.create -
 ```
 
 Bare braces are a shell error, not an argc feature. Quote object input.

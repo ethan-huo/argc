@@ -1,49 +1,52 @@
+import { stringify } from 'yaml'
+
 import type { Router, Schema } from './types'
 
 import { getRouterChildren } from './router'
-import { getInputTypeHint } from './schema'
+import { buildSurfaceExamples, getInputTypeHint } from './schema'
 import { isCommand, isGroup } from './types'
 
-export function showHelp(options: {
-	name: string
-	version: string
-	description?: string
-	context?: Schema
-}): void {
-	const { name, description } = options
-	const lines: string[] = []
-	lines.push(`${name}${description ? ` — ${description}` : ''}`)
-	lines.push('')
-	lines.push('CALL')
-	lines.push(`  ${name} <path> [<input>]                 run a command`)
-	if (options.context) {
-		lines.push(
-			`  ${name} <path> [<input>] --context <obj> with cross-cutting context`,
-		)
+export function showHelp(
+	schema: Router,
+	options: {
+		name: string
+		version: string
+		description?: string
+		context?: Schema
+	},
+): void {
+	const program = options.description
+		? `${options.name} — ${options.description}`
+		: options.name
+	// help is a content section (YAML block scalar) = free text, so write it as a
+	// small markdown doc, not a fake column-aligned card. Discovery-first: the
+	// cold-start next step is @schema, so lead with it.
+	const n = options.name
+	const help = [
+		'New here? Print the typed API first — it lists every command and its input type:',
+		`\`${n} @schema\`  ·  narrow with \`${n} @schema .<namespace>\``,
+		'',
+		'Call a command by its dotted path, passing one quoted JSON5 object:',
+		`\`${n} <path> "<json5>"\` — input may also be \`@file\`, \`-\` (stdin), or omitted (\`{}\`)`,
+		'',
+		'- `--context "<json5>"` — cross-cutting config (or `ARGC_CTX`)',
+		'- `@run "<code>"` — run TypeScript against the typed API',
+		'- `@schema` selectors: `.name` `."key"` `.*` `.{a,b}` `..name`',
+	].join('\n')
+	const output: Record<string, unknown> = {
+		program,
+		help,
+		// join → multi-line string → YAML renders a |- block scalar, so the inner
+		// quotes stay verbatim instead of a seq of escaped \" strings.
+		examples: buildSurfaceExamples(schema, options).join('\n'),
 	}
-	lines.push(
-		`  ${name} @run '<code>'                    run code against the typed API`,
-	)
-	lines.push(`  ${name} @schema [.selector]              print the typed API`)
-	lines.push('')
-	lines.push(
-		'INPUT   one quoted JSON5 token · @file · - (stdin) · omitted = {}',
-	)
-	lines.push(`        ${name} user create "{ name: 'alice' }"`)
-	lines.push(`        ${name} db seed @payload.json`)
 	if (options.context) {
-		lines.push('')
-		lines.push('CONTEXT  --context <obj>  or  ARGC_CTX env')
-		lines.push(`  type Context = ${getInputTypeHint(options.context)}`)
+		output.context = [
+			`type Context = ${getInputTypeHint(options.context)}`,
+			'pass via  --context "<json5>"  or  ARGC_CTX',
+		].join('\n')
 	}
-	lines.push('')
-	lines.push(`EXPLORE  ${name} @schema            whole API`)
-	lines.push(`         ${name} @schema .user      one namespace`)
-	lines.push(`         ${name} @schema ..create   recursive search`)
-	lines.push('  selector: .name  ."key"  .*  .{a,b}  ..name')
-	lines.push('')
-	lines.push('built-ins  @run  @schema  @completions   ·   --help  --version')
-	process.stdout.write(`${lines.join('\n')}\n`)
+	process.stdout.write(stringify(output, { lineWidth: 0 }))
 }
 
 export function renderNamespaceCommands(

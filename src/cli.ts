@@ -1,6 +1,6 @@
 import { JSON5 } from 'bun'
+import { stringify } from 'yaml'
 
-import type { SchemaSelectionResult } from './schema-selector'
 import type {
 	AnyCommand,
 	CLIOptions,
@@ -21,7 +21,7 @@ import {
 	getCompletionReloadHint,
 	installCompletionScript,
 } from './complete'
-import { showHelp, renderNamespaceCommands } from './help'
+import { showHelp } from './help'
 import { createHookDispatcher } from './hook'
 import { parseInputSource, type InputSource } from './parser'
 import {
@@ -29,11 +29,16 @@ import {
 	formatRuntimeError,
 	renderError,
 	renderResult,
+	type ErrorEnvelope,
 	type ErrorIssue,
 	withStdoutRerouted,
 } from './render'
 import { getRouterChildren, findHandler } from './router'
-import { extractCliInputParamsDetailed, isValidIdentifier } from './schema'
+import {
+	extractCliInputParamsDetailed,
+	getInputTypeHint,
+	isValidIdentifier,
+} from './schema'
 import { createDefaultSchemaExplorer } from './schema-explorer'
 import {
 	parseRunSource,
@@ -78,7 +83,7 @@ export class CLI<
 			await this.runInner(runOptions, argv)
 		} catch (error) {
 			if (error instanceof ArgcError) {
-				process.stderr.write(renderError(error.envelope))
+				process.stderr.write(renderError(this.finalizeEnvelope(error.envelope)))
 				process.exit(1)
 			}
 			process.stderr.write(
@@ -91,12 +96,30 @@ export class CLI<
 		}
 	}
 
+	// Invariant in one place: an INVALID_INPUT always carries its command $schema
+	// (and never a $hint), wherever it was thrown — direct call already does this,
+	// the @run path does not, so backfill it here.
+	private finalizeEnvelope(envelope: ErrorEnvelope): ErrorEnvelope {
+		if (
+			envelope.error === 'INVALID_INPUT' &&
+			!envelope.$schema &&
+			typeof envelope.command === 'string'
+		) {
+			const { $hint: _hint, ...rest } = envelope
+			return {
+				...rest,
+				$schema: this.renderSchemaSlice(envelope.command.split('.')),
+			}
+		}
+		return envelope
+	}
+
 	private async runInner(
 		runOptions: RunConfig<TSchema, TContext>,
 		argv: string[],
 	): Promise<void> {
 		if (argv.length === 0 || (argv.length === 1 && argv[0] === '--help')) {
-			showHelp(this.options)
+			showHelp(this.schema, this.options)
 			return
 		}
 		if (argv.length === 1 && argv[0] === '--version') {
@@ -201,46 +224,80 @@ export class CLI<
 	}
 
 	private async runSchema(argv: string[]): Promise<void> {
+		const explorer = this.getSchemaExplorer()
+		// A selector is @schema's argument; a malformed or non-matching selector is a
+		// BAD_SELECTOR (not an unknown command), and it embeds the root outline so the
+		// agent sees the real structure and fixes the path in one shot.
 		if (argv.length > 1) {
 			throw new ArgcError({
-				error: 'RUNTIME_ERROR',
-				detail: '@schema accepts at most one selector',
+				error: 'BAD_SELECTOR',
+				selector: argv.join(' '),
+				reason: '@schema takes at most one selector',
+				$schema: this.renderSchemaSlice([]),
 			})
 		}
 		const selectorValue = argv[0]
-		const schemaExplorer =
-			this.options.schemaExplorer ?? createDefaultSchemaExplorer()
-		let selection: SchemaSelectionResult | null = null
-		let schemaOutput = schemaExplorer.render(this.schema, this.schemaOptions())
+		let target: Router = this.schema
 		if (selectorValue) {
-			selection = schemaExplorer.select(this.schema, selectorValue)
-			if (selection.empty) {
+			let selection: ReturnType<typeof explorer.select>
+			try {
+				selection = explorer.select(this.schema, selectorValue)
+			} catch (error) {
 				throw new ArgcError({
-					error: 'UNKNOWN_COMMAND',
-					got: selectorValue,
-					$hint: `${this.options.name} @schema`,
+					error: 'BAD_SELECTOR',
+					selector: selectorValue,
+					reason: formatRuntimeError(error),
+					$schema: this.renderSchemaSlice([]),
 				})
 			}
-			schemaOutput = schemaExplorer.render(
-				selection.schema,
-				this.schemaOptions(),
-			)
-		}
-		const lines = schemaOutput.split('\n')
-		if (lines.length > schemaExplorer.maxLines) {
-			const outlineSchema = selection === null ? this.schema : selection.schema
-			process.stdout.write(
-				`// App is large: ${lines.length} lines across ${this.countCommands(outlineSchema)} commands. Drill in with a selector.\n\n`,
-			)
-			for (const line of schemaExplorer.outline(outlineSchema)) {
-				process.stdout.write(`${line}\n`)
+			if (selection.empty) {
+				throw new ArgcError({
+					error: 'BAD_SELECTOR',
+					selector: selectorValue,
+					reason: 'matched nothing',
+					$schema: this.renderSchemaSlice([]),
+				})
 			}
-			const hint = schemaExplorer.hint(outlineSchema)
-			if (hint)
-				process.stdout.write(`\nnext: ${this.options.name} @schema .${hint}\n`)
-			return
+			target = selection.schema
 		}
-		process.stdout.write(`${schemaOutput}\n`)
+
+		// One OKF envelope (--- frontmatter --- body) for both folded and full
+		// output, so the agent parses one shape. Body is the typed API, or the
+		// compact outline when too large. Frontmatter carries only what has a
+		// reason to be there: context, fold status + drill-in, navigation.
+		const body = explorer.render(target, this.schemaOptions())
+		const lines = body.split('\n')
+		const name = this.options.name
+
+		// Guidance is dynamic — it must match the state, not be a constant block.
+		const fm: Record<string, string> = {}
+		if (this.options.context) {
+			fm.context = getInputTypeHint(this.options.context)
+		}
+		let outBody = body
+		if (lines.length > explorer.maxLines) {
+			// Folded: the agent must navigate, so pile on selector guidance.
+			const hint = explorer.hint(target)
+			fm.status = `compact outline — full schema is ${lines.length} lines across ${this.countCommands(target)} commands; narrow with a selector`
+			if (hint) fm.next = `${name} @schema .${hint}`
+			fm.selectors = [
+				'.name            a child',
+				'."key"           a child whose name needs quoting',
+				'.["key"]         a child by bracket key',
+				'.*               all children',
+				'.{a.{x,y},b.z}   a set: each branch a full sub-selector, any depth, nestable',
+				'..name           recursive search anywhere below',
+			].join('\n')
+			outBody = explorer.outline(target).join('\n')
+		} else {
+			// Fully shown: nothing to drill into — say so, do not suggest selectors.
+			fm.status = 'fully shown — no further selector needed'
+		}
+		fm.call = `${name} <path> "<json5>"  ·  ${name} @run "<code>"`
+
+		process.stdout.write(
+			`---\n${stringify(fm, { lineWidth: 0 })}---\n${outBody}\n`,
+		)
 	}
 
 	private async runCompletions(argv: string[]): Promise<void> {
@@ -275,54 +332,41 @@ export class CLI<
 	}
 
 	private parseCall(argv: string[]): ParsedCall {
-		let current: Router = this.schema
-		const commandPath: string[] = []
-		let index = 0
-		while (index < argv.length && !isCommand(current)) {
-			const token = argv[index]!
-			if (
-				token === '--context' ||
-				token.startsWith('{') ||
-				token.startsWith('@') ||
-				token === '-'
-			) {
-				break
-			}
-			const children = getRouterChildren(current)
-			if (!(token in children)) {
-				const similar = suggestSimilar(token, Object.keys(children))[0]
-				const envelope: {
-					error: 'UNKNOWN_COMMAND'
-					[key: string]: unknown
-				} = {
-					error: 'UNKNOWN_COMMAND',
-					got: [...commandPath, token].join(' '),
-					$hint: `${this.options.name} @schema ${
-						commandPath.length > 0 ? `.${commandPath.join('.')}` : ''
-					}`.trim(),
-				}
-				if (similar) envelope.did_you_mean = [...commandPath, similar].join(' ')
-				throw new ArgcError(envelope)
-			}
-			commandPath.push(token)
-			current = children[token]!
-			index++
+		const pathToken = argv[0]
+		if (
+			!pathToken ||
+			pathToken === '--context' ||
+			this.isInputToken(pathToken)
+		) {
+			showHelp(this.schema, this.options)
+			throw new ArgcError({
+				error: 'NOT_A_COMMAND',
+				got: pathToken ?? '',
+				$schema: this.renderSchemaSlice([]),
+			})
 		}
 
+		const resolved = this.resolveDottedPath(pathToken)
+		const commandPath = resolved.path
+		const current = resolved.router
+		let index = 1
+
 		if (!isCommand(current)) {
-			if (commandPath.length === 0) {
-				showHelp(this.options)
+			const spacePath = this.collectBarePath(argv, index)
+			if (spacePath.length > 0) {
 				throw new ArgcError({
-					error: 'NOT_A_COMMAND',
-					namespace: '',
-					$hint: `${this.options.name} @schema`,
+					error: 'BAD_PATH',
+					got: [pathToken, ...spacePath].join(' '),
+					$hint: `paths are dotted — ${this.options.name} ${[
+						pathToken,
+						...spacePath,
+					].join('.')} "{ ... }"`,
 				})
 			}
 			throw new ArgcError({
 				error: 'NOT_A_COMMAND',
-				namespace: commandPath.join(' '),
-				commands: renderNamespaceCommands(current, commandPath),
-				$hint: `${this.options.name} @schema .${commandPath.join('.')}`,
+				got: commandPath.join('.'),
+				$schema: this.renderSchemaSlice(commandPath),
 			})
 		}
 
@@ -348,14 +392,25 @@ export class CLI<
 				throw new ArgcError({
 					error: 'UNKNOWN_COMMAND',
 					got: token,
-					$hint: `${this.options.name} @schema .${commandPath.join('.')}`,
+					$schema: this.renderSchemaSlice(commandPath),
+				})
+			}
+			if (!this.isInputToken(token)) {
+				const spacePath = this.collectBarePath(argv, index)
+				throw new ArgcError({
+					error: 'BAD_PATH',
+					got: [pathToken, ...spacePath].join(' '),
+					$hint: `paths are dotted — ${this.options.name} ${[
+						pathToken,
+						...spacePath,
+					].join('.')} "{ ... }"`,
 				})
 			}
 			if (seenInput) {
 				throw new ArgcError({
 					error: 'TWO_INPUTS',
 					$hint: `a command takes one input object; pass context via --context:\n${this.options.name} ${commandPath.join(
-						' ',
+						'.',
 					)} <input> --context <ctx>`,
 				})
 			}
@@ -373,6 +428,87 @@ export class CLI<
 		}
 	}
 
+	private resolveDottedPath(pathToken: string): {
+		path: string[]
+		router: Router
+	} {
+		const segments = pathToken.split('.')
+		let current: Router = this.schema
+		const resolvedPath: string[] = []
+
+		for (const segment of segments) {
+			if (!segment || !isValidIdentifier(segment)) {
+				throw new ArgcError({
+					error: 'BAD_PATH',
+					got: pathToken,
+					$hint: 'paths are dotted JavaScript identifiers',
+				})
+			}
+			const children = getRouterChildren(current)
+			if (!(segment in children)) {
+				const similar = suggestSimilar(segment, Object.keys(children))[0]
+				const envelope: {
+					error: 'UNKNOWN_COMMAND'
+					got: string
+					did_you_mean?: string
+					$schema: string
+				} = {
+					error: 'UNKNOWN_COMMAND',
+					got: pathToken,
+					$schema: this.renderSchemaSlice(resolvedPath),
+				}
+				if (similar) {
+					envelope.did_you_mean = [...resolvedPath, similar].join('.')
+				}
+				throw new ArgcError(envelope)
+			}
+			current = children[segment]!
+			resolvedPath.push(segment)
+		}
+
+		return { path: resolvedPath, router: current }
+	}
+
+	private isInputToken(token: string): boolean {
+		return token.startsWith('{') || token.startsWith('@') || token === '-'
+	}
+
+	private collectBarePath(argv: string[], start: number): string[] {
+		const path: string[] = []
+		for (let index = start; index < argv.length; index++) {
+			const token = argv[index]!
+			if (
+				token === '--context' ||
+				token.startsWith('--') ||
+				this.isInputToken(token)
+			) {
+				break
+			}
+			path.push(token)
+		}
+		return path
+	}
+
+	private getSchemaExplorer() {
+		return this.options.schemaExplorer ?? createDefaultSchemaExplorer()
+	}
+
+	private renderSchemaSlice(path: string[]): string {
+		const explorer = this.getSchemaExplorer()
+		const router =
+			path.length === 0
+				? this.schema
+				: explorer.select(this.schema, `.${path.join('.')}`).schema
+		const output = explorer.render(router, this.schemaOptions())
+		const lines = output.split('\n')
+		if (lines.length <= explorer.maxLines) return output
+		return [
+			`// Schema slice is large: ${lines.length} lines across ${this.countCommands(router)} commands.`,
+			'',
+			...explorer.outline(router),
+		].join('\n')
+	}
+
 	private async invokeCommand(
 		commandPath: string[],
 		command: AnyCommand,
@@ -385,7 +521,7 @@ export class CLI<
 		if (!handler) {
 			throw new ArgcError({
 				error: 'RUNTIME_ERROR',
-				detail: `no handler for command: ${commandPath.join(' ')}`,
+				detail: `no handler for command: ${commandPath.join('.')}`,
 			})
 		}
 		const input = await this.resolveInput(inputSource)
@@ -393,7 +529,7 @@ export class CLI<
 		const hookDispatcher = this.createHookDispatcher()
 		const hookCall = hookDispatcher.createCall(
 			commandPath,
-			commandPath.join(' '),
+			commandPath.join('.'),
 		)
 		let ok = false
 		try {
@@ -403,7 +539,7 @@ export class CLI<
 					context,
 					meta: {
 						path: commandPath,
-						command: commandPath.join(' '),
+						command: commandPath.join('.'),
 						raw,
 						callId: hookCall.callId,
 					},
@@ -455,36 +591,57 @@ export class CLI<
 		if (!this.options.context) {
 			if (source.kind !== 'omitted') {
 				throw new ArgcError({
-					error: 'INVALID_INPUT',
-					command: '$context',
-					issues: [{ message: 'context is not declared by this CLI' }],
+					error: 'INVALID_CONTEXT',
+					issues: [{ message: 'this CLI declares no context' }],
 				})
 			}
 			return undefined as ContextOutput<TContext>
 		}
+		// Context problems always show the Context type so the agent can fix the shape.
+		const contextSchema = `type Context = ${getInputTypeHint(this.options.context)}`
 		const env = process.env.ARGC_CTX
 		const actualSource =
 			source.kind === 'omitted' && env !== undefined
 				? ({ kind: 'inline', value: env } as InputSource)
 				: source
-		const input = await this.resolveInput(actualSource)
-		const issues = await this.validateObject(this.options.context, input)
-		if (issues.length > 0) {
-			throw new ArgcError({
-				error: 'INVALID_INPUT',
-				command: '$context',
-				issues,
-			})
+		let input: unknown
+		try {
+			input = await this.resolveInput(actualSource)
+		} catch (error) {
+			if (
+				error instanceof ArgcError &&
+				error.envelope.error === 'BAD_INPUT_JSON'
+			) {
+				throw new ArgcError({
+					error: 'BAD_INPUT_JSON',
+					source: 'context',
+					detail: error.envelope.detail,
+					$schema: contextSchema,
+				})
+			}
+			throw error
 		}
+		const unknownKeyIssues = await this.validateObject(
+			this.options.context,
+			input,
+		)
 		const result = await this.options.context['~standard'].validate(input)
+		let schemaIssues: ErrorIssue[] = []
+		let value: unknown = input
 		if (result.issues) {
+			schemaIssues = this.normalizeIssues(result.issues)
+		} else {
+			value = result.value
+		}
+		const allIssues = [...schemaIssues, ...unknownKeyIssues]
+		if (allIssues.length > 0) {
 			throw new ArgcError({
-				error: 'INVALID_INPUT',
-				command: '$context',
-				issues: this.normalizeIssues(result.issues),
+				error: 'INVALID_CONTEXT',
+				issues: allIssues,
+				$schema: contextSchema,
 			})
 		}
-		return result.value as ContextOutput<TContext>
+		return value as ContextOutput<TContext>
 	}
 
 	private async validateInput(
@@ -507,9 +664,9 @@ export class CLI<
 		if (allIssues.length > 0) {
 			throw new ArgcError({
 				error: 'INVALID_INPUT',
-				command: commandPath.join(' '),
+				command: commandPath.join('.'),
 				issues: allIssues,
-				$hint: `${this.options.name} @schema .${commandPath.join('.')}`,
+				$schema: this.renderSchemaSlice(commandPath),
 			})
 		}
 		return value

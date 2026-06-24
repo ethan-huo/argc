@@ -48,14 +48,14 @@ After scaffolding:
 - `bun run schema` must read well; this is the agent UI.
 - Fill in `skills/<name>/SKILL.md` for the finished tool.
 - Use `.agents/skills/release/SKILL.md` when cutting releases.
-- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.0.0` or a newer tag.
+- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.0.0-beta.1` or a newer tag.
 
 Use `oxfmt` and `tsgo` as in the templates. Do not introduce eslint,
 prettier, or `tsc`.
 
 ## Contract
 
-- Commands are paths: `tool user create`
+- Commands are dotted paths: `tool user.create`
 - Input is one quoted JSON5 object token: `"{ name: 'alice' }"`
 - Large input is `@payload.json`; generated input is `-` for stdin
 - Builtins are `@schema`, `@run`, and `@completions`
@@ -103,7 +103,7 @@ const commands = {
 			create: c
 				.meta({
 					description: 'Create a user',
-					examples: ['myapp user create "{ name: \'alice\' }"'],
+					examples: ['myapp user.create "{ name: \'alice\' }"'],
 				})
 				.input(
 					s(
@@ -154,8 +154,8 @@ human-facing terminal output; keep handler return values clean and structured.
 - Command and group keys must be valid JavaScript identifiers and cannot start
   with `@`; input field keys may be non-identifiers and `@schema` will quote
   them.
-- Quote object input. `tool user create { name: 'alice' }` is a shell-split
-  error; use `tool user create "{ name: 'alice' }"`.
+- Quote object input. `tool user.create { name: 'alice' }` is a shell-split
+  error; use `tool user.create "{ name: 'alice' }"`.
 - `@file` and `-` are input sources only after the command path or inside
   `@run`; first-token `@name` is a builtin.
 - Ship the tool's own `skills/<name>/SKILL.md`. A CLI without usage context is
