@@ -6,7 +6,7 @@ handlers, predictable stdout, and an agent-readable `@schema`.
 ## Install
 
 ```bash
-bun add github:ethan-huo/argc#v7.0.0-beta.1
+bun add github:ethan-huo/argc#v7.1.0
 ```
 
 Use release tags for downstream projects. `main` is the source branch and does
@@ -45,7 +45,7 @@ const commands = {
 
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.0.0-beta.1',
+	version: '7.1.0',
 	description: 'Example argc CLI',
 })
 
@@ -113,7 +113,7 @@ injected into handlers as `context`.
 ```typescript
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.0.0-beta.1',
+	version: '7.1.0',
 	context: s(
 		v.object({
 			token: v.string(),

@@ -48,7 +48,7 @@ After scaffolding:
 - `bun run schema` must read well; this is the agent UI.
 - Fill in `skills/<name>/SKILL.md` for the finished tool.
 - Use `.agents/skills/release/SKILL.md` when cutting releases.
-- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.0.0-beta.1` or a newer tag.
+- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.1.0` or a newer tag.
 
 Use `oxfmt` and `tsgo` as in the templates. Do not introduce eslint,
 prettier, or `tsc`.
