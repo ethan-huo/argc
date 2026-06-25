@@ -60,6 +60,40 @@ export function parseRunSource(token: string | undefined): RunSource {
 	return { kind: 'inline', code: token }
 }
 
+function objectLiteralReturnBody(code: string): string | undefined {
+	const trimmed = code.trim()
+	if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return undefined
+
+	const wrapped = `(${code})`
+	const parsed = parseSync('snippet.js', wrapped, { lang: 'js' })
+	if (parsed.errors.length > 0) return undefined
+
+	const statement = parsed.program.body.at(-1)
+	if (statement?.type !== 'ExpressionStatement') return undefined
+	let expression: { type: string; expression?: unknown } = statement.expression
+	while (expression.type === 'ParenthesizedExpression') {
+		expression = expression.expression as { type: string; expression?: unknown }
+	}
+	if (expression.type !== 'ObjectExpression') {
+		return undefined
+	}
+
+	// Bare `{ ... }` parses as a block in statement position; @run users mean a result.
+	return `return (${code})`
+}
+
+async function executeInlineBody(
+	body: string,
+	scope: Record<string, unknown>,
+): Promise<unknown> {
+	const AsyncFunction = (async () => {}).constructor as new (
+		...args: string[]
+	) => (...values: unknown[]) => Promise<unknown>
+	const names = Object.keys(scope)
+	const fn = new AsyncFunction(...names, body)
+	return await fn(...names.map((name) => scope[name]))
+}
+
 function pathFromIssuePath(path: unknown): string | undefined {
 	if (!Array.isArray(path)) return undefined
 	return path
@@ -255,6 +289,11 @@ async function runInline(
 	code: string,
 	scope: Record<string, unknown>,
 ): Promise<unknown> {
+	const objectBody = objectLiteralReturnBody(code)
+	if (objectBody !== undefined) {
+		return await executeInlineBody(objectBody, scope)
+	}
+
 	const parsed = parseSync('snippet.js', code, { lang: 'js' })
 	if (parsed.errors.length > 0) {
 		throw new SyntaxError(
@@ -272,12 +311,7 @@ async function runInline(
 		)})`
 	}
 
-	const AsyncFunction = (async () => {}).constructor as new (
-		...args: string[]
-	) => (...values: unknown[]) => Promise<unknown>
-	const names = Object.keys(scope)
-	const fn = new AsyncFunction(...names, body)
-	return await fn(...names.map((name) => scope[name]))
+	return await executeInlineBody(body, scope)
 }
 
 async function runScriptFile(path: string, api: ScriptAPI): Promise<unknown> {

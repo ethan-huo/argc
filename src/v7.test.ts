@@ -364,6 +364,32 @@ describe('argc 7 command surface', () => {
 		expect(result.stderr).toContain('debug line')
 	})
 
+	test('@run returns a bare object literal', async () => {
+		const { app, handlers } = makeApp()
+		process.env.ARGC_CTX = "{ env: 'dev' }"
+		const result = await capture(() =>
+			app.run({ handlers }, [
+				'@run',
+				"{ now: new Date('2026-06-25T08:33:53.479Z'), count: 2 }",
+			]),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toContain('now: 2026-06-25T08:33:53.479Z')
+		expect(result.stdout).toContain('count: 2')
+	})
+
+	test('@run preserves explicit block statements as statements', async () => {
+		const { app, handlers } = makeApp()
+		process.env.ARGC_CTX = "{ env: 'dev' }"
+		const result = await capture(() =>
+			app.run({ handlers }, ['@run', '{ let value = 1; }']),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toBe('')
+	})
+
 	test('@run can execute a module file and pass argc only', async () => {
 		const { app, handlers } = makeApp()
 		const file = join(tmpdir(), `argc-run-${Date.now()}.ts`)
