@@ -711,7 +711,10 @@ describe('argc 7 command surface', () => {
 		expect(error.stderr).toMatch(ANSI_RE)
 		expect(disabled.stdout).not.toMatch(ANSI_RE)
 		expect(schema.stdout).toContain('\x1b[2m  /**\x1b[0m')
-		expect(schema.stdout).toContain('\x1b[36m   * @example\x1b[0m')
+		expect(schema.stdout).toContain(
+			'\x1b[2m   * \x1b[0m\x1b[36m@example\x1b[0m',
+		)
+		expect(schema.stdout).not.toContain('\x1b[36m   * @example\x1b[0m')
 		expect(schema.stdout).toContain('type \x1b[1mMcpx\x1b[0m =')
 	})
 

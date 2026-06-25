@@ -110,7 +110,13 @@ export function colorizeSchema(
 				trimmed.startsWith('/**') ||
 				trimmed.startsWith('*')
 			) {
-				if (/^\* @example\s*$/.test(trimmed)) return cyan(line, enabled)
+				const exampleMatch = /^(\s*\*\s*)(@example)(\s*)$/.exec(line)
+				if (exampleMatch) {
+					const [, prefix, tag, suffix] = exampleMatch
+					return `${dim(prefix!, enabled)}${cyan(tag!, enabled)}${
+						suffix ? dim(suffix, enabled) : ''
+					}`
+				}
 				return dim(line, enabled)
 			}
 			return line.replace(
