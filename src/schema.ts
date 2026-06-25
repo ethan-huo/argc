@@ -40,13 +40,31 @@ export type FieldDescriptor = {
 }
 
 const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+const AT_IDENTIFIER_RE = /^@[A-Za-z_$][A-Za-z0-9_$]*$/
 
 export function isValidIdentifier(name: string): boolean {
 	return IDENTIFIER_RE.test(name)
 }
 
+export function isValidCommandKey(name: string): boolean {
+	return isValidIdentifier(name) || AT_IDENTIFIER_RE.test(name)
+}
+
 function formatPropertyKey(name: string): string {
 	return isValidIdentifier(name) ? name : JSON.stringify(name)
+}
+
+function formatPathMember(name: string): string {
+	return isValidIdentifier(name) ? `.${name}` : `[${JSON.stringify(name)}]`
+}
+
+function formatScriptInvocation(path: string[], input: string): string {
+	if (path.every(isValidIdentifier)) return `${path.join('.')}(${input})`
+	return `argc.call[${JSON.stringify(path.join('.'))}](${input})`
+}
+
+export function formatSchemaSelectorPath(path: string[]): string {
+	return path.map(formatPathMember).join('')
 }
 
 function formatExamplePropertyKey(name: string): string {
@@ -400,21 +418,22 @@ export function buildSurfaceExamples(
 	const dottedPath = command.path.join('.')
 	const input = getCommandInputExample(command.router)
 	const direct = `${options.name} ${dottedPath} "${input}"`
+	const scriptCall = formatScriptInvocation(command.path, input)
 	const examples = [direct]
 	examples.push(
 		[
 			`${options.name} @run - --json <<'JS'`,
 			'await Promise.all([',
-			`  ${dottedPath}(${input}),`,
-			`  ${dottedPath}(${input}),`,
+			`  ${scriptCall},`,
+			`  ${scriptCall},`,
 			'])',
 			'JS',
 		].join('\n'),
 	)
 	examples.push(
-		`${options.name} @schema ${
-			namespace ? `.${namespace.join('.')}` : `.${dottedPath}`
-		}`,
+		`${options.name} @schema ${formatSchemaSelectorPath(
+			namespace ?? command.path,
+		)}`,
 	)
 	return examples
 }
@@ -438,9 +457,11 @@ function generateCommandSchema(
 				: undefined
 		pushCommandDoc(lines, indent, meta.description, example)
 		if (params.length > 0) {
-			lines.push(`${indent}${name}(input: { ${formatParams(params)} })`)
+			lines.push(
+				`${indent}${formatPropertyKey(name)}(input: { ${formatParams(params)} })`,
+			)
 		} else {
-			lines.push(`${indent}${name}()`)
+			lines.push(`${indent}${formatPropertyKey(name)}()`)
 		}
 		return lines
 	}
@@ -448,7 +469,7 @@ function generateCommandSchema(
 	if (isGroup(router)) {
 		const meta = router['~argc.group'].meta
 		if (meta.description) pushDoc(lines, indent, meta.description)
-		lines.push(`${indent}${name}: {`)
+		lines.push(`${indent}${formatPropertyKey(name)}: {`)
 		for (const [key, child] of Object.entries(router['~argc.group'].children)) {
 			lines.push(
 				...generateCommandSchema(
@@ -464,7 +485,7 @@ function generateCommandSchema(
 		return lines
 	}
 
-	lines.push(`${indent}${name}: {`)
+	lines.push(`${indent}${formatPropertyKey(name)}: {`)
 	for (const [key, child] of Object.entries(router)) {
 		lines.push(
 			...generateCommandSchema(
@@ -542,13 +563,14 @@ export function generateSchemaHintExample(schema: Router): string | null {
 	const entries = Object.entries(getRouterChildren(schema))
 	for (const [name, child] of entries) {
 		const deep = findDeepPath(child, [name], 3)
-		if (deep) return deep.join('.')
+		if (deep) return formatSchemaSelectorPath(deep).slice(1)
 	}
 	for (const [name, child] of entries) {
 		const two = findDeepPath(child, [name], 2)
-		if (two) return two.join('.')
+		if (two) return formatSchemaSelectorPath(two).slice(1)
 	}
-	if (entries.length > 0) return entries[0]![0]
+	if (entries.length > 0)
+		return formatSchemaSelectorPath([entries[0]![0]]).slice(1)
 	return null
 }
 

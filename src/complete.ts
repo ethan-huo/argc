@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path'
 
 import type { Router } from './types'
 
+import { BUILTIN_COMMANDS } from './builtins'
 import { getRouterChildren } from './router'
 import { isCommand, isGroup } from './types'
 
@@ -41,13 +42,14 @@ export function complete(router: Router, ctx: CompletionContext): string[] {
 	const currentWord =
 		current >= 0 && current < words.length ? (words[current] ?? '') : ''
 	const preceding = words.slice(0, Math.max(0, current))
+	const pathCandidates = preceding.length === 0 ? collectPaths(router) : []
 
 	if (preceding.length === 0 && currentWord.startsWith('@')) {
-		return filterByPrefix(['@run', '@schema', '@completions'], currentWord)
+		return filterByPrefix([...BUILTIN_COMMANDS, ...pathCandidates], currentWord)
 	}
 
-	const candidates = preceding.length === 0 ? collectPaths(router) : []
-	if (preceding.length === 0) candidates.push('@run', '@schema', '@completions')
+	const candidates = [...pathCandidates]
+	if (preceding.length === 0) candidates.push(...BUILTIN_COMMANDS)
 	return filterByPrefix(candidates, currentWord)
 }
 

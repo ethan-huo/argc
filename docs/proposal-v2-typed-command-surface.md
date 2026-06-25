@@ -87,10 +87,10 @@ cli                       # == cli --help
 - **`--context <ctx>`** the one surviving flag: a single object-valued, order-free slot for
   cross-cutting config. Default comes from `ARGC_CTX` env; `--context` overrides per call.
   It is _not_ the per-field flag layer we deleted — zero per-field machinery.
-- **`@`-prefix** is reserved for framework commands at the **first token** (`cli @run`,
-  `cli @schema`); enforced at `cli()` construction, non-overridable by default. An `@file` or
-  `-` in the **input slot** (after the resolved path) is a file/stdin input, _not_ a built-in —
-  position disambiguates (app command keys are identifiers, never `@`-led).
+- **`@`-prefix** is reserved only for argc's actual framework commands at the **first token**
+  (`cli @run`, `cli @schema`, `cli @completions`). Other `@name` keys may be app commands.
+  An `@file` or `-` in the **input slot** (after the resolved path) is a file/stdin input,
+  _not_ a built-in — position disambiguates.
 - **`run: false`** in `cli()` options disables `@run` (arbitrary code-exec gate); `@schema` /
   `@completions` stay available.
 
@@ -129,7 +129,7 @@ not the contract — this table is the demolition plan Codex's first pass was mi
 | v1 behavior (file)                                                                                               | v2                                                                                                                                                       |
 | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Handler` returns `void`; `CLI.run()` discards the result (`types.ts:104`, `cli.ts:505`)                         | **changed**: handlers return a value; argc serializes it to stdout (§3). `Handler`, `RunConfig`, and `findHandler` (`router.ts:11`) return types change. |
-| command/group keys may be any string incl. dashed `alert-create` (`schema.ts:311`, `schema-explorer.test.ts:25`) | **removed**: keys must be valid JS identifiers (§2.3.1), rejected at construction.                                                                       |
+| command/group keys may be any string incl. dashed `alert-create` (`schema.ts:311`, `schema-explorer.test.ts:25`) | **removed**: keys must be valid JS identifiers or non-builtin `@` identifiers (§2.3.1), rejected at construction.                                        |
 | command aliases: routing in `extractCommand()` (`cli.ts:578`) + alias completion (`complete.ts:180`)             | **removed**: one command, one name. Touches routing, "unknown command" errors, and completion candidates.                                                |
 | flag parsing / camelCase↔snake (`naming.ts`, `normalizeFlagsForFields`)                                          | **removed**                                                                                                                                              |
 | positional args `.args()`                                                                                        | **removed** (object subsumes)                                                                                                                            |
@@ -140,12 +140,14 @@ not the contract — this table is the demolition plan Codex's first pass was mi
 | per-command prose `--help`                                                                                       | **removed** (→ `@schema`)                                                                                                                                |
 | verbose git-style did-you-mean block                                                                             | **changed** → terse structured suggestion (§4.5)                                                                                                         |
 
-#### 2.3.1 Command keys: identifiers only
+#### 2.3.1 Command keys: identifiers plus non-builtin `@` identifiers
 
-A command/group key must match `/^[A-Za-z_$][A-Za-z0-9_$]*$/`. One rule then holds across all
-three forms — path `cli g1 c2`, `@schema` method `c2(input)` (no quoting ever needed),
-and `@run` `g1.c2(...)`. Enforced at `cli()` construction next to the `@`-key rejection.
-Downstream tools using dashed command names must rename — inventory before release.
+A command/group key must match `/^[A-Za-z_$][A-Za-z0-9_$]*$/` or
+`/^@[A-Za-z_$][A-Za-z0-9_$]*$/`. Top-level keys that collide with argc builtins (`@schema`,
+`@run`, `@completions`) are rejected because first-token dispatch belongs to the framework.
+Non-builtin `@` keys are app commands: path `cli @skill`, `@schema` method `"@skill"(input)`,
+and `@run` via `argc.call["@skill"](...)`. Downstream tools using dashed command names must
+rename — inventory before release.
 
 ---
 

@@ -48,7 +48,7 @@ After scaffolding:
 - `bun run schema` must read well; this is the agent UI.
 - Fill in `skills/<name>/SKILL.md` for the finished tool.
 - Use `.agents/skills/release/SKILL.md` when cutting releases.
-- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.2.1` or a newer tag.
+- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.4.0` or a newer tag.
 
 Use `oxfmt` and `tsgo` as in the templates. Do not introduce eslint,
 prettier, or `tsc`.
@@ -154,12 +154,12 @@ human-facing terminal output; keep handler return values clean and structured.
 
 - valibot schemas passed to `.input()` or `context` need
   `toStandardJsonSchema`. zod and arktype can be used directly.
-- Command and group keys must be valid JavaScript identifiers and cannot start
-  with `@`; input field keys may be non-identifiers and `@schema` will quote
-  them.
+- Command and group keys must be valid JavaScript identifiers or non-builtin
+  `@` identifiers; top-level `@schema`, `@run`, and `@completions` are reserved.
+  Input field keys may be non-identifiers and `@schema` will quote them.
 - Quote object input. `tool user.create { name: 'alice' }` is a shell-split
   error; use `tool user.create "{ name: 'alice' }"`.
 - `@file` and `-` are input sources only after the command path or inside
-  `@run`; first-token `@name` is a builtin.
+  `@run`; first-token `@schema`, `@run`, and `@completions` are builtins.
 - Ship the tool's own `skills/<name>/SKILL.md`. A CLI without usage context is
   unfinished.

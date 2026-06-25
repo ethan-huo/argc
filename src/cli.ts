@@ -14,6 +14,7 @@ import type {
 	StandardSchemaV1,
 } from './types'
 
+import { isBuiltinCommand } from './builtins'
 import {
 	complete,
 	detectCurrentShell,
@@ -38,8 +39,9 @@ import {
 import { getRouterChildren, findHandler } from './router'
 import {
 	extractCliInputParamsDetailed,
+	formatSchemaSelectorPath,
 	getInputTypeHint,
-	isValidIdentifier,
+	isValidCommandKey,
 } from './schema'
 import { createDefaultSchemaExplorer } from './schema-explorer'
 import {
@@ -143,7 +145,7 @@ export class CLI<
 			}
 			return
 		}
-		if (argv[0]?.startsWith('@')) {
+		if (isBuiltinCommand(argv[0])) {
 			await this.runBuiltin(runOptions, argv)
 			return
 		}
@@ -344,7 +346,8 @@ export class CLI<
 		if (
 			!pathToken ||
 			pathToken === '--context' ||
-			this.isInputToken(pathToken)
+			pathToken === '-' ||
+			pathToken.startsWith('{')
 		) {
 			showHelp(this.schema, this.options)
 			throw new ArgcError({
@@ -472,11 +475,11 @@ export class CLI<
 		const resolvedPath: string[] = []
 
 		for (const segment of segments) {
-			if (!segment || !isValidIdentifier(segment)) {
+			if (!segment || !isValidCommandKey(segment)) {
 				throw new ArgcError({
 					error: 'BAD_PATH',
 					got: pathToken,
-					$hint: 'paths are dotted JavaScript identifiers',
+					$hint: 'paths are dotted identifiers or @-prefixed identifiers',
 				})
 			}
 			const children = getRouterChildren(current)
@@ -539,7 +542,7 @@ export class CLI<
 		const router =
 			path.length === 0
 				? this.schema
-				: explorer.select(this.schema, `.${path.join('.')}`).schema
+				: explorer.select(this.schema, formatSchemaSelectorPath(path)).schema
 		const output = explorer.render(router, this.schemaOptions())
 		const lines = output.split('\n')
 		if (lines.length <= explorer.maxLines) return output
@@ -786,7 +789,10 @@ export class CLI<
 		}
 		const children = getRouterChildren(router)
 		for (const [key, child] of Object.entries(children)) {
-			if (key.startsWith('@') || !isValidIdentifier(key)) {
+			if (
+				(path.length === 0 && isBuiltinCommand(key)) ||
+				!isValidCommandKey(key)
+			) {
 				throw new Error(`Invalid command key: ${[...path, key].join('.')}`)
 			}
 			this.assertValidCommandKeys(child, [...path, key])

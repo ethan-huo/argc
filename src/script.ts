@@ -9,7 +9,7 @@ import type { Router, Schema } from './types'
 
 import { ArgcError, renderResult, withStdoutRerouted } from './render'
 import { getRouterChildren, findHandler } from './router'
-import { extractCliInputParamsDetailed } from './schema'
+import { extractCliInputParamsDetailed, isValidIdentifier } from './schema'
 import { isCommand } from './types'
 
 export async function readStdin(): Promise<string> {
@@ -344,11 +344,17 @@ export async function runScriptMode(
 		options.appName,
 		hookDispatcher,
 	)
+	const bareHandlers =
+		typeof api.handlers === 'object' && api.handlers !== null
+			? Object.fromEntries(
+					Object.entries(api.handlers).filter(([key]) =>
+						isValidIdentifier(key),
+					),
+				)
+			: {}
 	const scope: Record<string, unknown> = {
 		argc: api,
-		...((typeof api.handlers === 'object' && api.handlers !== null
-			? api.handlers
-			: {}) as Record<string, unknown>),
+		...(bareHandlers as Record<string, unknown>),
 	}
 	const result = await withStdoutRerouted(async () => {
 		if (options.source.kind === 'stdin')

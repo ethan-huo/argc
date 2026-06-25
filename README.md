@@ -6,7 +6,7 @@ handlers, predictable stdout, and an agent-readable `@schema`.
 ## Install
 
 ```bash
-bun add github:ethan-huo/argc#v7.2.1
+bun add github:ethan-huo/argc#v7.4.0
 ```
 
 Use release tags for downstream projects. `main` is the source branch and does
@@ -45,7 +45,7 @@ const commands = {
 
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.2.1',
+	version: '7.4.0',
 	description: 'Example argc CLI',
 })
 
@@ -72,6 +72,7 @@ user:
 argc 7 is a clean-break typed command surface:
 
 - Commands are addressed by dotted path: `myapp user.create`
+- Non-builtin `@` identifiers are app commands; `@schema`, `@run`, and `@completions` are reserved
 - Input is one quoted object literal token: `"{ name: 'alice' }"`
 - Large input can come from a file or stdin: `@payload.json` or `-`
 - `@schema`, `@run`, and `@completions` are builtins
@@ -113,7 +114,7 @@ injected into handlers as `context`.
 ```typescript
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.2.1',
+	version: '7.4.0',
 	context: s(
 		v.object({
 			token: v.string(),
