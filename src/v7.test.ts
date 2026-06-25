@@ -428,25 +428,93 @@ describe('argc 7 command surface', () => {
 		expect(schemaResult.stdout).toContain('ping()')
 	})
 
-	test('command keys must be identifiers or non-builtin @ identifiers', () => {
+	test('command keys must be identifiers, kebab keys, or non-builtin @ keys', () => {
 		expect(() =>
 			cli(
-				{ 'bad-name': c.input(s(v.object({}))) },
+				{ '-bad-name': c.input(s(v.object({}))) },
 				{ name: 'x', version: '7.0.0' },
 			),
-		).toThrow('Invalid command key: bad-name')
+		).toThrow('Invalid command key: -bad-name')
 		expect(() =>
 			cli(
-				{ '@bad-name': c.input(s(v.object({}))) },
+				{ 'bad-name-': c.input(s(v.object({}))) },
 				{ name: 'x', version: '7.0.0' },
 			),
-		).toThrow('Invalid command key: @bad-name')
+		).toThrow('Invalid command key: bad-name-')
 		expect(() =>
 			cli(
 				{ '@schema': c.input(s(v.object({}))) },
 				{ name: 'x', version: '7.0.0' },
 			),
 		).toThrow('Invalid command key: @schema')
+	})
+
+	test('kebab command keys work in dotted paths, schema, @run, and completion', async () => {
+		const schema = {
+			g1: group(
+				{ description: 'Group one' },
+				{
+					'kebab-case-cmd': c
+						.meta({ description: 'Run kebab command' })
+						.input(s(v.object({ name: v.string() }))),
+				},
+			),
+		}
+		const app = cli(schema, { name: 'x', version: '7.0.0' })
+		const handlers = {
+			g1: {
+				'kebab-case-cmd': (options) =>
+					`kebab:${(options.input as { name: string }).name}`,
+			},
+		} satisfies RunConfig<typeof schema, undefined>['handlers']
+
+		const direct = await capture(() =>
+			app.run({ handlers }, ['g1.kebab-case-cmd', "{ name: 'direct' }"]),
+		)
+		expect(direct.exitCode).toBe(0)
+		expect(direct.stdout).toBe('kebab:direct')
+
+		const schemaResult = await capture(() => app.run({ handlers }, ['@schema']))
+		expect(schemaResult.exitCode).toBe(0)
+		expect(schemaResult.stdout).toContain('"kebab-case-cmd"(input:')
+		expect(schemaResult.stdout).toContain('x g1.kebab-case-cmd "{')
+		expect(
+			parseSync('schema.ts', bodyFromOkf(schemaResult.stdout), {
+				lang: 'ts',
+			}).errors,
+		).toEqual([])
+
+		const selected = await capture(() =>
+			app.run({ handlers }, ['@schema', '.g1.["kebab-case-cmd"]']),
+		)
+		expect(selected.exitCode).toBe(0)
+		expect(selected.stdout).toContain('"kebab-case-cmd"(input:')
+
+		const bracketRun = await capture(() =>
+			app.run({ handlers }, [
+				'@run',
+				'await g1["kebab-case-cmd"]({ name: "bracket" })',
+			]),
+		)
+		expect(bracketRun.exitCode).toBe(0)
+		expect(bracketRun.stdout).toBe('kebab:bracket')
+
+		const callRun = await capture(() =>
+			app.run({ handlers }, [
+				'@run',
+				'await argc.call["g1.kebab-case-cmd"]({ name: "call" })',
+			]),
+		)
+		expect(callRun.exitCode).toBe(0)
+		expect(callRun.stdout).toBe('kebab:call')
+
+		const help = await capture(() => app.run({ handlers }, ['--help']))
+		expect(help.exitCode).toBe(0)
+		expect(help.stdout).toContain('g1["kebab-case-cmd"]({ name: ')
+
+		expect(complete(schema, { words: ['g1.k'], current: 0 })).toEqual([
+			'g1.kebab-case-cmd',
+		])
 	})
 
 	test('@ command keys are app commands unless they collide with argc builtins', async () => {
@@ -557,12 +625,12 @@ describe('argc 7 command surface', () => {
 	})
 
 	test('completion includes non-builtin @ command paths', () => {
-		const schema = { '@skill': c.input(s(v.object({}))) }
+		const schema = { '@skill-install': c.input(s(v.object({}))) }
 		expect(complete(schema, { words: ['@'], current: 0 })).toEqual([
 			'@run',
 			'@schema',
 			'@completions',
-			'@skill',
+			'@skill-install',
 		])
 	})
 

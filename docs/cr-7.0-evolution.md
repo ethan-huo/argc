@@ -40,10 +40,9 @@ Why this is clean, not a regression:
 - **Isomorphic across all three forms** — `large storage.bucket.list "{…}"`,
   `@run "await storage.bucket.list({…})"`, and the `@schema` nested type flatten to the _same_
   string. Read the type → write the call, path included.
-- **No bracket notation needed.** Command/group keys are already identifier-only (parent §2.3.1),
-  so a path is always `ident.ident.ident` — unquoted-shell-safe (`.` is not shell-special; there
-  is no `[]` to trigger globbing). Non-identifier keys exist only inside the input object, which is
-  already a quoted JSON5 token. So `storage['foo-bar'].call` never arises and is not supported.
+- **Bracket notation only when the command key needs it.** Identifier keys keep the clean
+  `ident.ident.ident` path across CLI, `@run`, and `@schema`. Kebab-case and non-builtin `@` keys
+  stay valid by quoting in TS surfaces (`g1["kebab-case"](...)`, `argc.call["@skill"](...)`).
 
 Parser:
 
@@ -239,4 +238,4 @@ the repo after the sweep.
 
 The 7.0 contract otherwise stands: input = one quoted JSON5 object (`@file` / `-` / omitted=`{}`),
 `--context` + `ARGC_CTX`, handler-return serialized as block YAML, stdout→stderr reroute, `@run`
-print mode, identifier-only keys, unknown-key precheck, `run: false`. No new deps.
+print mode, constrained command keys, unknown-key precheck, `run: false`. No new deps.

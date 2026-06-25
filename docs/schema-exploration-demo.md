@@ -54,8 +54,8 @@ without reading unrelated branches.
 
 ## Non-Identifier Input Keys
 
-Command and group keys are valid JavaScript identifiers. Input field keys may
-come from domain data:
+Command and group keys may be JavaScript identifiers, kebab-case names, or
+non-builtin `@` names. Input field keys may come from domain data:
 
 ```typescript
 type Input = {

@@ -41,13 +41,13 @@ Scenario: accept a non-builtin command/group key that starts with `@`
   When cli() is constructed
   Then construction succeeds
 
-Scenario: reject a non-identifier command/group key
-  Given a schema with a key "alert-create"
+Scenario: reject a malformed command/group key
+  Given a schema with a key "-alert"
   When cli() is constructed
-  Then it throws  "Invalid command key: alert-create"
+  Then it throws  "Invalid command key: -alert"
 
-Scenario: accept identifier keys (incl. reserved words as property names)
-  Given keys like "list", "delete", "export", "core_v2"
+Scenario: accept identifier, kebab-case, and non-builtin @ keys
+  Given keys like "list", "delete", "export", "core_v2", "kebab-case", "@skill-install"
   Then construction succeeds
 ```
 
@@ -58,7 +58,8 @@ payloads, e.g. `content-type`); only command/group keys are.
 
 ## Feature 2 — Path & routing
 
-Path is a single dotted token of identifier segments: `g1.c2.c3`.
+Path is a single dotted token of command-key segments: `g1.c2.c3` or
+`g1.kebab-case-cmd`.
 
 ```
 Scenario: a top-level command

@@ -40,14 +40,15 @@ export type FieldDescriptor = {
 }
 
 const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
-const AT_IDENTIFIER_RE = /^@[A-Za-z_$][A-Za-z0-9_$]*$/
+const COMMAND_KEY_BODY_RE = /^[A-Za-z_$][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*$/
 
 export function isValidIdentifier(name: string): boolean {
 	return IDENTIFIER_RE.test(name)
 }
 
 export function isValidCommandKey(name: string): boolean {
-	return isValidIdentifier(name) || AT_IDENTIFIER_RE.test(name)
+	const body = name.startsWith('@') ? name.slice(1) : name
+	return body.length > 0 && COMMAND_KEY_BODY_RE.test(body)
 }
 
 function formatPropertyKey(name: string): string {
@@ -55,11 +56,20 @@ function formatPropertyKey(name: string): string {
 }
 
 function formatPathMember(name: string): string {
-	return isValidIdentifier(name) ? `.${name}` : `[${JSON.stringify(name)}]`
+	return isValidIdentifier(name) ? `.${name}` : `.[${JSON.stringify(name)}]`
 }
 
 function formatScriptInvocation(path: string[], input: string): string {
-	if (path.every(isValidIdentifier)) return `${path.join('.')}(${input})`
+	if (path[0] && isValidIdentifier(path[0])) {
+		const receiver = path
+			.map((segment, index) => {
+				if (index === 0) return segment
+				if (isValidIdentifier(segment)) return `.${segment}`
+				return `[${JSON.stringify(segment)}]`
+			})
+			.join('')
+		return `${receiver}(${input})`
+	}
 	return `argc.call[${JSON.stringify(path.join('.'))}](${input})`
 }
 

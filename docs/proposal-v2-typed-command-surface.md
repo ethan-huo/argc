@@ -126,28 +126,29 @@ caller-side flag to `--ctx`. Absent that, verbatim wins (one less layer).
 Every v1 behavior below is **removed or changed**. Treat the v1 implementation as the _before_,
 not the contract — this table is the demolition plan Codex's first pass was missing.
 
-| v1 behavior (file)                                                                                               | v2                                                                                                                                                       |
-| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Handler` returns `void`; `CLI.run()` discards the result (`types.ts:104`, `cli.ts:505`)                         | **changed**: handlers return a value; argc serializes it to stdout (§3). `Handler`, `RunConfig`, and `findHandler` (`router.ts:11`) return types change. |
-| command/group keys may be any string incl. dashed `alert-create` (`schema.ts:311`, `schema-explorer.test.ts:25`) | **removed**: keys must be valid JS identifiers or non-builtin `@` identifiers (§2.3.1), rejected at construction.                                        |
-| command aliases: routing in `extractCommand()` (`cli.ts:578`) + alias completion (`complete.ts:180`)             | **removed**: one command, one name. Touches routing, "unknown command" errors, and completion candidates.                                                |
-| flag parsing / camelCase↔snake (`naming.ts`, `normalizeFlagsForFields`)                                          | **removed**                                                                                                                                              |
-| positional args `.args()`                                                                                        | **removed** (object subsumes)                                                                                                                            |
-| `--input` flag + `input`-field collision handling (`cli.ts:401`)                                                 | **removed** (the bare object _is_ the input)                                                                                                             |
-| CLI string→value coercion (`coerce.ts`)                                                                          | **removed** (JSON5 carries types; schema transforms stay)                                                                                                |
-| `context: (globals) => …` transform                                                                              | **removed** (§2.2)                                                                                                                                       |
-| `@schema` CLI-syntax / case-conversion preamble                                                                  | **removed** (§4.2)                                                                                                                                       |
-| per-command prose `--help`                                                                                       | **removed** (→ `@schema`)                                                                                                                                |
-| verbose git-style did-you-mean block                                                                             | **changed** → terse structured suggestion (§4.5)                                                                                                         |
+| v1 behavior (file)                                                                                                | v2                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Handler` returns `void`; `CLI.run()` discards the result (`types.ts:104`, `cli.ts:505`)                          | **changed**: handlers return a value; argc serializes it to stdout (§3). `Handler`, `RunConfig`, and `findHandler` (`router.ts:11`) return types change. |
+| command/group keys may be any string incl. arbitrary dashed names (`schema.ts:311`, `schema-explorer.test.ts:25`) | **changed**: keys must be valid JS identifiers, kebab-case names, or non-builtin `@` names (§2.3.1), rejected at construction.                           |
+| command aliases: routing in `extractCommand()` (`cli.ts:578`) + alias completion (`complete.ts:180`)              | **removed**: one command, one name. Touches routing, "unknown command" errors, and completion candidates.                                                |
+| flag parsing / camelCase↔snake (`naming.ts`, `normalizeFlagsForFields`)                                           | **removed**                                                                                                                                              |
+| positional args `.args()`                                                                                         | **removed** (object subsumes)                                                                                                                            |
+| `--input` flag + `input`-field collision handling (`cli.ts:401`)                                                  | **removed** (the bare object _is_ the input)                                                                                                             |
+| CLI string→value coercion (`coerce.ts`)                                                                           | **removed** (JSON5 carries types; schema transforms stay)                                                                                                |
+| `context: (globals) => …` transform                                                                               | **removed** (§2.2)                                                                                                                                       |
+| `@schema` CLI-syntax / case-conversion preamble                                                                   | **removed** (§4.2)                                                                                                                                       |
+| per-command prose `--help`                                                                                        | **removed** (→ `@schema`)                                                                                                                                |
+| verbose git-style did-you-mean block                                                                              | **changed** → terse structured suggestion (§4.5)                                                                                                         |
 
-#### 2.3.1 Command keys: identifiers plus non-builtin `@` identifiers
+#### 2.3.1 Command keys: identifiers, kebab-case, plus non-builtin `@` names
 
-A command/group key must match `/^[A-Za-z_$][A-Za-z0-9_$]*$/` or
-`/^@[A-Za-z_$][A-Za-z0-9_$]*$/`. Top-level keys that collide with argc builtins (`@schema`,
-`@run`, `@completions`) are rejected because first-token dispatch belongs to the framework.
-Non-builtin `@` keys are app commands: path `cli @skill`, `@schema` method `"@skill"(input)`,
-and `@run` via `argc.call["@skill"](...)`. Downstream tools using dashed command names must
-rename — inventory before release.
+A command/group key must match `/^@?[A-Za-z_$][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)*$/`.
+Top-level keys that collide with argc builtins (`@schema`, `@run`, `@completions`) are rejected
+because first-token dispatch belongs to the framework. Kebab keys are app commands:
+path `cli g1.kebab-case-cmd`, `@schema` method `"kebab-case-cmd"(input)`, `@run` via
+`g1["kebab-case-cmd"](...)` when the top-level group is an identifier, and always via
+`argc.call["g1.kebab-case-cmd"](...)`. This deliberately preserves dotted single-token paths
+without restoring the old `g1 g2 cmd` cascade.
 
 ---
 
@@ -273,11 +274,11 @@ type App = {
   reads the actual shape from the output it gets back.
 - Keys are verbatim. A `'json' | 'table'` literal union renders as-is — the agent sees exactly
   what is accepted.
-- Command keys are identifiers (§2.3.1), so method names render **unquoted**.
+- Identifier command keys render **unquoted**. Kebab-case and `@` command keys render quoted so
+  the schema body stays valid TS.
 - **Input field keys are _not_ identifier-constrained** (they mirror real payloads, e.g.
   `content-type`). The renderer **quotes non-identifier property names** so the output stays valid
-  TS: `create(input: { "content-type"?: string; name: string })`. (Command keys = our naming,
-  identifiers; input keys = domain data, quoted-when-needed.)
+  TS: `create(input: { "content-type"?: string; name: string })`.
 
 ### 4.3 `cli @schema .selector` and outline mode
 
@@ -480,16 +481,16 @@ branches on `error:` and reads `issues[].at` / `.message` directly. A strict-JSO
   lib-specific fields).
 - delete: `coerce.ts`, `naming.ts` flag-normalization, alias routing, positional handling.
 - New deps: `oxc-parser` (`@run`), `yaml` (output rendering — `Bun.YAML.stringify` is flow-only).
-- Tests/docs: rewrite README around the three forms; migrate `@add` and dashed-key fixtures
-  (`schema-explorer.test.ts:25`); inventory downstream tools for dashed command names + aliases;
-  add tests for the call contract, identifier/`@`-key rejection, handler-return serialization,
-  every render target in §4, and `run:false`.
+- Tests/docs: rewrite README around the three forms; migrate `@add` and malformed-key fixtures;
+  inventory downstream aliases; add tests for the call contract, malformed-key rejection,
+  handler-return serialization, every render target in §4, and `run:false`.
 
 ## 6. Decisions & open questions
 
 **Frozen** (confirmed in review):
 
-- **Command/group keys must be valid JS identifiers** (§2.3.1) — downstream dashed names rename.
+- **Command/group keys must be valid identifiers, kebab-case names, or non-builtin `@` names**
+  (§2.3.1).
 - **No context transform** (§2.2) — the validated `context` object reaches handlers verbatim.
 - **No output types / per-command output schemas** (§4.2) — rejected on principle: call→observe;
   a declared return is dead weight and, being unverified, can drift from the real value.
@@ -499,5 +500,4 @@ branches on `error:` and reads `issues[].at` / `.message` directly. A strict-JSO
 1. **Strict JSON error mode** (`ARGC_ERROR=json`, §4.6) — deferred; the YAML envelope is already
    structured and parseable.
 2. `@help`/`@version` aliases for `--help`/`--version`, or skip.
-3. **Downstream inventory** — confirm no family tool relies on dashed command names or aliases
-   before the clean break.
+3. **Downstream inventory** — confirm no family tool relies on aliases before the clean break.

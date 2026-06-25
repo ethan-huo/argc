@@ -58,7 +58,7 @@ UPPER="$(printf '%s' "$NAME" | tr 'a-z-' 'A-Z_')"
 # argc version to substitute into package.json's {{ARGC_VERSION}}. The live path
 # queries the latest published tag so scaffolds are always current with zero manual
 # sync; FALLBACK is offline-only and rarely matters (any recent release scaffolds fine).
-FALLBACK_ARGC_VERSION="v7.4.0"
+FALLBACK_ARGC_VERSION="v7.5.0"
 ARGC_VERSION="$(git ls-remote --tags --refs https://github.com/ethan-huo/argc.git 'v*' 2>/dev/null \
   | awk -F/ '{print $NF}' | sort -V | tail -1 || true)"
 if [[ "$ARGC_VERSION" =~ ^v[0-9] ]]; then
