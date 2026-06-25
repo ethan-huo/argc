@@ -322,8 +322,34 @@ function exampleInput(params: ParamInfo[]): string {
 }
 
 function pushDoc(lines: string[], indent: string, text: string): void {
-	const normalized = text.replaceAll('*/', '* /')
-	lines.push(`${indent}/** ${normalized} */`)
+	lines.push(`${indent}/** ${normalizeDocText(text)} */`)
+}
+
+function normalizeDocText(text: string): string {
+	return text.replaceAll('*/', '* /')
+}
+
+function pushCommandDoc(
+	lines: string[],
+	indent: string,
+	description: string | undefined,
+	example: string | undefined,
+): void {
+	const desc = description ? normalizeDocText(description) : undefined
+	const sample = example ? normalizeDocText(example) : undefined
+	if (!desc && !sample) return
+	if (desc && !sample) {
+		lines.push(`${indent}/** ${desc} */`)
+		return
+	}
+	lines.push(`${indent}/**`)
+	if (desc) {
+		lines.push(`${indent} * ${desc}`)
+		lines.push(`${indent} *`)
+	}
+	lines.push(`${indent} * @example`)
+	lines.push(`${indent} * ${sample}`)
+	lines.push(`${indent} */`)
 }
 
 function getCommandInputExample(router: Router): string {
@@ -376,7 +402,14 @@ export function buildSurfaceExamples(
 	const direct = `${options.name} ${dottedPath} "${input}"`
 	const examples = [direct]
 	examples.push(
-		`${options.name} @run "await Promise.all([${dottedPath}(${input}), ${dottedPath}(${input})])" --json`,
+		[
+			`${options.name} @run - --json <<'JS'`,
+			'await Promise.all([',
+			`  ${dottedPath}(${input}),`,
+			`  ${dottedPath}(${input}),`,
+			'])',
+			'JS',
+		].join('\n'),
 	)
 	examples.push(
 		`${options.name} @schema ${
@@ -399,11 +432,12 @@ function generateCommandSchema(
 		const meta = router['~argc'].meta
 		const input = router['~argc'].input
 		const params = input ? extractOutputParamsDetailed(input) : []
-		if (meta.description) pushDoc(lines, indent, meta.description)
+		const example =
+			params.length > 0
+				? `${appName} ${path.join('.')} "${exampleInput(params)}"`
+				: undefined
+		pushCommandDoc(lines, indent, meta.description, example)
 		if (params.length > 0) {
-			lines.push(
-				`${indent}// ${appName} ${path.join('.')} "${exampleInput(params)}"`,
-			)
 			lines.push(`${indent}${name}(input: { ${formatParams(params)} })`)
 		} else {
 			lines.push(`${indent}${name}()`)

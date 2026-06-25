@@ -2,6 +2,7 @@ import { toStandardJsonSchema } from '@valibot/to-json-schema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parseSync } from 'oxc-parser'
 import * as v from 'valibot'
 
 import type { RunConfig } from './types'
@@ -97,6 +98,12 @@ async function capture(
 }
 
 const ANSI_RE = /\x1b\[/
+
+function bodyFromOkf(output: string): string {
+	const first = output.indexOf('---\n')
+	const second = output.indexOf('---\n', first + 4)
+	return output.slice(second + 4)
+}
 
 afterEach(() => {
 	delete process.env.ARGC_CTX
@@ -200,7 +207,7 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).toBe('')
 	})
 
-	test('@schema renders method signatures without return annotations and quotes input keys', async () => {
+	test('@schema renders parseable TS with command JSDoc examples', async () => {
 		const { app, handlers } = makeApp()
 		const result = await capture(() =>
 			app.run({ handlers }, ['@schema', '.user.create']),
@@ -210,7 +217,21 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).toContain('create(input:')
 		expect(result.stdout).not.toContain('): unknown')
 		expect(result.stdout).toContain('"content-type"?: string')
-		expect(result.stdout).toContain('mcpx user.create "{')
+		expect(result.stdout).toContain(
+			[
+				'    /**',
+				'     * Create a user',
+				'     *',
+				'     * @example',
+				"     * mcpx user.create \"{ name: 'value', email: 'value', 'content-type': 'value' }\"",
+				'     */',
+				'    create(input:',
+			].join('\n'),
+		)
+		expect(result.stdout).not.toContain('// mcpx user.create')
+		expect(
+			parseSync('schema.ts', bodyFromOkf(result.stdout), { lang: 'ts' }).errors,
+		).toEqual([])
 		// OKF envelope: --- frontmatter --- body, no `program` label. Small slice =
 		// fully shown, so guidance says so and offers no selector noise.
 		expect(result.stdout.startsWith('---')).toBe(true)
@@ -222,6 +243,32 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).not.toContain('program:')
 		expect(result.stdout).not.toContain('selectors:')
 		expect(result.stdout).not.toContain('--toc')
+	})
+
+	test('@schema keeps command doc degradation rules narrow', async () => {
+		const schema = {
+			described: c.meta({ description: 'Describe only' }),
+			exampleOnly: c.input(s(v.object({ name: v.string() }))),
+			bare: c,
+		}
+		const app = cli(schema, { name: 'x', version: '7.0.0' })
+		const result = await capture(() =>
+			app.run({ handlers: {} as never }, ['@schema']),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).toContain('/** Describe only */\n  described()')
+		expect(result.stdout).toContain(
+			[
+				'  /**',
+				'   * @example',
+				'   * x exampleOnly "{ name: \'value\' }"',
+				'   */',
+				'  exampleOnly(input:',
+			].join('\n'),
+		)
+		expect(result.stdout).toContain('  bare()')
+		expect(result.stdout).not.toContain('/**\n   *\n')
 	})
 
 	test('unknown object keys fail before schema validation can strip them', async () => {
@@ -426,7 +473,17 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).toContain('## Schema')
 		expect(result.stdout).toContain('## Examples')
 		expect(result.stdout).toContain('mcpx user.create "{')
-		expect(result.stdout).toContain('mcpx @run "await Promise.all')
+		expect(result.stdout).toContain("mcpx @run - --json <<'JS'")
+		expect(result.stdout).toContain(
+			[
+				'await Promise.all([',
+				"  user.create({ name: 'value', email: 'value', 'content-type': 'value' }),",
+				"  user.create({ name: 'value', email: 'value', 'content-type': 'value' }),",
+				'])',
+				'JS',
+			].join('\n'),
+		)
+		expect(result.stdout).not.toContain('mcpx @run "await Promise.all')
 		expect(result.stdout).toContain('mcpx @schema .user')
 		expect(result.stdout).not.toContain('help:')
 		expect(result.stdout).not.toContain('examples:')
@@ -526,6 +583,38 @@ describe('argc 7 command surface', () => {
 		expect(result.stderr).not.toContain('received "--toc"')
 	})
 
+	test('@run reads multi-line stdin source with trailing --json', async () => {
+		const proc = Bun.spawn(['bun', 'examples/demo.ts', '@run', '-', '--json'], {
+			env: {
+				...process.env,
+				ARGC_CTX: "{ env: 'prod' }",
+			},
+			stdin: 'pipe',
+			stdout: 'pipe',
+			stderr: 'pipe',
+		})
+		proc.stdin.write(
+			[
+				'await Promise.all([',
+				"  user.create({ name: 'alice' }),",
+				"  user.create({ name: 'bob' }),",
+				'])',
+			].join('\n'),
+		)
+		proc.stdin.end()
+
+		const stdout = await new Response(proc.stdout).text()
+		const stderr = await new Response(proc.stderr).text()
+		const exitCode = await proc.exited
+
+		expect(exitCode).toBe(0)
+		expect(stderr).toBe('')
+		expect(JSON.parse(stdout)).toEqual([
+			{ id: 1, name: 'alice', env: 'prod' },
+			{ id: 1, name: 'bob', env: 'prod' },
+		])
+	})
+
 	test('human path unexpected positionals point to command help', async () => {
 		const { app, handlers } = makeApp()
 		const result = await capture(() =>
@@ -621,6 +710,9 @@ describe('argc 7 command surface', () => {
 		expect(schema.stdout).toMatch(ANSI_RE)
 		expect(error.stderr).toMatch(ANSI_RE)
 		expect(disabled.stdout).not.toMatch(ANSI_RE)
+		expect(schema.stdout).toContain('\x1b[2m  /**\x1b[0m')
+		expect(schema.stdout).toContain('\x1b[36m   * @example\x1b[0m')
+		expect(schema.stdout).toContain('type \x1b[1mMcpx\x1b[0m =')
 	})
 
 	test('--no-color is not a framework control token', async () => {

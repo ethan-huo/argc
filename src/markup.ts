@@ -104,7 +104,15 @@ export function colorizeSchema(
 				return dim(line, enabled)
 			}
 			if (frontmatter) return styleFrontmatterLine(line, enabled)
-			if (line.startsWith('//')) return dim(line, enabled)
+			const trimmed = line.trimStart()
+			if (
+				trimmed.startsWith('//') ||
+				trimmed.startsWith('/**') ||
+				trimmed.startsWith('*')
+			) {
+				if (/^\* @example\s*$/.test(trimmed)) return cyan(line, enabled)
+				return dim(line, enabled)
+			}
 			return line.replace(
 				/^(type\s+)([A-Za-z_$][A-Za-z0-9_$]*)(\s*=)/,
 				(_match, prefix: string, name: string, suffix: string) =>
