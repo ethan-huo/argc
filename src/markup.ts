@@ -6,15 +6,9 @@ type ColorStream = {
 	isTTY?: boolean
 }
 
-const NO_COLOR_FLAG = '--no-color'
-
 function color(stream: ColorStream): boolean {
 	// Framework-rendered contracts must stay byte-plain whenever captured.
-	return (
-		!!stream.isTTY &&
-		!process.env.NO_COLOR &&
-		!process.argv.includes(NO_COLOR_FLAG)
-	)
+	return !!stream.isTTY && !process.env.NO_COLOR
 }
 
 function dim(value: string, enabled: boolean): string {

@@ -616,16 +616,23 @@ describe('argc 7 command surface', () => {
 			stdoutTTY: true,
 			env: { NO_COLOR: '1' },
 		})
-		const disabledByFlag = await capture(
-			() => app.run({ handlers }, ['--no-color', '--help']),
-			{ stdoutTTY: true },
-		)
 
 		expect(help.stdout).toMatch(ANSI_RE)
 		expect(schema.stdout).toMatch(ANSI_RE)
 		expect(error.stderr).toMatch(ANSI_RE)
 		expect(disabled.stdout).not.toMatch(ANSI_RE)
-		expect(disabledByFlag.stdout).not.toMatch(ANSI_RE)
+	})
+
+	test('--no-color is not a framework control token', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['read', 'docs/spec.md', '--no-color']),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toContain('error: INVALID_INPUT')
+		expect(result.stderr).toContain('at: no-color')
+		expect(result.stderr).toContain('message: unknown flag')
 	})
 })
 

@@ -1,8 +1,8 @@
 ---
 type: Proposal
 title: argc 7.2 — converge every display surface to OKF, with TTY-gated color
-status: draft
-version: 0.2
+status: accepted
+version: 0.3
 timestamp: 2026-06-25
 description: >
   One display grammar for the whole framework: --help, <cmd> --help, and @schema become OKF
@@ -24,6 +24,10 @@ description: >
 > force-enable path; the styler takes an explicit `enabled` boolean (no fake reuse of
 > `fmt.isColorSupported`); verification drops the false "byte-identical" claim for "non-TTY zero
 > ANSI + structural contract unchanged"; all open questions frozen.
+>
+> **0.3:** dropped the `--no-color` _flag_ (redundant with the `NO_COLOR` env standard, and removing
+> it deletes the 7.1 human-parser control-token seam — there is no flag to strip); color disable is
+> now **`NO_COLOR` env only**.
 
 Baseline: argc 7.0 (`867a9fd`) + 7.1 human path (`56013fd`). This proposal is **display-only**
 plus a **vocabulary** rename; it changes no dispatch, no parser, no validation, no error codes.
@@ -162,7 +166,9 @@ colorize(stream) = stream.isTTY && !env.NO_COLOR
 - errors → `process.stderr.isTTY`.
 - The **only** enable signal is `stream.isTTY`. There is **no force-enable path**: `--color`,
   `FORCE_COLOR`, `CI`, and win32 are all ignored, so a captured stream is always plain.
-- Disable always wins: `NO_COLOR` (env) or `--no-color` (flag) forces plain even on a TTY.
+- Disable always wins: `NO_COLOR` (env) forces plain even on a TTY. There is **no `--no-color`
+  flag** — it is redundant with the `NO_COLOR` standard and would otherwise need stripping before
+  the 7.1 human parser; dropping it removes that seam.
 - Trade-off (accepted): `<cmd> --help | less -R` is plain — fine for an agent-primary CLI; a force
   path is the exact footgun that puts ANSI into a captured stream.
 
@@ -247,16 +253,17 @@ placeholder, which cannot be misread.
 
 1. All four surfaces share OKF / the error envelope; help bodies are natural-language markdown.
 2. Framework color enables **only** on `stream.isTTY` (stdout for help/`@schema`, stderr for
-   errors), disabled by `NO_COLOR`/`--no-color`; **no** force-enable from `--color`/`FORCE_COLOR`/
-   `CI`/win32 (§3.2). With color off, surfaces carry zero ANSI.
+   errors), disabled by the **`NO_COLOR` env only** (no `--no-color` flag); **no** force-enable from
+   `--color`/`FORCE_COLOR`/`CI`/win32 (§3.2). With color off, surfaces carry zero ANSI.
 3. The styler is light & role-based, no markdown/highlight dependency (§4).
 4. Top-level `--help` stays agent-oriented; the human form is taught only in `<cmd> --help` (§2.1).
 5. Vocabulary → "object literal"; JSON5 stays the parser; `BAD_INPUT_JSON` code unchanged (§7).
 6. Examples are representative per-form; no bareword positional examples in shared surfaces (§8).
 
-**Resolved** (frozen in 0.2 per Codex review v1 — no open design points remain):
+**Resolved** (frozen in 0.3 — no open design points remain):
 
-- **Q1 → `isTTY` is the sole enable switch.** No `--color`/`FORCE_COLOR` force-enable (decided #2).
+- **Q1 → `isTTY` is the sole enable switch.** No `--color`/`FORCE_COLOR` force-enable and no
+  `--no-color` framework flag (decided #2).
 - **Q2 → keep `BAD_INPUT_JSON`.** No rename.
 - **Q3 → `@schema` color = `//` comment lines + the `type X =` name only.** No full TS highlight.
 - **Q4 → claw round-trip via a temp file:** capture `<cmd> --help` to `/tmp/help.md`, then
@@ -270,8 +277,8 @@ placeholder, which cannot be misread.
 - `src/terminal.ts` — extract the **raw ANSI factory** (bare color codes, or `(code) => (s,
 enabled) => …`) so both `fmt` (its own liberal gate, unchanged) and the new styler share codes.
 - new `src/markup.ts` (suggested) — the role-based styler + the contract-safe gate
-  `enabled(stream) = stream.isTTY && !NO_COLOR && !hasFlag('--no-color')`; formatters take that
-  `enabled` boolean explicitly. It does **not** consume `fmt.isColorSupported`.
+  `enabled(stream) = stream.isTTY && !process.env.NO_COLOR`; formatters take that `enabled` boolean
+  explicitly. It does **not** consume `fmt.isColorSupported`, and there is **no `--no-color` flag**.
 - `src/render.ts` — error envelope gains TTY color on `stderr` via the same gate; codes/fields/stream
   split unchanged.
 - `src/schema.ts` `buildSurfaceExamples` — emit the representative set (§8).
@@ -285,6 +292,6 @@ enabled) => …`) so both `fmt` (its own liberal gate, unchanged) and the new st
 - Re-run the full `spec-7.0-behavior.md` matrix — `@schema`/error **structure** unchanged.
 - Update the 7.0/7.1 `--help` and `<cmd> --help` assertions to the OKF shapes (the YAML-card
   assertions are deleted).
-- TTY snapshot (with `FORCE_COLOR`/pty) showing colored headers, for the human surfaces only.
+- TTY snapshot (with a pty) showing colored headers, for the human surfaces only.
 - A `claw read` round-trip smoke: capture `<cmd> --help` to a temp `.md`, then
   `claw read <tmp> --toc` (Q4).

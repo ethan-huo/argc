@@ -88,12 +88,8 @@ export class CLI<
 		runOptions: RunConfig<TSchema, TContext>,
 		argv: string[] = process.argv.slice(2),
 	): Promise<void> {
-		const noColor = argv[0] === '--no-color'
-		const effectiveArgv = noColor ? argv.slice(1) : argv
-		const originalNoColor = process.env.NO_COLOR
-		if (noColor) process.env.NO_COLOR = '1'
 		try {
-			await this.runInner(runOptions, effectiveArgv)
+			await this.runInner(runOptions, argv)
 		} catch (error) {
 			if (error instanceof ArgcError) {
 				process.stderr.write(renderError(this.finalizeEnvelope(error.envelope)))
@@ -106,11 +102,6 @@ export class CLI<
 				}),
 			)
 			process.exit(1)
-		} finally {
-			if (noColor) {
-				if (originalNoColor === undefined) delete process.env.NO_COLOR
-				else process.env.NO_COLOR = originalNoColor
-			}
 		}
 	}
 
