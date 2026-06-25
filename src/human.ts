@@ -15,6 +15,7 @@ export type HumanParseResult = {
 
 type HumanParseOptions = {
 	commandPath: string[]
+	appName: string
 }
 
 type FieldIndex = Map<string, FieldDescriptor>
@@ -58,27 +59,25 @@ function setField(
 	input[field.name] = [value]
 }
 
-function unknownFlag(commandPath: string[], name: string): never {
+function helpHint(options: HumanParseOptions): string {
+	return `${options.appName} ${options.commandPath.join('.')} --help`
+}
+
+function unknownFlag(options: HumanParseOptions, name: string): never {
 	throw new ArgcError({
 		error: 'INVALID_INPUT',
-		command: commandPath.join('.'),
+		command: options.commandPath.join('.'),
 		issues: [{ at: name, message: 'unknown flag' }],
+		$hint: helpHint(options),
 	})
 }
 
-function missingFlagValue(commandPath: string[], name: string): never {
+function missingFlagValue(options: HumanParseOptions, name: string): never {
 	throw new ArgcError({
 		error: 'INVALID_INPUT',
-		command: commandPath.join('.'),
+		command: options.commandPath.join('.'),
 		issues: [{ at: name, message: 'missing flag value' }],
-	})
-}
-
-function invalidPositional(commandPath: string[], value: string): never {
-	throw new ArgcError({
-		error: 'INVALID_INPUT',
-		command: commandPath.join('.'),
-		issues: [{ message: `invalid positional value: ${value}` }],
+		$hint: helpHint(options),
 	})
 }
 
@@ -90,20 +89,13 @@ function addPositional(
 	value: string,
 	options: HumanParseOptions,
 ): number {
-	if (
-		value === '-' ||
-		value.startsWith('@') ||
-		value.startsWith('{') ||
-		value.startsWith('--')
-	) {
-		invalidPositional(options.commandPath, value)
-	}
 	const name = positionals[index]
 	if (!name) {
 		throw new ArgcError({
 			error: 'INVALID_INPUT',
 			command: options.commandPath.join('.'),
 			issues: [{ message: `unexpected positional: ${value}` }],
+			$hint: helpHint(options),
 		})
 	}
 	const field = fields.get(name)
@@ -166,7 +158,7 @@ export function parseHumanArgs(
 		if (token.startsWith('--')) {
 			const flag = splitFlag(token)
 			const field = fields.get(flag.name)
-			if (!field) unknownFlag(options.commandPath, flag.name)
+			if (!field) unknownFlag(options, flag.name)
 			if (field.kind === 'boolean' && flag.value === undefined) {
 				setField(input, field, true)
 				continue
@@ -174,9 +166,9 @@ export function parseHumanArgs(
 			let value = flag.value
 			if (value === undefined) {
 				index++
-				if (index >= argv.length)
-					missingFlagValue(options.commandPath, flag.name)
+				if (index >= argv.length) missingFlagValue(options, flag.name)
 				value = argv[index]!
+				if (value.startsWith('--')) missingFlagValue(options, flag.name)
 			}
 			setField(input, field, coerceValue(value, field))
 			continue

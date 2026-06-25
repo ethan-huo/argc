@@ -104,18 +104,17 @@ export class CLI<
 		}
 	}
 
-	// Invariant in one place: an INVALID_INPUT always carries its command $schema
-	// (and never a $hint), wherever it was thrown — direct call already does this,
-	// the @run path does not, so backfill it here.
+	// Invariant in one place: an INVALID_INPUT always carries its command $schema.
+	// Explicit parser hints survive so the human path can point back to command help;
+	// schema validation itself still emits no hint.
 	private finalizeEnvelope(envelope: ErrorEnvelope): ErrorEnvelope {
 		if (
 			envelope.error === 'INVALID_INPUT' &&
 			!envelope.$schema &&
 			typeof envelope.command === 'string'
 		) {
-			const { $hint: _hint, ...rest } = envelope
 			return {
-				...rest,
+				...envelope,
 				$schema: this.renderSchemaSlice(envelope.command.split('.')),
 			}
 		}
@@ -414,6 +413,7 @@ export class CLI<
 				}
 				const human = parseHumanArgs(current, argv.slice(index), {
 					commandPath,
+					appName: this.options.name,
 				})
 				input = { kind: 'object', value: human.input }
 				if (human.context) context = human.context
@@ -433,6 +433,7 @@ export class CLI<
 				}
 				const human = parseHumanArgs(current, argv.slice(index), {
 					commandPath,
+					appName: this.options.name,
 				})
 				input = { kind: 'object', value: human.input }
 				if (human.context) context = human.context

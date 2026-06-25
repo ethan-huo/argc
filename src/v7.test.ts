@@ -456,6 +456,36 @@ describe('argc 7 command surface', () => {
 		expect(result.stderr).toContain('error: INVALID_INPUT')
 		expect(result.stderr).toContain('at: tocc')
 		expect(result.stderr).toContain('message: unknown flag')
+		expect(result.stderr).toContain('$hint: mcpx read --help')
+		expect(result.stderr).toContain('$schema: |-')
+	})
+
+	test('human path does not swallow a following flag as a missing value', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['read', 'docs/spec.md', '--depth', '--toc']),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toContain('error: INVALID_INPUT')
+		expect(result.stderr).toContain('at: depth')
+		expect(result.stderr).toContain('message: missing flag value')
+		expect(result.stderr).toContain('$hint: mcpx read --help')
+		expect(result.stderr).toContain('$schema: |-')
+		expect(result.stderr).not.toContain('received "--toc"')
+	})
+
+	test('human path unexpected positionals point to command help', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['read', 'docs/spec.md', 'extra']),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toContain('error: INVALID_INPUT')
+		expect(result.stderr).toContain('unexpected positional: extra')
+		expect(result.stderr).toContain('$hint: mcpx read --help')
+		expect(result.stderr).toContain('$schema: |-')
 	})
 
 	test('object input cannot mix with human flags', async () => {
