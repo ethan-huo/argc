@@ -1,5 +1,7 @@
 import { stringify } from 'yaml'
 
+import { colorizeError } from './markup'
+
 export type ErrorIssue = {
 	at?: string
 	message: string
@@ -85,7 +87,7 @@ export function renderResult(
 }
 
 export function renderError(envelope: ErrorEnvelope): string {
-	return stringify(normalizeValue(envelope), { lineWidth: 0 })
+	return colorizeError(stringify(normalizeValue(envelope), { lineWidth: 0 }))
 }
 
 export async function withStdoutRerouted<T>(fn: () => Promise<T>): Promise<T> {

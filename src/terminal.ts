@@ -18,28 +18,54 @@ const isColorSupported =
 
 const RESET = '\x1b[0m'
 
+export const ansi = {
+	black: '\x1b[30m',
+	red: '\x1b[31m',
+	green: '\x1b[32m',
+	yellow: '\x1b[33m',
+	blue: '\x1b[34m',
+	magenta: '\x1b[35m',
+	cyan: '\x1b[36m',
+	white: '\x1b[37m',
+	gray: '\x1b[90m',
+	bold: '\x1b[1m',
+	dim: '\x1b[2m',
+	italic: '\x1b[3m',
+	underline: '\x1b[4m',
+	inverse: '\x1b[7m',
+	strikethrough: '\x1b[9m',
+} as const
+
+export function formatAnsi(
+	code: string,
+	value: string,
+	enabled: boolean,
+): string {
+	return enabled ? `${code}${value}${RESET}` : value
+}
+
 const createFormatter = (code: string) =>
 	isColorSupported ? (s: string) => `${code}${s}${RESET}` : (s: string) => s
 
 const baseColors = {
 	// Standard colors
-	black: createFormatter('\x1b[30m'),
-	red: createFormatter('\x1b[31m'),
-	green: createFormatter('\x1b[32m'),
-	yellow: createFormatter('\x1b[33m'),
-	blue: createFormatter('\x1b[34m'),
-	magenta: createFormatter('\x1b[35m'),
-	cyan: createFormatter('\x1b[36m'),
-	white: createFormatter('\x1b[37m'),
-	gray: createFormatter('\x1b[90m'),
+	black: createFormatter(ansi.black),
+	red: createFormatter(ansi.red),
+	green: createFormatter(ansi.green),
+	yellow: createFormatter(ansi.yellow),
+	blue: createFormatter(ansi.blue),
+	magenta: createFormatter(ansi.magenta),
+	cyan: createFormatter(ansi.cyan),
+	white: createFormatter(ansi.white),
+	gray: createFormatter(ansi.gray),
 
 	// Styles
-	bold: createFormatter('\x1b[1m'),
-	dim: createFormatter('\x1b[2m'),
-	italic: createFormatter('\x1b[3m'),
-	underline: createFormatter('\x1b[4m'),
-	inverse: createFormatter('\x1b[7m'),
-	strikethrough: createFormatter('\x1b[9m'),
+	bold: createFormatter(ansi.bold),
+	dim: createFormatter(ansi.dim),
+	italic: createFormatter(ansi.italic),
+	underline: createFormatter(ansi.underline),
+	inverse: createFormatter(ansi.inverse),
+	strikethrough: createFormatter(ansi.strikethrough),
 }
 
 // ============ Semantic Output (with icons) ============

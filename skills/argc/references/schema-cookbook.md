@@ -5,8 +5,8 @@ object passed as the single command input token.
 
 ## Mental Model
 
-argc does not coerce shell flags in v7. A command receives one structured JSON5
-value, then the Standard Schema validator owns type checking, defaults, and
+argc does not coerce shell flags in v7. A command receives one structured object
+literal value, then the Standard Schema validator owns type checking, defaults, and
 transforms.
 
 ```bash
@@ -68,7 +68,7 @@ Closed sets are high-signal in `@schema`; free-form strings are not.
 
 ## Arrays and Objects
 
-Arrays and nested objects are ordinary JSON5:
+Arrays and nested objects are ordinary object literals:
 
 ```typescript
 tags: v.array(v.string())

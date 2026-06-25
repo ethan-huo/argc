@@ -19,7 +19,16 @@ class ExitError extends Error {
 	}
 }
 
-async function capture(fn: () => Promise<void> | void): Promise<{
+type CaptureOptions = {
+	stdoutTTY?: boolean
+	stderrTTY?: boolean
+	env?: Record<string, string | undefined>
+}
+
+async function capture(
+	fn: () => Promise<void> | void,
+	options: CaptureOptions = {},
+): Promise<{
 	stdout: string
 	stderr: string
 	exitCode: number
@@ -29,6 +38,12 @@ async function capture(fn: () => Promise<void> | void): Promise<{
 	const originalStdout = process.stdout.write
 	const originalStderr = process.stderr.write
 	const originalExit = process.exit
+	const stdoutTTY = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+	const stderrTTY = Object.getOwnPropertyDescriptor(process.stderr, 'isTTY')
+	const envEntries = Object.entries(options.env ?? {})
+	const originalEnv = new Map(
+		envEntries.map(([key]) => [key, process.env[key]] as const),
+	)
 
 	process.stdout.write = ((chunk: string | Uint8Array) => {
 		stdout += String(chunk)
@@ -41,6 +56,22 @@ async function capture(fn: () => Promise<void> | void): Promise<{
 	process.exit = ((code?: string | number | null) => {
 		throw new ExitError(typeof code === 'number' ? code : 0)
 	}) as typeof process.exit
+	if (options.stdoutTTY !== undefined) {
+		Object.defineProperty(process.stdout, 'isTTY', {
+			configurable: true,
+			value: options.stdoutTTY,
+		})
+	}
+	if (options.stderrTTY !== undefined) {
+		Object.defineProperty(process.stderr, 'isTTY', {
+			configurable: true,
+			value: options.stderrTTY,
+		})
+	}
+	for (const [key, value] of envEntries) {
+		if (value === undefined) delete process.env[key]
+		else process.env[key] = value
+	}
 
 	try {
 		await fn()
@@ -51,14 +82,27 @@ async function capture(fn: () => Promise<void> | void): Promise<{
 		}
 		throw error
 	} finally {
+		for (const [key, value] of originalEnv) {
+			if (value === undefined) delete process.env[key]
+			else process.env[key] = value
+		}
+		if (stdoutTTY) Object.defineProperty(process.stdout, 'isTTY', stdoutTTY)
+		else delete (process.stdout as { isTTY?: boolean }).isTTY
+		if (stderrTTY) Object.defineProperty(process.stderr, 'isTTY', stderrTTY)
+		else delete (process.stderr as { isTTY?: boolean }).isTTY
 		process.stdout.write = originalStdout
 		process.stderr.write = originalStderr
 		process.exit = originalExit
 	}
 }
 
+const ANSI_RE = /\x1b\[/
+
 afterEach(() => {
 	delete process.env.ARGC_CTX
+	delete process.env.CI
+	delete process.env.FORCE_COLOR
+	delete process.env.NO_COLOR
 })
 
 function makeApp() {
@@ -173,6 +217,8 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).toContain('context:')
 		expect(result.stdout).toContain('fully shown')
 		expect(result.stdout).toContain('call:')
+		expect(result.stdout).toContain('mcpx <path> "<object>"')
+		expect(result.stdout).not.toContain('<json5>')
 		expect(result.stdout).not.toContain('program:')
 		expect(result.stdout).not.toContain('selectors:')
 		expect(result.stdout).not.toContain('--toc')
@@ -366,20 +412,25 @@ describe('argc 7 command surface', () => {
 		).toEqual([])
 	})
 
-	test('help renders YAML examples from the shared schema source', async () => {
+	test('help renders an OKF markdown document with representative examples', async () => {
 		const { app, handlers } = makeApp()
 		const result = await capture(() => app.run({ handlers }, ['--help']))
 
 		expect(result.exitCode).toBe(0)
+		expect(result.stdout.startsWith('---\n')).toBe(true)
 		expect(result.stdout).toContain('program: mcpx')
-		// help is a block-scalar content section, not a one-line tag
-		expect(result.stdout).toContain('help: |')
-		// examples render as a |- block (verbatim quotes, no escaped seq)
-		expect(result.stdout).toContain('examples: |')
-		expect(result.stdout).toContain('mcpx user.create')
-		// selectors live inside the help block, not as a floating top-level key
-		expect(result.stdout).toContain('selectors:')
-		expect(result.stdout).not.toContain('$selectors:')
+		expect(result.stdout).toContain('version: 7.0.0')
+		expect(result.stdout).toContain('---\n## Usage')
+		expect(result.stdout).toContain('one quoted object literal')
+		expect(result.stdout).toContain('mcpx <path> "<object>"')
+		expect(result.stdout).toContain('## Schema')
+		expect(result.stdout).toContain('## Examples')
+		expect(result.stdout).toContain('mcpx user.create "{')
+		expect(result.stdout).toContain('mcpx @run "await Promise.all')
+		expect(result.stdout).toContain('mcpx @schema .user')
+		expect(result.stdout).not.toContain('help:')
+		expect(result.stdout).not.toContain('examples:')
+		expect(result.stdout).not.toContain('<json5>')
 		expect(result.stdout).not.toContain('CALL')
 	})
 
@@ -505,10 +556,19 @@ describe('argc 7 command surface', () => {
 		)
 
 		expect(result.exitCode).toBe(0)
-		expect(result.stdout).toContain('usage:')
+		expect(result.stdout.startsWith('---\n')).toBe(true)
+		expect(result.stdout).toContain('command: mcpx read')
+		expect(result.stdout).toContain('summary: Read a file')
+		expect(result.stdout).toContain('## Usage')
 		expect(result.stdout).toContain('mcpx read <file>')
+		expect(result.stdout).toContain('[options]')
+		expect(result.stdout).toContain('## Arguments')
+		expect(result.stdout).toContain('- `file`')
+		expect(result.stdout).toContain('## Options')
 		expect(result.stdout).toContain('--toc')
 		expect(result.stdout).toContain('--no-cache')
+		expect(result.stdout).toContain('one object literal')
+		expect(result.stdout).not.toContain('flags:')
 		expect(result.stdout).not.toContain('file: docs')
 	})
 
@@ -521,6 +581,51 @@ describe('argc 7 command surface', () => {
 		expect(result.exitCode).toBe(0)
 		expect(result.stdout).toContain('mcpx read <file>')
 		expect(result.stdout).not.toContain('file: docs/spec.md')
+	})
+
+	test('framework surfaces emit no ANSI when captured, even with color env set', async () => {
+		const { app, handlers } = makeApp()
+		const env = { CI: '1', FORCE_COLOR: '1' }
+		const help = await capture(() => app.run({ handlers }, ['--help']), { env })
+		const schema = await capture(() => app.run({ handlers }, ['@schema']), {
+			env,
+		})
+		const error = await capture(
+			() => app.run({ handlers }, ['read', 'docs/spec.md', '--depth', '--toc']),
+			{ env },
+		)
+
+		expect(help.stdout).not.toMatch(ANSI_RE)
+		expect(schema.stdout).not.toMatch(ANSI_RE)
+		expect(error.stderr).not.toMatch(ANSI_RE)
+	})
+
+	test('framework surfaces colorize only on their target TTY stream', async () => {
+		const { app, handlers } = makeApp()
+		const help = await capture(() => app.run({ handlers }, ['--help']), {
+			stdoutTTY: true,
+		})
+		const schema = await capture(() => app.run({ handlers }, ['@schema']), {
+			stdoutTTY: true,
+		})
+		const error = await capture(
+			() => app.run({ handlers }, ['read', 'docs/spec.md', '--depth', '--toc']),
+			{ stderrTTY: true },
+		)
+		const disabled = await capture(() => app.run({ handlers }, ['--help']), {
+			stdoutTTY: true,
+			env: { NO_COLOR: '1' },
+		})
+		const disabledByFlag = await capture(
+			() => app.run({ handlers }, ['--no-color', '--help']),
+			{ stdoutTTY: true },
+		)
+
+		expect(help.stdout).toMatch(ANSI_RE)
+		expect(schema.stdout).toMatch(ANSI_RE)
+		expect(error.stderr).toMatch(ANSI_RE)
+		expect(disabled.stdout).not.toMatch(ANSI_RE)
+		expect(disabledByFlag.stdout).not.toMatch(ANSI_RE)
 	})
 })
 
@@ -574,7 +679,7 @@ describe('argc 7 selector & context errors (spec)', () => {
 		expect(result.stderr).toContain('type Context')
 	})
 
-	test('malformed context JSON5 → BAD_INPUT_JSON source: context + Context schema', async () => {
+	test('malformed context object literal → BAD_INPUT_JSON source: context + Context schema', async () => {
 		const { app, handlers } = makeApp()
 		const result = await capture(() =>
 			app.run({ handlers }, ['user.list', '{}', '--context', '{ env:']),

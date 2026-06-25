@@ -6,7 +6,7 @@ handlers, predictable stdout, and an agent-readable `@schema`.
 ## Install
 
 ```bash
-bun add github:ethan-huo/argc#v7.1.1
+bun add github:ethan-huo/argc#v7.2.0
 ```
 
 Use release tags for downstream projects. `main` is the source branch and does
@@ -45,7 +45,7 @@ const commands = {
 
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.1.1',
+	version: '7.2.0',
 	description: 'Example argc CLI',
 })
 
@@ -72,7 +72,7 @@ user:
 argc 7 is a clean-break typed command surface:
 
 - Commands are addressed by dotted path: `myapp user.create`
-- Input is one quoted JSON5 object token: `"{ name: 'alice' }"`
+- Input is one quoted object literal token: `"{ name: 'alice' }"`
 - Large input can come from a file or stdin: `@payload.json` or `-`
 - `@schema`, `@run`, and `@completions` are builtins
 - `--help` and `--version` are the only direct global flags
@@ -84,7 +84,7 @@ There are no command aliases, `.args()`, input flags, `--input`, `--schema`,
 
 ## Input
 
-Quote object input so the shell passes it as one argv token:
+Quote object literal input so the shell passes it as one argv token:
 
 ```bash
 myapp user.create "{ name: 'alice', tags: ['admin', 'dev'] }"
@@ -113,7 +113,7 @@ injected into handlers as `context`.
 ```typescript
 const app = cli(commands, {
 	name: 'myapp',
-	version: '7.1.1',
+	version: '7.2.0',
 	context: s(
 		v.object({
 			token: v.string(),
@@ -165,7 +165,7 @@ myapp @schema .user.create
 myapp @schema .user.create.input
 ```
 
-Schema output is TypeScript-like and includes quoted JSON5 examples. Command
+Schema output is TypeScript-like and includes quoted object literal examples. Command
 and group keys must be valid JavaScript identifiers and cannot start with `@`.
 Input field names come from domain data and may be non-identifiers; `@schema`
 quotes them when needed:

@@ -24,6 +24,7 @@ import {
 import { showCommandHelp, showHelp } from './help'
 import { createHookDispatcher } from './hook'
 import { parseHumanArgs } from './human'
+import { colorizeSchema } from './markup'
 import { parseInputSource, type InputSource } from './parser'
 import {
 	ArgcError,
@@ -87,8 +88,12 @@ export class CLI<
 		runOptions: RunConfig<TSchema, TContext>,
 		argv: string[] = process.argv.slice(2),
 	): Promise<void> {
+		const noColor = argv[0] === '--no-color'
+		const effectiveArgv = noColor ? argv.slice(1) : argv
+		const originalNoColor = process.env.NO_COLOR
+		if (noColor) process.env.NO_COLOR = '1'
 		try {
-			await this.runInner(runOptions, argv)
+			await this.runInner(runOptions, effectiveArgv)
 		} catch (error) {
 			if (error instanceof ArgcError) {
 				process.stderr.write(renderError(this.finalizeEnvelope(error.envelope)))
@@ -101,6 +106,11 @@ export class CLI<
 				}),
 			)
 			process.exit(1)
+		} finally {
+			if (noColor) {
+				if (originalNoColor === undefined) delete process.env.NO_COLOR
+				else process.env.NO_COLOR = originalNoColor
+			}
 		}
 	}
 
@@ -301,11 +311,10 @@ export class CLI<
 			// Fully shown: nothing to drill into — say so, do not suggest selectors.
 			fm.status = 'fully shown — no further selector needed'
 		}
-		fm.call = `${name} <path> "<json5>"  ·  ${name} @run "<code>"`
+		fm.call = `${name} <path> "<object>"  ·  ${name} @run "<code>"`
 
-		process.stdout.write(
-			`---\n${stringify(fm, { lineWidth: 0 })}---\n${outBody}\n`,
-		)
+		const output = `---\n${stringify(fm, { lineWidth: 0 })}---\n${outBody}\n`
+		process.stdout.write(colorizeSchema(output))
 	}
 
 	private async runCompletions(argv: string[]): Promise<void> {
@@ -622,7 +631,7 @@ export class CLI<
 		} catch (error) {
 			throw new ArgcError({
 				error: 'BAD_INPUT_JSON',
-				detail: formatRuntimeError(error),
+				detail: `invalid object literal: ${formatRuntimeError(error)}`,
 			})
 		}
 	}

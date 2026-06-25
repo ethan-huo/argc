@@ -48,7 +48,7 @@ After scaffolding:
 - `bun run schema` must read well; this is the agent UI.
 - Fill in `skills/<name>/SKILL.md` for the finished tool.
 - Use `.agents/skills/release/SKILL.md` when cutting releases.
-- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.1.0` or a newer tag.
+- Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.2.0` or a newer tag.
 
 Use `oxfmt` and `tsgo` as in the templates. Do not introduce eslint,
 prettier, or `tsc`.
@@ -56,7 +56,7 @@ prettier, or `tsc`.
 ## Contract
 
 - Commands are dotted paths: `tool user.create`
-- Input is one quoted JSON5 object token: `"{ name: 'alice' }"`
+- Input is one quoted object literal token: `"{ name: 'alice' }"`
 - Large input is `@payload.json`; generated input is `-` for stdin
 - Builtins are `@schema`, `@run`, and `@completions`
 - Direct globals are only `--help` and `--version`

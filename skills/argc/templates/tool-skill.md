@@ -42,7 +42,7 @@ the source of truth:
 
 ## Long or Structured Input
 
-Pass one quoted JSON5 input object, or hand off a file for larger payloads:
+Pass one quoted object literal input, or hand off a file for larger payloads:
 
 ```bash
 {{APP_NAME}} cmd "{ name: 'alice' }"

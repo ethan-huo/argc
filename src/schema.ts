@@ -1,4 +1,4 @@
-import type { Router, Schema } from './types'
+import type { AnyCommand, Router, Schema } from './types'
 
 import { getRouterChildren } from './router'
 import { isCommand, isGroup } from './types'
@@ -333,8 +333,8 @@ function getCommandInputExample(router: Router): string {
 	return exampleInput(params)
 }
 
-function getSchemaInputExample(schema: Schema): string {
-	return exampleInput(extractOutputParamsDetailed(schema))
+export function buildCommandInputExample(command: AnyCommand): string {
+	return getCommandInputExample(command)
 }
 
 function findFirstCommand(
@@ -375,12 +375,9 @@ export function buildSurfaceExamples(
 	const input = getCommandInputExample(command.router)
 	const direct = `${options.name} ${dottedPath} "${input}"`
 	const examples = [direct]
-	if (options.context) {
-		examples.push(
-			`${direct} --context "${getSchemaInputExample(options.context)}"`,
-		)
-	}
-	examples.push(`${options.name} @run "await ${dottedPath}(${input})" --json`)
+	examples.push(
+		`${options.name} @run "await Promise.all([${dottedPath}(${input}), ${dottedPath}(${input})])" --json`,
+	)
 	examples.push(
 		`${options.name} @schema ${
 			namespace ? `.${namespace.join('.')}` : `.${dottedPath}`

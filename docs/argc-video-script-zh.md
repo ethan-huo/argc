@@ -68,7 +68,7 @@ hello @schema .greet
 hello @schema .greet.input
 ```
 
-复杂输入直接传 JSON5：
+复杂输入直接传对象字面量：
 
 ```bash
 tool deploy "{ target: 'prod', tags: ['api'], db: { host: 'localhost', port: 5432 } }"
