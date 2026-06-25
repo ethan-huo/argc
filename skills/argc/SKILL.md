@@ -72,8 +72,11 @@ Do not use or document v1 concepts: `.args()`, aliases, input flags, `--input`,
 
 - `@schema` is the primary UI. Every command needs a precise
   `meta.description`; non-obvious commands need `meta.examples`.
-- Prefer structured object input over positional grammar. The shell sees one
-  payload; argc validates it against Standard Schema.
+- Default to structured object input; agents and `@schema` only ever use the
+  object form, validated against Standard Schema. For a command humans also type
+  at a terminal, `.positional('field')` opts that field into a bare positional plus
+  a per-command `<tool> cmd --help` view — the human layer, kept out of `@schema`
+  and errors. Stay agent-first; reach for it only when a human path is real.
 - stdout is the result. Progress, warnings, logs, prompts, and debug output go
   to stderr.
 - Return compact YAML summaries by default. Persist bulky artifacts under a

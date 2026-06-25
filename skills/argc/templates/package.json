@@ -18,7 +18,7 @@
 	},
 	"dependencies": {
 		"@valibot/to-json-schema": "^1.7.0",
-		"argc": "github:ethan-huo/argc#v7.1.0",
+		"argc": "github:ethan-huo/argc#{{ARGC_VERSION}}",
 		"valibot": "^1.4.1",
 		"yaml": "^2.9.0"
 	},

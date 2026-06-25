@@ -55,6 +55,19 @@ REPO="${REPO:-owner/$NAME}"
 # Env-var prefix for install.sh: my-tool -> MY_TOOL
 UPPER="$(printf '%s' "$NAME" | tr 'a-z-' 'A-Z_')"
 
+# argc version to substitute into package.json's {{ARGC_VERSION}}. The live path
+# queries the latest published tag so scaffolds are always current with zero manual
+# sync; FALLBACK is offline-only and rarely matters (any recent release scaffolds fine).
+FALLBACK_ARGC_VERSION="v7.2.1"
+ARGC_VERSION="$(git ls-remote --tags --refs https://github.com/ethan-huo/argc.git 'v*' 2>/dev/null \
+  | awk -F/ '{print $NF}' | sort -V | tail -1 || true)"
+if [[ "$ARGC_VERSION" =~ ^v[0-9] ]]; then
+  echo "Pinning argc to latest tag $ARGC_VERSION"
+else
+  ARGC_VERSION="$FALLBACK_ARGC_VERSION"
+  echo "Note: remote tags unreachable; pinning argc to fallback $ARGC_VERSION" >&2
+fi
+
 if [[ -e "$DIR" ]]; then
   echo "Target already exists: $DIR" >&2
   exit 1
@@ -67,6 +80,7 @@ render() {
   sed -e "s|{{REPO}}|$REPO|g" \
     -e "s|{{APP_NAME_UPPER}}|$UPPER|g" \
     -e "s|{{APP_NAME}}|$NAME|g" \
+    -e "s|{{ARGC_VERSION}}|$ARGC_VERSION|g" \
     "$TEMPLATES_DIR/$1" > "$DIR/$2"
 }
 
@@ -135,19 +149,6 @@ cat > "$DIR/.gitignore" <<'EOF'
 node_modules/
 dist/
 EOF
-
-# Pin argc to its latest release tag. argc publishes git tags, not GitHub
-# Releases, so query tags directly; keep the template's pin on failure.
-latest_tag="$(git ls-remote --tags --refs https://github.com/ethan-huo/argc.git 'v*' 2>/dev/null \
-  | awk -F/ '{print $NF}' | sort -V | tail -1 || true)"
-if [[ "$latest_tag" =~ ^v[0-9] ]]; then
-  sed -e "s|github:ethan-huo/argc#v[0-9][^\"]*|github:ethan-huo/argc#$latest_tag|" \
-    "$DIR/package.json" > "$DIR/package.json.tmp"
-  mv "$DIR/package.json.tmp" "$DIR/package.json"
-  echo "Pinned argc to $latest_tag"
-else
-  echo "Warning: could not resolve latest argc tag via gh; kept the template pin." >&2
-fi
 
 git init -q "$DIR"
 
