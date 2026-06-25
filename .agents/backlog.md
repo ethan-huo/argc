@@ -21,7 +21,7 @@ present at v7.2.1.
   human-parser errors keep `$hint` only, object/`@run` errors keep `$schema` only.
   Needs the envelope to know which door it came through.
 - **Non-boolean flag eats the next token unconditionally** (`human.ts:174`). `read a --depth
-  --toc` consumes `--toc` as depth's value → misleading "Expected number but received
+--toc` consumes `--toc` as depth's value → misleading "Expected number but received
   '--toc'" instead of "missing flag value for --depth". Old parser guarded
   `!next.startsWith('-')`; add that guard.
 - **Dead branch** (`human.ts:97`): `addPositional` checks `value.startsWith('--')`, but the
