@@ -126,11 +126,18 @@ export function showCommandHelp(
 			body.push(`- \`${flagUsage(field)}\` — ${fieldDescription(field)}`)
 		}
 	}
-	body.push(
-		'',
-		'You can also pass the whole input as one object literal:',
-		'',
-		`${options.name} ${commandPath.join('.')} "${buildCommandInputExample(command)}"`,
-	)
+	const examples = command['~argc'].meta.examples ?? []
+	if (examples.length > 0) {
+		// Authored examples already show the object form; the synthesized line
+		// below would only restate it with placeholder values.
+		body.push('', '## Examples', '', ...examples)
+	} else {
+		body.push(
+			'',
+			'You can also pass the whole input as one object literal:',
+			'',
+			`${options.name} ${commandPath.join('.')} "${buildCommandInputExample(command)}"`,
+		)
+	}
 	process.stdout.write(renderOkfMarkdown(frontmatter, body.join('\n')))
 }

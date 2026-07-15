@@ -361,12 +361,12 @@ function pushCommandDoc(
 	lines: string[],
 	indent: string,
 	description: string | undefined,
-	example: string | undefined,
+	examples: readonly string[],
 ): void {
 	const desc = description ? normalizeDocText(description) : undefined
-	const sample = example ? normalizeDocText(example) : undefined
-	if (!desc && !sample) return
-	if (desc && !sample) {
+	const samples = examples.map(normalizeDocText)
+	if (!desc && samples.length === 0) return
+	if (desc && samples.length === 0) {
 		lines.push(`${indent}/** ${desc} */`)
 		return
 	}
@@ -375,8 +375,13 @@ function pushCommandDoc(
 		lines.push(`${indent} * ${desc}`)
 		lines.push(`${indent} *`)
 	}
-	lines.push(`${indent} * @example`)
-	lines.push(`${indent} * ${sample}`)
+	samples.forEach((sample, index) => {
+		if (index > 0) lines.push(`${indent} *`)
+		lines.push(`${indent} * @example`)
+		for (const line of sample.split('\n')) {
+			lines.push(line ? `${indent} * ${line}` : `${indent} *`)
+		}
+	})
 	lines.push(`${indent} */`)
 }
 
@@ -427,7 +432,13 @@ export function buildSurfaceExamples(
 	}
 	const dottedPath = command.path.join('.')
 	const input = getCommandInputExample(command.router)
-	const direct = `${options.name} ${dottedPath} "${input}"`
+	// An authored example beats the synthesized shape for the plain call form.
+	// The @run block below stays synthesized: it demonstrates concurrency
+	// structure, where the input values are beside the point.
+	const authored = isCommand(command.router)
+		? command.router['~argc'].meta.examples?.[0]
+		: undefined
+	const direct = authored ?? `${options.name} ${dottedPath} "${input}"`
 	const scriptCall = formatScriptInvocation(command.path, input)
 	const examples = [direct]
 	examples.push(
@@ -449,7 +460,6 @@ export function buildSurfaceExamples(
 }
 
 function generateCommandSchema(
-	appName: string,
 	path: string[],
 	name: string,
 	router: Router,
@@ -461,11 +471,11 @@ function generateCommandSchema(
 		const meta = router['~argc'].meta
 		const input = router['~argc'].input
 		const params = input ? extractOutputParamsDetailed(input) : []
-		const example =
-			params.length > 0
-				? `${appName} ${path.join('.')} "${exampleInput(params)}"`
-				: undefined
-		pushCommandDoc(lines, indent, meta.description, example)
+		// Authored examples only. A synthesized `{ name: 'value' }` carries no
+		// signal the rendered signature below does not already give, and it can
+		// contradict the description (e.g. a positive amount under a
+		// "expenses are negative" convention).
+		pushCommandDoc(lines, indent, meta.description, meta.examples ?? [])
 		if (params.length > 0) {
 			lines.push(
 				`${indent}${formatPropertyKey(name)}(input: { ${formatParams(params)} })`,
@@ -482,13 +492,7 @@ function generateCommandSchema(
 		lines.push(`${indent}${formatPropertyKey(name)}: {`)
 		for (const [key, child] of Object.entries(router['~argc.group'].children)) {
 			lines.push(
-				...generateCommandSchema(
-					appName,
-					[...path, key],
-					key,
-					child,
-					`${indent}  `,
-				),
+				...generateCommandSchema([...path, key], key, child, `${indent}  `),
 			)
 		}
 		lines.push(`${indent}}`)
@@ -498,13 +502,7 @@ function generateCommandSchema(
 	lines.push(`${indent}${formatPropertyKey(name)}: {`)
 	for (const [key, child] of Object.entries(router)) {
 		lines.push(
-			...generateCommandSchema(
-				appName,
-				[...path, key],
-				key,
-				child,
-				`${indent}  `,
-			),
+			...generateCommandSchema([...path, key], key, child, `${indent}  `),
 		)
 	}
 	lines.push(`${indent}}`)
@@ -524,7 +522,7 @@ export function generateSchema(schema: Router, options: SchemaOptions): string {
 			: schema
 
 	for (const [key, child] of Object.entries(children)) {
-		lines.push(...generateCommandSchema(options.name, [key], key, child, '  '))
+		lines.push(...generateCommandSchema([key], key, child, '  '))
 	}
 	lines.push('}')
 	return lines.join('\n')

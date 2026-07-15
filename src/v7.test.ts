@@ -117,15 +117,23 @@ function makeApp() {
 		user: group(
 			{ description: 'User commands' },
 			{
-				create: c.meta({ description: 'Create a user' }).input(
-					s(
-						v.object({
-							name: v.pipe(v.string(), v.minLength(3)),
-							email: v.optional(v.string()),
-							'content-type': v.optional(v.string()),
-						}),
+				create: c
+					.meta({
+						description: 'Create a user',
+						examples: [
+							`mcpx user.create "{ name: 'alice' }"`,
+							`mcpx user.create "{ name: 'alice', email: 'alice@example.com' }"`,
+						],
+					})
+					.input(
+						s(
+							v.object({
+								name: v.pipe(v.string(), v.minLength(3)),
+								email: v.optional(v.string()),
+								'content-type': v.optional(v.string()),
+							}),
+						),
 					),
-				),
 				list: c
 					.meta({ description: 'List users' })
 					.input(
@@ -137,7 +145,10 @@ function makeApp() {
 			clear: c.input(s(v.object({ all: v.optional(v.boolean()) }))),
 		},
 		read: c
-			.meta({ description: 'Read a file' })
+			.meta({
+				description: 'Read a file',
+				examples: [`mcpx read "{ file: 'docs/spec.md', toc: true }"`],
+			})
 			.input(
 				s(
 					v.object({
@@ -223,7 +234,10 @@ describe('argc 7 command surface', () => {
 				'     * Create a user',
 				'     *',
 				'     * @example',
-				"     * mcpx user.create \"{ name: 'value', email: 'value', 'content-type': 'value' }\"",
+				`     * mcpx user.create "{ name: 'alice' }"`,
+				'     *',
+				'     * @example',
+				`     * mcpx user.create "{ name: 'alice', email: 'alice@example.com' }"`,
 				'     */',
 				'    create(input:',
 			].join('\n'),
@@ -248,7 +262,10 @@ describe('argc 7 command surface', () => {
 	test('@schema keeps command doc degradation rules narrow', async () => {
 		const schema = {
 			described: c.meta({ description: 'Describe only' }),
-			exampleOnly: c.input(s(v.object({ name: v.string() }))),
+			exampleOnly: c
+				.meta({ examples: [`x exampleOnly "{ name: 'alice' }"`] })
+				.input(s(v.object({ name: v.string() }))),
+			undocumented: c.input(s(v.object({ name: v.string() }))),
 			bare: c,
 		}
 		const app = cli(schema, { name: 'x', version: '7.0.0' })
@@ -262,11 +279,15 @@ describe('argc 7 command surface', () => {
 			[
 				'  /**',
 				'   * @example',
-				'   * x exampleOnly "{ name: \'value\' }"',
+				`   * x exampleOnly "{ name: 'alice' }"`,
 				'   */',
 				'  exampleOnly(input:',
 			].join('\n'),
 		)
+		// No authored example means no example. The signature already carries the
+		// shape, so a synthesized one would only add placeholder noise.
+		expect(result.stdout).toContain('\n  undocumented(input: { name: string })')
+		expect(result.stdout).not.toContain('@example\n   * x undocumented')
 		expect(result.stdout).toContain('  bare()')
 		expect(result.stdout).not.toContain('/**\n   *\n')
 	})
@@ -455,7 +476,10 @@ describe('argc 7 command surface', () => {
 				{ description: 'Group one' },
 				{
 					'kebab-case-cmd': c
-						.meta({ description: 'Run kebab command' })
+						.meta({
+							description: 'Run kebab command',
+							examples: [`x g1.kebab-case-cmd "{ name: 'alice' }"`],
+						})
 						.input(s(v.object({ name: v.string() }))),
 				},
 			),
@@ -520,7 +544,10 @@ describe('argc 7 command surface', () => {
 	test('@ command keys are app commands unless they collide with argc builtins', async () => {
 		const schema = {
 			'@skill': c
-				.meta({ description: 'Install a skill' })
+				.meta({
+					description: 'Install a skill',
+					examples: [`x @skill "{ name: 'lint' }"`],
+				})
 				.input(s(v.object({ name: v.string() }))),
 			tools: group(
 				{ description: 'Tool commands' },
@@ -831,9 +858,24 @@ describe('argc 7 command surface', () => {
 		expect(result.stdout).toContain('## Options')
 		expect(result.stdout).toContain('--toc')
 		expect(result.stdout).toContain('--no-cache')
-		expect(result.stdout).toContain('one object literal')
+		expect(result.stdout).toContain('## Examples')
+		expect(result.stdout).toContain(
+			`mcpx read "{ file: 'docs/spec.md', toc: true }"`,
+		)
 		expect(result.stdout).not.toContain('flags:')
-		expect(result.stdout).not.toContain('file: docs')
+		expect(result.stdout).not.toContain('file: docs\n')
+	})
+
+	test('per-command human help falls back to the object form without examples', async () => {
+		const { app, handlers } = makeApp()
+		const result = await capture(() =>
+			app.run({ handlers }, ['user.list', '--help']),
+		)
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout).not.toContain('## Examples')
+		expect(result.stdout).toContain('one object literal')
+		expect(result.stdout).toContain('mcpx user.list "{')
 	})
 
 	test('per-command human help short-circuits after a positional token', async () => {

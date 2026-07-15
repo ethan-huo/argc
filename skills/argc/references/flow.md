@@ -34,7 +34,7 @@ Prompt only when all of these hold:
 Treat the explicit invocation as intent. Do not ask whether to do the command
 the user already ran; ask for the smallest missing value.
 
-For *how* to render a prompt — `@clack/prompts` on stderr, searchable vs plain
+For _how_ to render a prompt — `@clack/prompts` on stderr, searchable vs plain
 selection by list size, and treating a cancelled prompt as an abort — see
 `references/concurrency.md`.
 
