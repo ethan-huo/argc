@@ -1,0 +1,34 @@
+import type { CLIOptions, CombinedHandlers, Handlers, Router, RunConfig, Schema } from './types';
+export declare class CLI<TSchema extends Router, TContext extends Schema | undefined = undefined> {
+    Handlers: CombinedHandlers<Handlers<TSchema, TContext>>;
+    private schema;
+    private options;
+    private stdinTextPromise;
+    constructor(schema: TSchema, options: CLIOptions<TContext>);
+    run(runOptions: RunConfig<TSchema, TContext>, argv?: string[]): Promise<void>;
+    private finalizeEnvelope;
+    private runInner;
+    private runBuiltin;
+    private parseRun;
+    private runSchema;
+    private runCompletions;
+    private parseCall;
+    private resolveDottedPath;
+    private hasCommandHelpToken;
+    private isInputToken;
+    private collectBarePath;
+    private getSchemaExplorer;
+    private renderSchemaSlice;
+    private invokeCommand;
+    private resolveInput;
+    private resolveContext;
+    private validateInput;
+    private validateObject;
+    private normalizeIssues;
+    private schemaOptions;
+    private countCommands;
+    private readStdinText;
+    private assertValidCommandKeys;
+    private createHookDispatcher;
+}
+export declare function cli<TSchema extends Router, TContext extends Schema | undefined = undefined>(schema: TSchema, options: CLIOptions<TContext>): CLI<TSchema, TContext>;
