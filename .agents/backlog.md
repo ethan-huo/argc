@@ -32,3 +32,22 @@ present at v7.2.1.
   field descriptions so the human help carries real signal.
 - **Doc hygiene:** `docs/proposal-7.1-human-path.md` is still `status: draft` though 7.1 shipped
   in v7.1.0 — set it to `accepted` to match `proposal-7.2` (already accepted).
+
+## meta.examples fix tail (2026-07-15)
+
+Found while diagnosing why `hq @schema` rendered `{ name: 'value' }` boilerplate over
+hand-written examples. Fixed in v7.6.0 (`f5b89ec`); these are the leftovers.
+
+- **Nothing runs `bun run check` except a release.** `release.yml` triggers only on
+  `paths: package.json`, so a commit that touches src/docs/skills is never checked. Drift
+  accumulates invisibly and lands as a _blocked release_ on whoever bumps the version next:
+  `4f58eea` left `skills/argc/references/{concurrency,flow}.md` failing `fmt:check`, which
+  would have failed the v7.6.0 tag job had it not been cleaned first. Add a push/PR CI job
+  running `bun run check` — the release job then only ever confirms what CI already knew.
+- **`docs/cr-7.3-schema-doc-blocks.md` is superseded in part and still untracked.** Its CR-1
+  degradation table and its "Out of scope — reuses the existing `exampleInput` sample
+  generation" line describe the synthesized-example behavior that v7.6.0 removed; CR-2
+  (heredoc `@run`) and CR-3 (block color) still hold as shipped. It also fails `fmt:check`.
+  Left alone: it is an uncommitted draft owned by its author. Either commit it with the
+  degradation table corrected to "authored examples only, no synthesis", or drop it — 7.3
+  shipped, so it is a historical record either way.
