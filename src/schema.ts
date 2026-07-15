@@ -375,13 +375,15 @@ function pushCommandDoc(
 		lines.push(`${indent} * ${desc}`)
 		lines.push(`${indent} *`)
 	}
-	samples.forEach((sample, index) => {
-		if (index > 0) lines.push(`${indent} *`)
-		lines.push(`${indent} * @example`)
+	// One @example tag over the whole list. The entries are alternative
+	// invocations of one command, not separate worked examples, so a tag per
+	// entry would split a single list into fake sections.
+	lines.push(`${indent} * @example`)
+	for (const sample of samples) {
 		for (const line of sample.split('\n')) {
 			lines.push(line ? `${indent} * ${line}` : `${indent} *`)
 		}
-	})
+	}
 	lines.push(`${indent} */`)
 }
 

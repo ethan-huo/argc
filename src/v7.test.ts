@@ -235,14 +235,15 @@ describe('argc 7 command surface', () => {
 				'     *',
 				'     * @example',
 				`     * mcpx user.create "{ name: 'alice' }"`,
-				'     *',
-				'     * @example',
 				`     * mcpx user.create "{ name: 'alice', email: 'alice@example.com' }"`,
 				'     */',
 				'    create(input:',
 			].join('\n'),
 		)
 		expect(result.stdout).not.toContain('// mcpx user.create')
+		// Two invocations, one tag — entries are alternatives, not sections.
+		// Anchored: `alice@example.com` in the example text is not a tag.
+		expect(result.stdout.match(/^\s*\* @example$/gm)).toHaveLength(1)
 		expect(
 			parseSync('schema.ts', bodyFromOkf(result.stdout), { lang: 'ts' }).errors,
 		).toEqual([])
