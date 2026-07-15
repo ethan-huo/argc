@@ -9,19 +9,14 @@ import packageJson from '../package.json' with { type: 'json' }
 const s = toStandardJsonSchema
 
 const schema = {
-	hello: c
-		.meta({
-			description: 'Say hello',
-			examples: [`{{APP_NAME}} hello "{ name: 'world', loud: true }"`],
-		})
-		.input(
-			s(
-				v.object({
-					name: v.pipe(v.string(), v.minLength(1)),
-					loud: v.optional(v.boolean(), false),
-				}),
-			),
+	hello: c.meta({ description: 'Say hello' }).input(
+		s(
+			v.object({
+				name: v.pipe(v.string(), v.minLength(1)),
+				loud: v.optional(v.boolean(), false),
+			}),
 		),
+	),
 }
 
 const app = cli(schema, {

@@ -71,11 +71,13 @@ Do not use or document v1 concepts: `.args()`, aliases, input flags, `--input`,
 ## Designing for Agents
 
 - `@schema` is the primary UI. Every command needs a precise
-  `meta.description`; non-obvious commands need `meta.examples`.
-- `meta.examples` is the only source of `@example` — argc synthesizes nothing.
-  Spend an example on what the signature cannot say: real vocabulary, sign
-  conventions, the shorter form of an optional-heavy input. Restating the shape
-  with placeholder values earns nothing; omit it instead.
+  `meta.description`. `meta.examples` is optional and most commands want none —
+  argc synthesizes nothing, so an example appears only where you wrote one.
+- An example demonstrates a typical use case. Add one when the call worth
+  reaching for first is not the one the signature suggests: a real category
+  vocabulary, a sign convention, the two-field form of a ten-field input.
+  Assume a caller who reads types fluently — an example that restates the shape
+  is noise, and an obvious command needs none.
 - Default to structured object input; agents and `@schema` only ever use the
   object form, validated against Standard Schema. For a command humans also type
   at a terminal, `.positional('field')` opts that field into a bare positional plus
@@ -111,18 +113,13 @@ const commands = {
 	user: group(
 		{ description: 'User management' },
 		{
-			create: c
-				.meta({
-					description: 'Create a user',
-					examples: ['myapp user.create "{ name: \'alice\' }"'],
-				})
-				.input(
-					s(
-						v.object({
-							name: v.pipe(v.string(), v.minLength(2)),
-						}),
-					),
+			create: c.meta({ description: 'Create a user' }).input(
+				s(
+					v.object({
+						name: v.pipe(v.string(), v.minLength(2)),
+					}),
 				),
+			),
 		},
 	),
 }
