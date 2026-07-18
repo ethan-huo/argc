@@ -50,8 +50,8 @@ After scaffolding:
 - Use `.agents/skills/release/SKILL.md` when cutting releases.
 - Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.5.0` or a newer tag.
 
-Use `oxfmt` and `tsgo` as in the templates. Do not introduce eslint,
-prettier, or `tsc`.
+Use `oxfmt` and `tsc` (TypeScript 7 native) as in the templates. Do not
+introduce eslint or prettier.
 
 ## Contract
 
@@ -67,13 +67,13 @@ prettier, or `tsc`.
 **Input-source taxonomy** (the `@` / `-` / heredoc family — read before wiring long
 text or file inputs):
 
-| Form | Meaning | Scope |
-| --- | --- | --- |
-| `tool cmd "{ json }"` | whole input object (agent default) | command |
-| `tool cmd @payload.json` | whole input object from file | command |
-| `tool cmd -` | whole input object from stdin | command |
-| `--flag -` | **field-level**: that flag's value from stdin (heredoc) | one field |
-| `--flag @path` | **field-level**: that flag's value from file | one field |
+| Form                     | Meaning                                                 | Scope     |
+| ------------------------ | ------------------------------------------------------- | --------- |
+| `tool cmd "{ json }"`    | whole input object (agent default)                      | command   |
+| `tool cmd @payload.json` | whole input object from file                            | command   |
+| `tool cmd -`             | whole input object from stdin                           | command   |
+| `--flag -`               | **field-level**: that flag's value from stdin (heredoc) | one field |
+| `--flag @path`           | **field-level**: that flag's value from file            | one field |
 
 Command-level `@file`/`-` is implemented by argc. Field-level `-`/`@path` is a
 **tool-level convention you implement in handlers** for long free-text fields
