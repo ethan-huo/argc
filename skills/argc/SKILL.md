@@ -57,13 +57,32 @@ prettier, or `tsc`.
 
 - Commands are dotted paths: `tool user.create`
 - Input is one quoted object literal token: `"{ name: 'alice' }"`
-- Large input is `@payload.json`; generated input is `-` for stdin
 - Builtins are `@schema`, `@run`, and `@completions`
 - Direct globals are only `--help` and `--version`
 - Handler return values are serialized to stdout as YAML
 - Handler logs are redirected to stderr
 - `@run --json` emits strict JSON
 - Errors are YAML envelopes on stderr with stable `error:` codes
+
+**Input-source taxonomy** (the `@` / `-` / heredoc family — read before wiring long
+text or file inputs):
+
+| Form | Meaning | Scope |
+| --- | --- | --- |
+| `tool cmd "{ json }"` | whole input object (agent default) | command |
+| `tool cmd @payload.json` | whole input object from file | command |
+| `tool cmd -` | whole input object from stdin | command |
+| `--flag -` | **field-level**: that flag's value from stdin (heredoc) | one field |
+| `--flag @path` | **field-level**: that flag's value from file | one field |
+
+Command-level `@file`/`-` is implemented by argc. Field-level `-`/`@path` is a
+**tool-level convention you implement in handlers** for long free-text fields
+(message bodies, scripts, documents) so users and agents do not JSON-escape
+multi-line content. A bare `@path` next to flags hits argc's whole-command rule;
+if your tool accepts that idiom, rewrite argv in `main.ts` before `app.run`.
+Field-level `--flag @path` detection rule of thumb: treat the value as a file
+**only when the path exists**; otherwise it is literal text — that keeps
+`@something` usable as ordinary content without an escaping dance.
 
 Do not use or document v1 concepts: `.args()`, aliases, input flags, `--input`,
 `--schema`, `--run`, globals, global transforms, or compatibility shims.
@@ -87,6 +106,17 @@ Do not use or document v1 concepts: `.args()`, aliases, input flags, `--input`,
   to stderr.
 - Return compact YAML summaries by default. Persist bulky artifacts under a
   hidden state directory and return paths plus next commands.
+- Design **status/preflight output as disclosure for agents, not a parse tree**:
+  unauthenticated returns only `{ authenticated: false }`; authenticated returns
+  flat identity fields (`user`, `team`, …) plus derived rosters, omitting fields
+  that are N/A. No nested `auth.authenticated` bag, no machine-time fields an
+  agent cannot act on (e.g. raw `expires_at` when the CLI refreshes itself).
+- **Interactive vs non-interactive (TTY gate):** when an argument is missing on a
+  human-reachable command, prompt on TTY (masked readline for secrets, select for
+  enumerated choices like remove/delete) — zero-arg should do the obvious thing
+  for humans. Non-TTY never prompts: fail fast with a stable error naming the
+  flag to pass. Do not make humans set environment variables for state the tool
+  can persist itself; env vars are the CI/headless escape hatch, not the login UX.
 - Use `$`-prefixed top-level keys sparingly for tool-to-agent signals such as
   `$hints` or `$notification`.
 - Mutation commands follow Orient -> Detect -> Decide -> Preview -> Mutate ->
@@ -147,6 +177,7 @@ Load these on demand:
 | Read this skill's...            | When you are...                                                        |
 | ------------------------------- | ---------------------------------------------------------------------- |
 | `references/flow.md`            | Designing mutation commands, prompts, dangerous ops, and exit behavior |
+| `references/input-sources.md`   | Wiring `@file` / `-` / heredoc inputs, status disclosure, TTY prompts  |
 | `references/output.md`          | Designing stdout summaries, hidden state dirs, `--json`, and `$hints`  |
 | `references/terminal.md`        | Adding human-facing color, status icons, or aligned tables             |
 | `references/concurrency.md`     | Fanning out work across targets, live progress, or interactive prompts |
