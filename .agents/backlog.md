@@ -44,10 +44,3 @@ hand-written examples. Fixed in v7.6.0 (`f5b89ec`); these are the leftovers.
   `4f58eea` left `skills/argc/references/{concurrency,flow}.md` failing `fmt:check`, which
   would have failed the v7.6.0 tag job had it not been cleaned first. Add a push/PR CI job
   running `bun run check` — the release job then only ever confirms what CI already knew.
-- **`docs/cr-7.3-schema-doc-blocks.md` is superseded in part and still untracked.** Its CR-1
-  degradation table and its "Out of scope — reuses the existing `exampleInput` sample
-  generation" line describe the synthesized-example behavior that v7.6.0 removed; CR-2
-  (heredoc `@run`) and CR-3 (block color) still hold as shipped. It also fails `fmt:check`.
-  Left alone: it is an uncommitted draft owned by its author. Either commit it with the
-  degradation table corrected to "authored examples only, no synthesis", or drop it — 7.3
-  shipped, so it is a historical record either way.
