@@ -149,11 +149,30 @@ Use `@run --json` when scripting needs strict JSON.
 Errors are YAML envelopes on stderr with stable error codes:
 
 ```yaml
-error: UNKNOWN_KEY
-message: Unknown input key: nam
+error: INVALID_INPUT
+command: user.create
 issues:
-  - path: nam
-    message: Unknown input key
+  - at: name
+    message: Expected a string
+```
+
+Framework codes describe malformed invocations or runtime failures. When a
+well-formed invocation is refused by the tool's domain, throw `domainError`
+with the tool-owned stable code:
+
+```typescript
+import { domainError } from 'argc'
+
+throw domainError('user_suspended', 'The user cannot receive new work.', {
+	user: 'alice',
+})
+```
+
+```yaml
+error: DOMAIN_ERROR
+code: user_suspended
+detail: The user cannot receive new work.
+user: alice
 ```
 
 ## Agent Schema

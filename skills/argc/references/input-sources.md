@@ -38,12 +38,12 @@ Leave `tool cmd @payload.json` (sole token) alone — that is the argc conventio
 
 For a long-text field named `text`/`body`/`code`:
 
-| Value | Resolve to | Rationale |
-| --- | --- | --- |
-| `'-'` | stdin (heredoc) | no escaping, composes with pipes |
-| `'@path'` where `exists(path)` | file contents | humans think in files |
-| `'@path'` where not exists | literal text | `@README` must survive as content |
-| anything else | literal text | default |
+| Value                          | Resolve to      | Rationale                         |
+| ------------------------------ | --------------- | --------------------------------- |
+| `'-'`                          | stdin (heredoc) | no escaping, composes with pipes  |
+| `'@path'` where `exists(path)` | file contents   | humans think in files             |
+| `'@path'` where not exists     | literal text    | `@README` must survive as content |
+| anything else                  | literal text    | default                           |
 
 The **existence check** is the disambiguator. Extension heuristics (`*.md` only)
 or requiring `./` both leak: a file without the "right" extension is silently
@@ -78,11 +78,11 @@ Preflight commands (`tool status`) exist so an agent can orient before acting.
 Design them as:
 
 ```yaml
-authenticated: false          # unauthenticated — nothing else
+authenticated: false # unauthenticated — nothing else
 ```
 
 ```yaml
-authenticated: true           # authenticated — flat identity + derived fields
+authenticated: true # authenticated — flat identity + derived fields
 user: { id: U…, name: ethan }
 team: { id: T…, name: Celados }
 channels:
@@ -104,10 +104,10 @@ Rules:
 
 Gate on `process.stdin.isTTY`:
 
-| Caller | Missing argument |
-| --- | --- |
-| Human TTY | prompt — masked input for secrets, select for enumerated values (e.g. `tool remove` with no ref shows installed choices) |
-| Agent / pipe / CI | stable error naming the exact flag (`tool remove --repo owner/repo`) |
+| Caller            | Missing argument                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Human TTY         | prompt — masked input for secrets, select for enumerated values (e.g. `tool remove` with no ref shows installed choices) |
+| Agent / pipe / CI | stable error naming the exact flag (`tool remove --repo owner/repo`)                                                     |
 
 Never prompt non-TTY — a hung pipe is worse than an error. Never require env
 vars for state the tool can persist (app config, credentials); env is the

@@ -7,20 +7,28 @@ export type ErrorIssue = {
 	message: string
 }
 
-export type ErrorEnvelope = {
-	error:
-		| 'INVALID_INPUT'
-		| 'INVALID_CONTEXT'
-		| 'UNKNOWN_COMMAND'
-		| 'NOT_A_COMMAND'
-		| 'BAD_PATH'
-		| 'BAD_SELECTOR'
-		| 'BAD_INPUT_JSON'
-		| 'TWO_INPUTS'
-		| 'RUN_DISABLED'
-		| 'RUNTIME_ERROR'
-	[key: string]: unknown
-}
+type FrameworkErrorCode =
+	| 'INVALID_INPUT'
+	| 'INVALID_CONTEXT'
+	| 'UNKNOWN_COMMAND'
+	| 'NOT_A_COMMAND'
+	| 'BAD_PATH'
+	| 'BAD_SELECTOR'
+	| 'BAD_INPUT_JSON'
+	| 'TWO_INPUTS'
+	| 'RUN_DISABLED'
+	| 'RUNTIME_ERROR'
+
+export type ErrorEnvelope =
+	| {
+			error: FrameworkErrorCode
+			[key: string]: unknown
+	  }
+	| {
+			error: 'DOMAIN_ERROR'
+			code: string
+			[key: string]: unknown
+	  }
 
 export class ArgcError extends Error {
 	envelope: ErrorEnvelope
@@ -30,6 +38,29 @@ export class ArgcError extends Error {
 		this.name = 'ArgcError'
 		this.envelope = envelope
 	}
+}
+
+export function domainError(
+	code: string,
+	detail: string,
+	fields: Record<string, unknown> = {},
+): Error {
+	if (typeof code !== 'string' || code.trim() === '') {
+		throw new TypeError('domainError code must be a non-empty string')
+	}
+	for (const field of ['error', 'code', 'detail'] as const) {
+		if (field in fields) {
+			throw new TypeError(`domainError fields must not include "${field}"`)
+		}
+	}
+
+	return new ArgcError({
+		// Keep routing fields first and reserved so every consumer envelope starts with the stable contract.
+		error: 'DOMAIN_ERROR',
+		code,
+		detail,
+		...fields,
+	})
 }
 
 export function normalizeValue(value: unknown): unknown {

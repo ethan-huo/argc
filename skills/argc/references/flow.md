@@ -54,16 +54,28 @@ Missing team. In non-interactive mode pass it in input:
 
 ## Errors
 
-argc framework errors are YAML envelopes on stderr. For domain errors, follow
-the same shape when practical:
+argc framework errors are YAML envelopes on stderr. A well-formed command that
+the consumer's domain refuses must use the public constructor so agents can
+distinguish it from malformed input and framework failures:
+
+```typescript
+import { domainError } from 'argc'
+
+throw domainError('deployment_refused', 'Deployment target is locked.', {
+	environment: 'prod',
+})
+```
 
 ```yaml
-error: DEPLOYMENT_REFUSED
-message: Deployment target is locked
-issues:
-  - path: environment
-    message: prod requires confirmName
+error: DOMAIN_ERROR
+code: deployment_refused
+detail: Deployment target is locked.
+environment: prod
 ```
+
+The `code` vocabulary belongs to the consumer. Ordinary exceptions must remain
+ordinary exceptions so argc can surface them as `RUNTIME_ERROR`; do not map
+unknown crashes to `domainError`.
 
 Every error should say what failed, which rule was broken, and how to fix it.
 Avoid raw upstream JSON and stack traces unless a debug mode explicitly asks

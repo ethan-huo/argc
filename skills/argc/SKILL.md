@@ -62,7 +62,8 @@ introduce eslint or prettier.
 - Handler return values are serialized to stdout as YAML
 - Handler logs are redirected to stderr
 - `@run --json` emits strict JSON
-- Errors are YAML envelopes on stderr with stable `error:` codes
+- Framework failures are YAML envelopes on stderr with stable `error:` codes;
+  handlers use `domainError(code, detail, fields?)` for consumer-owned failures
 
 **Input-source taxonomy** (the `@` / `-` / heredoc family — read before wiring long
 text or file inputs):

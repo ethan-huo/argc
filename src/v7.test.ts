@@ -7,7 +7,14 @@ import * as v from 'valibot'
 
 import type { RunConfig } from './types'
 
-import { c, cli, complete, createDefaultSchemaExplorer, group } from './index'
+import {
+	c,
+	cli,
+	complete,
+	createDefaultSchemaExplorer,
+	domainError,
+	group,
+} from './index'
 
 const s = toStandardJsonSchema
 
@@ -216,6 +223,71 @@ describe('argc 7 command surface', () => {
 
 		expect(result.exitCode).toBe(0)
 		expect(result.stdout).toBe('')
+	})
+
+	test('domain errors preserve consumer codes without implying invalid input', async () => {
+		const { app, handlers } = makeApp()
+		handlers.user.create = () => {
+			throw domainError('focus_not_found', 'Focus message was not returned.', {
+				command: 'user.create',
+				focus: '1784559053.114759',
+			})
+		}
+		const result = await capture(() =>
+			app.run({ handlers }, [
+				'user.create',
+				"{ name: 'alice' }",
+				'--context',
+				"{ env: 'prod' }",
+			]),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toStartWith(
+			'error: DOMAIN_ERROR\ncode: focus_not_found\n',
+		)
+		expect(result.stderr).toContain('detail: Focus message was not returned.')
+		expect(result.stderr).toContain('focus: "1784559053.114759"')
+		expect(result.stderr).not.toContain('$schema')
+	})
+
+	test('domain errors render through the human path', async () => {
+		const { app, handlers } = makeApp()
+		handlers.read = () => {
+			throw domainError('resource_locked', 'The file is locked.')
+		}
+		const result = await capture(() =>
+			app.run({ handlers }, [
+				'read',
+				'docs/spec.md',
+				'--context',
+				"{ env: 'prod' }",
+			]),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toContain('error: DOMAIN_ERROR')
+		expect(result.stderr).toContain('code: resource_locked')
+	})
+
+	test('ordinary handler errors remain runtime errors', async () => {
+		const { app, handlers } = makeApp()
+		handlers.user.create = () => {
+			throw new Error('boom')
+		}
+		const result = await capture(() =>
+			app.run({ handlers }, [
+				'user.create',
+				"{ name: 'alice' }",
+				'--context',
+				"{ env: 'prod' }",
+			]),
+		)
+
+		expect(result.exitCode).toBe(1)
+		expect(result.stderr).toContain('error: RUNTIME_ERROR')
+		expect(result.stderr).toContain('detail: boom')
+		expect(result.stderr).not.toContain('code:')
 	})
 
 	test('@schema renders parseable TS with command JSDoc examples', async () => {
