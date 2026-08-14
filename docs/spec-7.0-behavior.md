@@ -246,6 +246,11 @@ Scenario: multiline string field → block scalar
 Scenario: handler stdout writes do not pollute the result
   Given a handler that console.log("debug") then returns { ok: true }
   Then stdout = "ok: true\n"   (the console.log went to stderr)
+
+Scenario: the result write respects downstream lifecycle
+  Given a handler returns a result larger than the stdout buffer
+  Then argc waits for the result write to complete before returning
+  And an EPIPE from a downstream reader that closes early is a successful terminal path
 ```
 
 ---

@@ -32,6 +32,7 @@ import {
 	formatRuntimeError,
 	renderError,
 	renderResult,
+	writeOutput,
 	type ErrorEnvelope,
 	type ErrorIssue,
 	withStdoutRerouted,
@@ -161,7 +162,7 @@ export class CLI<
 			runOptions.handlers as Record<string, unknown>,
 			parsed.raw,
 		)
-		process.stdout.write(renderResult(result))
+		await writeOutput(process.stdout, renderResult(result))
 	}
 
 	private async runBuiltin(

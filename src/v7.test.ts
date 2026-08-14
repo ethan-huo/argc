@@ -53,8 +53,12 @@ async function capture(
 		envEntries.map(([key]) => [key, process.env[key]] as const),
 	)
 
-	process.stdout.write = ((chunk: string | Uint8Array) => {
+	process.stdout.write = ((
+		chunk: string | Uint8Array,
+		callback?: (error?: Error | null) => void,
+	) => {
 		stdout += String(chunk)
+		callback?.()
 		return true
 	}) as typeof process.stdout.write
 	process.stderr.write = ((chunk: string | Uint8Array) => {

@@ -1,11 +1,7 @@
 import { expect, test } from 'bun:test'
 import { join } from 'node:path'
 
-// Run the scaffolded entry in place. This file is copied verbatim into a new
-// project, so it must not reach outside that project's own src/ — an earlier
-// version assembled a throwaway project three directories up and symlinked its
-// root in as `argc`, which is how argc verifies its own template, not how a
-// downstream CLI tests itself.
+// Exercise the same entry point and dependency graph users install.
 const ENTRY = join(import.meta.dir, 'main.ts')
 
 async function run(...args: string[]) {

@@ -85,7 +85,7 @@ render() {
 }
 
 render main.ts src/main.ts
-render main.test.ts src/main.test.ts
+render main.test.ts.tpl src/main.test.ts
 render package.json package.json
 render tsconfig.json tsconfig.json
 render ci.yml .github/workflows/ci.yml

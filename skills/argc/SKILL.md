@@ -33,7 +33,7 @@ Rendered layout:
 
 ```
 templates/main.ts       -> src/main.ts
-templates/main.test.ts  -> src/main.test.ts
+templates/main.test.ts.tpl -> src/main.test.ts
 templates/package.json  -> package.json
 templates/tsconfig.json -> tsconfig.json
 templates/ci.yml        -> .github/workflows/ci.yml

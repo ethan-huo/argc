@@ -67,15 +67,15 @@ For stdout _summaries_, prefer YAML:
 Raw data is the exception, not the default: expose it behind `--json` so the agent
 can pipe it through `jq`, and keep the default human/agent-facing path as a summary.
 
-## Serializing: use the `yaml` library, not `Bun.YAML`
+## Serialization
+
+Return the result and let argc own stdout:
 
 ```typescript
-import { stringify } from 'yaml' // npm: yaml (eemeli/yaml), the js-yaml successor
-
-process.stdout.write(stringify(value))
+return value
 ```
 
-Why not `Bun.YAML.stringify`: its native serializer never emits `|` literal-block
+argc uses the `yaml` library rather than `Bun.YAML.stringify`: Bun's native serializer never emits `|` literal-block
 scalars — multi-line strings come out as double-quoted with escaped `\n`
 (`preview: "<div>\n  ..."`). That is intentional and test-locked in Bun through
 1.4, not a version gap that will close (the `|`/`>` support in Bun's YAML docs is
@@ -189,18 +189,17 @@ async fetch({ input }) {
   await Bun.write(path, JSON.stringify(records))       // persist bulk to state dir
 
   if (input.json) {                                    // --json: raw to the pipe
-    process.stdout.write(JSON.stringify(records))
-    return
+    return JSON.stringify(records)
   }
 
-  process.stdout.write(stringify({                     // default: summary to stdout
+  return {                                             // argc serializes this summary to stdout
     records: records.length,
     written: path,
     $hints: [
       `Records at ${path} — slice with: jq '.[0:10]' ${path}`,
       'Re-run with --json to stream raw records to a pipe',
     ],
-  }))
+  }
 }
 ```
 

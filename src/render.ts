@@ -1,3 +1,5 @@
+import type { Writable } from 'node:stream'
+
 import { stringify } from 'yaml'
 
 import { colorizeError } from './markup'
@@ -119,6 +121,38 @@ export function renderResult(
 
 export function renderError(envelope: ErrorEnvelope): string {
 	return colorizeError(stringify(normalizeValue(envelope), { lineWidth: 0 }))
+}
+
+const brokenPipes = new WeakSet<Writable>()
+
+export function writeOutput(stream: Writable, value: string): Promise<void> {
+	if (value === '' || brokenPipes.has(stream)) return Promise.resolve()
+
+	return new Promise((resolve, reject) => {
+		let settled = false
+		const finish = (error?: Error | null) => {
+			if (settled) return
+			settled = true
+			stream.off('error', finish)
+
+			if (error && 'code' in error && error.code === 'EPIPE') {
+				// A downstream reader may intentionally close early; the producer has
+				// completed its contract once the pipe stops accepting output.
+				brokenPipes.add(stream)
+				stream.once('error', () => {})
+				resolve()
+				return
+			}
+			if (error) {
+				reject(error)
+				return
+			}
+			resolve()
+		}
+
+		stream.once('error', finish)
+		stream.write(value, finish)
+	})
 }
 
 export async function withStdoutRerouted<T>(fn: () => Promise<T>): Promise<T> {
