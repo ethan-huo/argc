@@ -190,6 +190,13 @@ because a macro in `node_modules` would resolve against the wrong directory.
 `@skill`. Do not generate it. Rationale:
 [docs/proposal-7.8-skill-builtin.md](../../docs/proposal-7.8-skill-builtin.md).
 
+The macro embed fits tools that run from a checkout (dev, `bun link`) or ship
+a built bundle — the standard release path. It does NOT fit source-tarball
+distribution (`bun add` of a .tgz / `github:` ref): Bun refuses to run macros
+from node_modules, so the installed CLI dies at startup. Such tools read
+`src/SKILL.md` at runtime relative to `import.meta.url` instead — the tarball
+ships the file anyway (gkit is the precedent).
+
 ## References
 
 Load these on demand:
