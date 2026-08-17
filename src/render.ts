@@ -19,6 +19,8 @@ type FrameworkErrorCode =
 	| 'BAD_INPUT_JSON'
 	| 'TWO_INPUTS'
 	| 'RUN_DISABLED'
+	| 'NO_SKILL'
+	| 'UNKNOWN_SKILL_FILE'
 	| 'RUNTIME_ERROR'
 
 export type ErrorEnvelope =

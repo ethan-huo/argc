@@ -72,10 +72,10 @@ user:
 argc 7 is a clean-break typed command surface:
 
 - Commands are addressed by dotted path: `myapp user.create`
-- Identifier, kebab-case, and non-builtin `@` segments are app commands; `@schema`, `@run`, and `@completions` are reserved
+- Identifier, kebab-case, and non-builtin `@` segments are app commands; `@schema`, `@run`, `@completions`, and `@skill` are reserved
 - Input is one quoted object literal token: `"{ name: 'alice' }"`
 - Large input can come from a file or stdin: `@payload.json` or `-`
-- `@schema`, `@run`, and `@completions` are builtins
+- `@schema`, `@run`, `@completions`, and `@skill` are builtins
 - `--help` and `--version` are the only direct global flags
 - Handler return values are serialized to stdout
 - Handler logs (`console.log` / `process.stdout`) are redirected to stderr

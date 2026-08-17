@@ -1,4 +1,9 @@
-export const BUILTIN_COMMANDS = ['@run', '@schema', '@completions'] as const
+export const BUILTIN_COMMANDS = [
+	'@run',
+	'@schema',
+	'@completions',
+	'@skill',
+] as const
 
 const BUILTIN_COMMAND_SET = new Set<string>(BUILTIN_COMMANDS)
 

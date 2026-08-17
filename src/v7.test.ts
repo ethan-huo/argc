@@ -545,6 +545,12 @@ describe('argc 7 command surface', () => {
 				{ name: 'x', version: '7.0.0' },
 			),
 		).toThrow('Invalid command key: @schema')
+		expect(() =>
+			cli(
+				{ '@skill': c.input(s(v.object({}))) },
+				{ name: 'x', version: '7.0.0' },
+			),
+		).toThrow('Invalid command key: @skill')
 	})
 
 	test('kebab command keys work in dotted paths, schema, @run, and completion', async () => {
@@ -620,10 +626,10 @@ describe('argc 7 command surface', () => {
 
 	test('@ command keys are app commands unless they collide with argc builtins', async () => {
 		const schema = {
-			'@skill': c
+			'@pack': c
 				.meta({
-					description: 'Install a skill',
-					examples: [`x @skill "{ name: 'lint' }"`],
+					description: 'Install a pack',
+					examples: [`x @pack "{ name: 'lint' }"`],
 				})
 				.input(s(v.object({ name: v.string() }))),
 			tools: group(
@@ -635,8 +641,7 @@ describe('argc 7 command surface', () => {
 		}
 		const app = cli(schema, { name: 'x', version: '7.0.0' })
 		const handlers = {
-			'@skill': (options) =>
-				`skill:${(options.input as { name: string }).name}`,
+			'@pack': (options) => `pack:${(options.input as { name: string }).name}`,
 			tools: {
 				'@sync': (options) =>
 					`sync:${(options.input as { name: string }).name}`,
@@ -644,10 +649,10 @@ describe('argc 7 command surface', () => {
 		} satisfies RunConfig<typeof schema, undefined>['handlers']
 
 		const direct = await capture(() =>
-			app.run({ handlers }, ['@skill', "{ name: 'lint' }"]),
+			app.run({ handlers }, ['@pack', "{ name: 'lint' }"]),
 		)
 		expect(direct.exitCode).toBe(0)
-		expect(direct.stdout).toBe('skill:lint')
+		expect(direct.stdout).toBe('pack:lint')
 
 		const nested = await capture(() =>
 			app.run({ handlers }, ['tools.@sync', "{ name: 'docs' }"]),
@@ -657,9 +662,9 @@ describe('argc 7 command surface', () => {
 
 		const schemaResult = await capture(() => app.run({ handlers }, ['@schema']))
 		expect(schemaResult.exitCode).toBe(0)
-		expect(schemaResult.stdout).toContain('"@skill"(input:')
+		expect(schemaResult.stdout).toContain('"@pack"(input:')
 		expect(schemaResult.stdout).toContain('"@sync"(input:')
-		expect(schemaResult.stdout).toContain('x @skill "{')
+		expect(schemaResult.stdout).toContain('x @pack "{')
 		expect(
 			parseSync('schema.ts', bodyFromOkf(schemaResult.stdout), {
 				lang: 'ts',
@@ -668,22 +673,22 @@ describe('argc 7 command surface', () => {
 
 		const help = await capture(() => app.run({ handlers }, ['--help']))
 		expect(help.exitCode).toBe(0)
-		expect(help.stdout).toContain('argc.call["@skill"]({ name: ')
+		expect(help.stdout).toContain('argc.call["@pack"]({ name: ')
 
 		const selected = await capture(() =>
-			app.run({ handlers }, ['@schema', '.["@skill"]']),
+			app.run({ handlers }, ['@schema', '.["@pack"]']),
 		)
 		expect(selected.exitCode).toBe(0)
-		expect(selected.stdout).toContain('"@skill"(input:')
+		expect(selected.stdout).toContain('"@pack"(input:')
 
 		const run = await capture(() =>
 			app.run({ handlers }, [
 				'@run',
-				'await argc.call["@skill"]({ name: "fmt" })',
+				'await argc.call["@pack"]({ name: "fmt" })',
 			]),
 		)
 		expect(run.exitCode).toBe(0)
-		expect(run.stdout).toBe('skill:fmt')
+		expect(run.stdout).toBe('pack:fmt')
 	})
 
 	test('ambient context is ignored unless the CLI declares a context schema', async () => {
@@ -734,6 +739,7 @@ describe('argc 7 command surface', () => {
 			'@run',
 			'@schema',
 			'@completions',
+			'@skill',
 			'@skill-install',
 		])
 	})
@@ -764,6 +770,7 @@ describe('argc 7 command surface', () => {
 		)
 		expect(result.stdout).not.toContain('mcpx @run "await Promise.all')
 		expect(result.stdout).toContain('mcpx @schema .user')
+		expect(result.stdout).not.toContain('mcpx @skill')
 		expect(result.stdout).not.toContain('help:')
 		expect(result.stdout).not.toContain('examples:')
 		expect(result.stdout).not.toContain('<json5>')

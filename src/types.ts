@@ -64,6 +64,8 @@ export type CLIOptions<TContext extends Schema | undefined = undefined> = {
 	run?: boolean
 	hook?: false | HookTransport
 	hookTimeoutMs?: number
+	/** Embedded skill VFS: src-relative posix path → file content. */
+	skill?: Record<string, string>
 }
 
 export type HandlerMeta = {

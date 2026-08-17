@@ -5,6 +5,7 @@ import { c, cli } from 'argc'
 import * as v from 'valibot'
 
 import packageJson from '../package.json' with { type: 'json' }
+import { embedSkill } from './skill.embed.ts' with { type: 'macro' }
 
 const s = toStandardJsonSchema
 
@@ -23,6 +24,7 @@ const app = cli(schema, {
 	name: '{{APP_NAME}}',
 	version: packageJson.version,
 	description: 'Describe what {{APP_NAME}} does in one line.',
+	skill: embedSkill(),
 })
 
 await app.run({

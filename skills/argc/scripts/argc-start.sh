@@ -86,6 +86,8 @@ render() {
 
 render main.ts src/main.ts
 render main.test.ts.tpl src/main.test.ts
+render SKILL.md src/SKILL.md
+render skill.embed.ts src/skill.embed.ts
 render package.json package.json
 render tsconfig.json tsconfig.json
 render ci.yml .github/workflows/ci.yml
@@ -141,7 +143,8 @@ vX.Y.Z and attaches the bundle automatically.
 ## Agent Skill
 
 \`\`\`text
-skills/$NAME/SKILL.md
+src/SKILL.md              # source of truth, served by @skill
+skills/$NAME/SKILL.md     # harness stub
 \`\`\`
 EOF
 
@@ -166,7 +169,8 @@ Scaffolded $NAME at $DIR
 
 Next steps:
   1. Implement your schema and handlers in src/main.ts
-  2. Fill in skills/$NAME/SKILL.md (the tool's agent skill)
-  3. Create the GitHub repo ($REPO) and push — release.yml handles releases
-  4. Use .agents/skills/release/SKILL.md when cutting future releases
+  2. Fill in src/SKILL.md (the usage guide served by @skill)
+  3. Keep skills/$NAME/SKILL.md as a trigger stub — update its description
+  4. Create the GitHub repo ($REPO) and push — release.yml handles releases
+  5. Use .agents/skills/release/SKILL.md when cutting future releases
 EOF

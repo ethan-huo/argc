@@ -51,6 +51,7 @@ import {
 	readTextInput,
 	runScriptMode,
 } from './script'
+import { ensureTrailingNewline, formatBareSkill } from './skill'
 import { suggestSimilar } from './suggest'
 import { isCommand, isGroup } from './types'
 
@@ -176,6 +177,10 @@ export class CLI<
 		}
 		if (name === '@completions') {
 			await this.runCompletions(argv.slice(1))
+			return
+		}
+		if (name === '@skill') {
+			this.runSkill(argv.slice(1))
 			return
 		}
 		if (name === '@run') {
@@ -309,6 +314,57 @@ export class CLI<
 
 		const output = `---\n${stringify(fm, { lineWidth: 0 })}---\n${outBody}\n`
 		process.stdout.write(colorizeSchema(output))
+	}
+
+	private runSkill(argv: string[]): void {
+		const vfs = this.options.skill
+		if (!vfs) {
+			throw new ArgcError({
+				error: 'NO_SKILL',
+				$hint: 'this tool embeds no skill',
+			})
+		}
+		if (argv.length > 1) {
+			throw new ArgcError({
+				error: 'RUNTIME_ERROR',
+				detail: '@skill takes at most one path',
+			})
+		}
+		const path = argv[0]
+		if (!path) {
+			// Missing SKILL.md is a configuration bug, not an unknown-file miss.
+			const body = vfs['SKILL.md']
+			if (body === undefined) {
+				throw new ArgcError({
+					error: 'RUNTIME_ERROR',
+					detail: 'embedded skill is missing SKILL.md',
+				})
+			}
+			process.stdout.write(
+				formatBareSkill(body, Object.keys(vfs), this.options.name),
+			)
+			return
+		}
+		const content = vfs[path]
+		if (content === undefined) {
+			// Same move as BAD_SELECTOR embedding the outline: give the agent
+			// the file list (and a suggestion) so the next call can succeed.
+			const files = Object.keys(vfs).sort()
+			const similar = suggestSimilar(path, files)[0]
+			const envelope: {
+				error: 'UNKNOWN_SKILL_FILE'
+				got: string
+				did_you_mean?: string
+				files: string[]
+			} = {
+				error: 'UNKNOWN_SKILL_FILE',
+				got: path,
+				files,
+			}
+			if (similar) envelope.did_you_mean = similar
+			throw new ArgcError(envelope)
+		}
+		process.stdout.write(ensureTrailingNewline(content))
 	}
 
 	private async runCompletions(argv: string[]): Promise<void> {

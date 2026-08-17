@@ -18,6 +18,7 @@ export function showHelp(
 		version: string
 		description?: string
 		context?: Schema
+		skill?: Record<string, string>
 	},
 ): void {
 	const program = options.description
@@ -40,6 +41,7 @@ export function showHelp(
 		'',
 		`\`${n} @schema\` prints the typed API — every command and the exact shape of its input.`,
 		`Append a selector to focus on one area, e.g. \`${n} @schema .<namespace>\`.`,
+		...(options.skill ? [`\`${n} @skill\` prints the agent usage guide.`] : []),
 		'',
 		'## Examples',
 		'',

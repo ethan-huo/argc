@@ -32,21 +32,24 @@ verification. If the scaffold check fails, fix the scaffold before feature work.
 Rendered layout:
 
 ```
-templates/main.ts       -> src/main.ts
+templates/main.ts          -> src/main.ts
 templates/main.test.ts.tpl -> src/main.test.ts
-templates/package.json  -> package.json
-templates/tsconfig.json -> tsconfig.json
-templates/ci.yml        -> .github/workflows/ci.yml
-templates/release.yml   -> .github/workflows/release.yml
-templates/install.sh    -> install.sh
-templates/tool-skill.md -> skills/<name>/SKILL.md
-templates/AGENTS.md     -> AGENTS.md
+templates/SKILL.md         -> src/SKILL.md
+templates/skill.embed.ts   -> src/skill.embed.ts
+templates/package.json     -> package.json
+templates/tsconfig.json    -> tsconfig.json
+templates/ci.yml           -> .github/workflows/ci.yml
+templates/release.yml      -> .github/workflows/release.yml
+templates/install.sh       -> install.sh
+templates/tool-skill.md    -> skills/<name>/SKILL.md
+templates/AGENTS.md        -> AGENTS.md
 ```
 
 After scaffolding:
 
 - `bun run schema` must read well; this is the agent UI.
-- Fill in `skills/<name>/SKILL.md` for the finished tool.
+- Fill in `src/SKILL.md` — that is the usage guide the binary serves via `@skill`.
+- Keep `skills/<name>/SKILL.md` as a trigger stub; update its description as the tool's purpose firms up.
 - Use `.agents/skills/release/SKILL.md` when cutting releases.
 - Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.5.0` or a newer tag.
 
@@ -57,7 +60,7 @@ introduce eslint or prettier.
 
 - Commands are dotted paths: `tool user.create`
 - Input is one quoted object literal token: `"{ name: 'alice' }"`
-- Builtins are `@schema`, `@run`, and `@completions`
+- Builtins are `@schema`, `@run`, `@completions`, and `@skill`
 - Direct globals are only `--help` and `--version`
 - Handler return values are serialized to stdout as YAML
 - Handler logs are redirected to stderr
@@ -171,6 +174,22 @@ await app.run({
 When the tool grows, split into `src/schema.ts` and `src/handlers/*.ts`, and
 type handlers with `typeof app.Handlers`.
 
+## Embedded skill
+
+Author the full guide in `src/SKILL.md` (no frontmatter) and optional
+`src/references/*.md`. `src/skill.embed.ts` is a project-local Bun macro that
+calls `pickFiles` from `argc/skill` — the path anchor has to live in the tool,
+because a macro in `node_modules` would resolve against the wrong directory.
+
+```
+<name> @skill                    # SKILL.md + file list
+<name> @skill references/foo.md  # one embedded file
+```
+
+`skills/<name>/SKILL.md` stays a stub: trigger frontmatter plus a pointer at
+`@skill`. Do not generate it. Rationale:
+[docs/proposal-7.8-skill-builtin.md](../../docs/proposal-7.8-skill-builtin.md).
+
 ## References
 
 Load these on demand:
@@ -193,11 +212,13 @@ human-facing terminal output; keep handler return values clean and structured.
 - valibot schemas passed to `.input()` or `context` need
   `toStandardJsonSchema`. zod and arktype can be used directly.
 - Command and group keys must be valid JavaScript identifiers, kebab-case names,
-  or non-builtin `@` names; top-level `@schema`, `@run`, and `@completions` are
-  reserved. Input field keys may be non-identifiers and `@schema` will quote them.
+  or non-builtin `@` names; top-level `@schema`, `@run`, `@completions`, and
+  `@skill` are reserved. Input field keys may be non-identifiers and `@schema`
+  will quote them.
 - Quote object input. `tool user.create { name: 'alice' }` is a shell-split
   error; use `tool user.create "{ name: 'alice' }"`.
 - `@file` and `-` are input sources only after the command path or inside
-  `@run`; first-token `@schema`, `@run`, and `@completions` are builtins.
-- Ship the tool's own `skills/<name>/SKILL.md`. A CLI without usage context is
-  unfinished.
+  `@run`; first-token `@schema`, `@run`, `@completions`, and `@skill` are
+  builtins.
+- Ship `src/SKILL.md` (embedded, served by `@skill`) and a trigger stub at
+  `skills/<name>/SKILL.md`. A CLI without usage context is unfinished.

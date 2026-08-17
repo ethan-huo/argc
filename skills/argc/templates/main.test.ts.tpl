@@ -29,3 +29,22 @@ test('@schema is agent-readable', async () => {
 	expect(exitCode, stderr).toBe(0)
 	expect(stdout).toContain('hello(')
 })
+
+test('@skill prints the embedded guide', async () => {
+	const { stdout, stderr, exitCode } = await run('@skill')
+	expect(exitCode, stderr).toBe(0)
+	expect(stdout).toContain('Discover Capabilities First')
+})
+
+test('@skill known path prints that file', async () => {
+	const { stdout, stderr, exitCode } = await run('@skill', 'SKILL.md')
+	expect(exitCode, stderr).toBe(0)
+	expect(stdout).toContain('Discover Capabilities First')
+})
+
+test('@skill unknown path names the files', async () => {
+	const { stderr, exitCode } = await run('@skill', 'nope.md')
+	expect(exitCode).toBe(1)
+	expect(stderr).toContain('error: UNKNOWN_SKILL_FILE')
+	expect(stderr).toContain('SKILL.md')
+})
