@@ -34,7 +34,7 @@ Rendered layout:
 ```
 templates/main.ts          -> src/main.ts
 templates/main.test.ts.tpl -> src/main.test.ts
-templates/SKILL.md         -> src/SKILL.md
+templates/SKILL.md.tpl     -> src/SKILL.md
 templates/skill.embed.ts   -> src/skill.embed.ts
 templates/package.json     -> package.json
 templates/tsconfig.json    -> tsconfig.json
@@ -229,3 +229,6 @@ human-facing terminal output; keep handler return values clean and structured.
   builtins.
 - Ship `src/SKILL.md` (embedded, served by `@skill`) and a trigger stub at
   `skills/<name>/SKILL.md`. A CLI without usage context is unfinished.
+- Scaffold payloads that become `SKILL.md` must be named `*.tpl` (or anything
+  else). A file literally named `SKILL.md` inside this skill is discovered as
+  a skill by Grok / `skill` / Claude.

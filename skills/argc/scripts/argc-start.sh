@@ -86,7 +86,8 @@ render() {
 
 render main.ts src/main.ts
 render main.test.ts.tpl src/main.test.ts
-render SKILL.md src/SKILL.md
+# .tpl: harnesses recurse on SKILL.md and would load a body-only payload as a skill
+render SKILL.md.tpl src/SKILL.md
 render skill.embed.ts src/skill.embed.ts
 render package.json package.json
 render tsconfig.json tsconfig.json
