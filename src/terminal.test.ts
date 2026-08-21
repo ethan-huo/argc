@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 
-import { fmt, padEnd, printTable, visibleWidth } from './terminal'
+import {
+	fmt,
+	padEnd,
+	printTable,
+	sliceAnsi,
+	visibleWidth,
+	wrapAnsi,
+} from './terminal'
 
 describe('fmt', () => {
 	describe('base colors', () => {
@@ -83,6 +90,29 @@ describe('visibleWidth', () => {
 	test('multiple ANSI codes', () => {
 		const text = '\x1b[1m\x1b[32mbold green\x1b[0m'
 		expect(visibleWidth(text)).toBe(10)
+	})
+
+	test('Unicode graphemes and terminal hyperlinks', () => {
+		expect(visibleWidth('中文')).toBe(4)
+		expect(visibleWidth('👨‍👩‍👧')).toBe(2)
+		expect(visibleWidth('🇺🇸')).toBe(2)
+		expect(visibleWidth('e\u0301')).toBe(1)
+		expect(visibleWidth('\x1b]8;;https://bun.sh\x07Bun\x1b]8;;\x07')).toBe(3)
+	})
+})
+
+describe('ANSI-aware slicing and wrapping', () => {
+	test('sliceAnsi preserves styles and grapheme boundaries', () => {
+		expect(sliceAnsi('\x1b[31mhello\x1b[39m', 1, 4)).toBe('\x1b[31mell\x1b[39m')
+		expect(sliceAnsi('A👨‍👩‍👧B', 1, 3)).toBe('👨‍👩‍👧')
+	})
+
+	test('wrapAnsi preserves styles across rows', () => {
+		const wrapped = wrapAnsi('\x1b[31mThe quick brown fox\x1b[39m', 10)
+		expect(wrapped).toContain('\x1b[31mThe quick\x1b[39m\n')
+		expect(wrapped.split('\n').every((line) => visibleWidth(line) <= 10)).toBe(
+			true,
+		)
 	})
 })
 

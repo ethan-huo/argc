@@ -2,11 +2,11 @@ import { stringify } from 'yaml'
 
 import { ansi, formatAnsi } from './terminal'
 
-type ColorStream = {
+export type TerminalStream = {
 	isTTY?: boolean
 }
 
-function color(stream: ColorStream): boolean {
+function color(stream: TerminalStream): boolean {
 	// Framework-rendered contracts must stay byte-plain whenever captured.
 	return !!stream.isTTY && !process.env.NO_COLOR
 }
@@ -48,17 +48,28 @@ function styleFrontmatterLine(line: string, enabled: boolean): string {
 }
 
 function styleMarkdownBodyLine(line: string, enabled: boolean): string {
-	if (line.startsWith('## ')) return bold(cyan(line, enabled), enabled)
+	if (/^#{1,6} /.test(line)) return bold(cyan(line, enabled), enabled)
 	if (line.startsWith('- ')) {
 		return `${dim('- ', enabled)}${styleInlineCode(line.slice(2), enabled)}`
 	}
 	return styleInlineCode(line, enabled)
 }
 
+/**
+ * Add light terminal styling while preserving the Markdown source verbatim
+ * whenever output is captured.
+ */
+export function renderMarkdown(
+	source: string,
+	stream: TerminalStream = process.stdout,
+): string {
+	return colorizeOkfMarkdown(source, stream)
+}
+
 export function renderOkfMarkdown(
 	frontmatter: Record<string, unknown>,
 	body: string,
-	stream: ColorStream = process.stdout,
+	stream: TerminalStream = process.stdout,
 ): string {
 	const normalizedBody = body.endsWith('\n') ? body : `${body}\n`
 	const source = `---\n${stringify(frontmatter, { lineWidth: 0 })}---\n${normalizedBody}`
@@ -67,7 +78,7 @@ export function renderOkfMarkdown(
 
 export function colorizeOkfMarkdown(
 	source: string,
-	stream: ColorStream = process.stdout,
+	stream: TerminalStream = process.stdout,
 ): string {
 	const enabled = color(stream)
 	if (!enabled) return source
@@ -89,7 +100,7 @@ export function colorizeOkfMarkdown(
 
 export function colorizeSchema(
 	source: string,
-	stream: ColorStream = process.stdout,
+	stream: TerminalStream = process.stdout,
 ): string {
 	const enabled = color(stream)
 	if (!enabled) return source
@@ -130,7 +141,7 @@ export function colorizeSchema(
 
 export function colorizeError(
 	source: string,
-	stream: ColorStream = process.stderr,
+	stream: TerminalStream = process.stderr,
 ): string {
 	const enabled = color(stream)
 	if (!enabled) return source

@@ -175,6 +175,21 @@ detail: The user cannot receive new work.
 user: alice
 ```
 
+## Human Terminal Output
+
+Markdown results can use the TTY-gated renderer without changing captured
+agent output:
+
+```typescript
+import { renderMarkdown } from 'argc'
+
+return renderMarkdown('# Release\n\n- Built `dist/acme`')
+```
+
+For terminal layout, `argc/terminal` exposes `visibleWidth`, `padEnd`,
+`sliceAnsi`, and `wrapAnsi`. They use Bun's ANSI- and grapheme-aware terminal
+column implementation.
+
 ## Agent Schema
 
 `@schema` is the agent-facing contract:

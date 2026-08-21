@@ -1,10 +1,18 @@
-# Terminal Output (`argc/terminal`)
+# Terminal Output
 
-A subexport with color, semantic status output, and an ANSI/CJK-aware table.
-Not documented in the README. Import from the `argc/terminal` entry:
+Use argc for semantic color and Markdown rendering; use Bun's native terminal
+string primitives for ANSI- and grapheme-correct layout:
 
 ```typescript
-import { fmt, printTable, visibleWidth, padEnd } from 'argc/terminal'
+import { renderMarkdown } from 'argc'
+import {
+	fmt,
+	padEnd,
+	printTable,
+	sliceAnsi,
+	visibleWidth,
+	wrapAnsi,
+} from 'argc/terminal'
 ```
 
 ## The one rule that matters for agents
@@ -22,6 +30,22 @@ Detection order (see `isColorSupported`): disabled by `NO_COLOR` or
 `--no-color`; forced on by `FORCE_COLOR` or `--color`; otherwise on for Windows,
 a TTY with a non-`dumb` `TERM`, or CI. **Corollary:** don't hand-roll your own
 `\x1b[...m` codes — they bypass this detection and will leak into agent stdout.
+
+## Markdown results
+
+Pass Markdown result strings through `renderMarkdown`. It adds light styling on
+a TTY and returns the original bytes when output is captured, redirected, or
+`NO_COLOR` is set:
+
+```typescript
+import { renderMarkdown } from 'argc'
+
+return renderMarkdown('# Release\n\n- Built `dist/acme`')
+```
+
+Structured handler values still return as YAML automatically. `Bun.Terminal` is
+a PTY for driving interactive subprocesses; it is not a YAML or Markdown
+renderer. Use ordinary `Bun.spawn` for non-interactive subprocesses.
 
 ## `fmt` — colors, styles, semantic status
 
@@ -92,21 +116,24 @@ alice   ok
   agent-facing command, prefer a YAML summary (or `--json` for raw data) and
   reserve tables for a `--format table` human mode — see `references/output.md`.
 
-## `visibleWidth` / `padEnd` — alignment primitives
+## Terminal string primitives
 
-For custom layouts (columns, right-aligned numbers, progress lines):
+`visibleWidth`, `padEnd`, `sliceAnsi`, and `wrapAnsi` use Bun's native terminal
+column implementation. It accounts for ANSI colors, terminal hyperlinks,
+combining marks, CJK, flags, and multi-codepoint emoji:
 
 ```typescript
-visibleWidth('你好') // 4  — CJK counts as 2; ANSI codes count as 0
-visibleWidth(fmt.red('hi')) // 2  — escape codes excluded
-padEnd('id', 8) // 'id      ' — pad to visible width 8
-padEnd(fmt.green('ok'), 8) // pads by visible width, color preserved
+visibleWidth('你好') // 4
+visibleWidth(fmt.red('hi')) // 2
+visibleWidth('👨‍👩‍👧') // 2
+padEnd(fmt.green('ok'), 8) // pads to visible width 8
+sliceAnsi(fmt.red('hello'), 1, 4) // styled `ell`
+wrapAnsi(fmt.red('The quick brown fox'), 10) // ANSI-safe wrapped rows
 ```
 
-Wide-char detection covers CJK ideographs, Hangul, Hiragana/Katakana, fullwidth
-forms, and CJK symbols/punctuation. Use these instead of `String.prototype.padEnd`
-whenever cells may contain color codes or non-Latin text — the native method
-counts bytes/code units and will misalign.
+Use these instead of code-unit operations whenever terminal text may contain
+styles or Unicode. `String.prototype.padEnd` and `String.prototype.slice` can
+misalign or split displayed graphemes.
 
 ## Pipe and signal hygiene
 

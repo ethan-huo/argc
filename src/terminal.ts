@@ -100,45 +100,18 @@ export const fmt = {
 
 // ============ ANSI-aware String Utils ============
 
-const ANSI_REGEX = /\x1b\[[0-9;]*m/g
+/** Slice by terminal columns without breaking ANSI state or Unicode graphemes. */
+export const sliceAnsi = Bun.sliceAnsi
 
-/** Check if a character is a wide character (CJK, fullwidth, etc.) */
-function isWideChar(code: number): boolean {
-	return (
-		// CJK Unified Ideographs
-		(code >= 0x4e00 && code <= 0x9fff) ||
-		// CJK Unified Ideographs Extension A
-		(code >= 0x3400 && code <= 0x4dbf) ||
-		// CJK Compatibility Ideographs
-		(code >= 0xf900 && code <= 0xfaff) ||
-		// Fullwidth Forms
-		(code >= 0xff00 && code <= 0xff60) ||
-		(code >= 0xffe0 && code <= 0xffe6) ||
-		// Hangul Syllables
-		(code >= 0xac00 && code <= 0xd7af) ||
-		// Hiragana & Katakana
-		(code >= 0x3040 && code <= 0x30ff) ||
-		// CJK Symbols and Punctuation
-		(code >= 0x3000 && code <= 0x303f) ||
-		// Enclosed CJK Letters and Months
-		(code >= 0x3200 && code <= 0x32ff) ||
-		// CJK Compatibility
-		(code >= 0x3300 && code <= 0x33ff)
-	)
-}
+/** Wrap by terminal columns while preserving ANSI state and Unicode graphemes. */
+export const wrapAnsi = Bun.wrapAnsi
 
 /**
- * Get visible width of string (excluding ANSI escape codes, handling wide
- * chars)
+ * Get the terminal column width, excluding ANSI escape codes and accounting for
+ * Unicode graphemes.
  */
 export function visibleWidth(str: string): number {
-	const plain = str.replace(ANSI_REGEX, '')
-	let width = 0
-	for (const char of plain) {
-		const code = char.codePointAt(0) || 0
-		width += isWideChar(code) ? 2 : 1
-	}
-	return width
+	return Bun.stringWidth(str)
 }
 
 /** Pad string to specified visible width */

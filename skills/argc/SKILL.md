@@ -108,6 +108,9 @@ Do not use or document v1 concepts: `.args()`, aliases, input flags, `--input`,
   and errors. Stay agent-first; reach for it only when a human path is real.
 - stdout is the result. Progress, warnings, logs, prompts, and debug output go
   to stderr.
+- Pass Markdown result strings through `renderMarkdown` from `argc`; it adds
+  light styling on a TTY and preserves the source bytes when captured. Structured
+  handler values already render as YAML.
 - Return compact YAML summaries by default. Persist bulky artifacts under a
   hidden state directory and return paths plus next commands.
 - Design **status/preflight output as disclosure for agents, not a parse tree**:
@@ -206,13 +209,25 @@ Load these on demand:
 | `references/flow.md`            | Designing mutation commands, prompts, dangerous ops, and exit behavior |
 | `references/input-sources.md`   | Wiring `@file` / `-` / heredoc inputs, status disclosure, TTY prompts  |
 | `references/output.md`          | Designing stdout summaries, hidden state dirs, `--json`, and `$hints`  |
-| `references/terminal.md`        | Adding human-facing color, status icons, or aligned tables             |
+| `references/terminal.md`        | Rendering Markdown, color, tables, or ANSI/Unicode terminal layouts    |
 | `references/concurrency.md`     | Fanning out work across targets, live progress, or interactive prompts |
 | `references/schema-cookbook.md` | Designing command input schemas and Standard Schema transforms         |
 | `references/release.md`         | Shipping versioned bundles and install scripts                         |
 
-`references/terminal.md` documents the `argc/terminal` subexport. Use it for
-human-facing terminal output; keep handler return values clean and structured.
+`references/terminal.md` documents `renderMarkdown` and the `argc/terminal`
+subexport. Keep handler return values structured unless Markdown is the result.
+
+## Runtime diagnostics
+
+Prefer Bun's Markdown reports because agents and terminal users can inspect them
+without a GUI:
+
+```bash
+bun --cpu-prof-md src/main.ts @schema
+bun --heap-prof-md src/main.ts @schema
+bun build src/main.ts --outfile=dist/profile.js --target=bun \
+  --metafile-md=dist/metafile.md
+```
 
 ## Gotchas
 

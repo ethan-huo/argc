@@ -4,6 +4,8 @@ export type { CompletionContext } from './complete'
 export { c, CommandBuilder, group, GroupBuilder } from './command'
 export { parseArgv } from './parser'
 export { domainError } from './render'
+export { renderMarkdown } from './markup'
+export type { TerminalStream } from './markup'
 export {
 	countSchemaCommands,
 	generateSchema,
