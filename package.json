@@ -1,6 +1,6 @@
 {
-	"name": "argc",
-	"version": "7.10.0",
+	"name": "@celados/argc",
+	"version": "7.11.0",
 	"type": "module",
 	"types": "./dist/index.d.ts",
 	"exports": {
@@ -19,6 +19,10 @@
 			"import": "./src/skill.ts",
 			"default": "./src/skill.ts"
 		}
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://npm.celados.com"
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",

@@ -108,3 +108,25 @@ jobs:
           git push origin "refs/tags/$TAG"
         env:
           TAG: ${{ steps.version.outputs.tag }}
+
+      - name: Write registry auth
+        if: steps.version.outputs.released == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Quoted heredoc keeps ${NODE_AUTH_TOKEN} literal; npm expands it from env.
+          cat > .npmrc <<'EOF'
+          @celados:registry=https://npm.celados.com
+          //npm.celados.com/:_authToken=${NODE_AUTH_TOKEN}
+          EOF
+
+      - name: Publish to npm.celados.com
+        if: steps.version.outputs.released == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Worktree is the pruned declaration snapshot at this point; .npmrc is
+          # always excluded by npm pack, so it never enters the tarball.
+          npm publish --access public

@@ -6,8 +6,12 @@ handlers, predictable stdout, and an agent-readable `@schema`.
 ## Install
 
 ```bash
-bun add github:ethan-huo/argc#v7.5.0
+bun add @celados/argc
 ```
+
+Team registry auth: render `.npmrc` from `.npmrc.tpl` via `hq secret.render`.
+The GitHub tag channel (`bun add github:ethan-huo/argc#v7.11.0`) stays
+available for consumers outside the registry.
 
 Use release tags for downstream projects. `main` is the source branch and does
 not commit generated declaration files; tags include `dist/*.d.ts`.
