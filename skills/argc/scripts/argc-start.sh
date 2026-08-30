@@ -145,7 +145,7 @@ vX.Y.Z and attaches the bundle automatically.
 
 \`\`\`text
 src/SKILL.md              # source of truth, served by @skill
-skills/$NAME/SKILL.md     # harness stub
+skills/$NAME/SKILL.md     # intent-to-@skill harness entry
 \`\`\`
 EOF
 
@@ -171,7 +171,7 @@ Scaffolded $NAME at $DIR
 Next steps:
   1. Implement your schema and handlers in src/main.ts
   2. Fill in src/SKILL.md (the usage guide served by @skill)
-  3. Keep skills/$NAME/SKILL.md as a trigger stub — update its description
+  3. Replace the bracketed intent in skills/$NAME/SKILL.md; keep its direct @skill action
   4. Create the GitHub repo ($REPO) and push — release.yml handles releases
   5. Use .agents/skills/release/SKILL.md when cutting future releases
 EOF

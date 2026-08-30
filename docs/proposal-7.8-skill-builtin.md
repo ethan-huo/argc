@@ -7,8 +7,9 @@ generated: { by: claude_code/fable-5, at: 2026-08-17T00:00:00Z }
 description: >
   Embed the agent-facing skill (SKILL.md + references) into the CLI binary at
   build time via a Bun macro, and serve it through a new @skill builtin. The
-  harness-visible skill becomes a one-line stub whose only job is trigger
-  selection. Every mechanism claim in §3 was verified empirically on Bun 1.3.14
+  harness-visible skill becomes an intent-to-action entry whose description
+  routes matching tasks directly to @skill and whose one-line body is a harness
+  fallback. Every mechanism claim in §3 was verified empirically on Bun 1.3.14
   before this document was written; do not re-litigate them, build on them.
 ---
 
@@ -27,9 +28,10 @@ into agent context even when one `@schema` call would have answered.
 New model — the binary is the source of truth:
 
 - The harness-visible skill (`skills/<name>/SKILL.md` in the tool repo,
-  installed into the harness skill dir) becomes a **stub**: frontmatter for
-  trigger selection plus a one-line body — `Run <name> @skill now`. It is
-  hand-maintained and almost never changes.
+  installed into the harness skill dir) becomes a **stub**: frontmatter that
+  maps concrete task intent directly to `Run <name> @skill now`, plus a one-line
+  body carrying the same action as a harness fallback. It is hand-maintained
+  and almost never changes.
 - The full skill body and its reference files are **embedded into the binary
   at build time** and served by a new `@skill` builtin. The skill can never be
   newer or older than the binary that serves it.
@@ -227,12 +229,11 @@ change.
    ```
    and `skill: embedSkill()` in the `cli(...)` options.
 4. **`tool-skill.md` template becomes the stub** (installed as
-   `skills/{{APP_NAME}}/SKILL.md`): keep the frontmatter guidance (name +
-   trigger-phrase description — that description is the only thing the harness
-   sees for selection), body reduced to:
+   `skills/{{APP_NAME}}/SKILL.md`): keep the frontmatter guidance, but make the
+   description an executable intent router — `When <intent>, run
+{{APP_NAME}} @skill immediately`. The body is the compatibility fallback:
    ```
    Run `{{APP_NAME}} @skill` now for the full usage guide.
-   Read a referenced file with `{{APP_NAME}} @skill <path>`.
    ```
 5. **`AGENTS.md` template** — the "Using this tool" bullet now points at
    `src/SKILL.md` as the source of truth and names `skills/{{APP_NAME}}/SKILL.md`

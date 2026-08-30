@@ -49,7 +49,9 @@ After scaffolding:
 
 - `bun run schema` must read well; this is the agent UI.
 - Fill in `src/SKILL.md` — that is the usage guide the binary serves via `@skill`.
-- Keep `skills/<name>/SKILL.md` as a trigger stub; update its description as the tool's purpose firms up.
+- Keep `skills/<name>/SKILL.md` as an intent-to-action stub: its description
+  matches concrete user intent and immediately runs `<name> @skill`; its
+  one-line body repeats that action as a harness fallback.
 - Use `.agents/skills/release/SKILL.md` when cutting releases.
 - Never pin argc to `#main`; pin `github:ethan-huo/argc#v7.5.0` or a newer tag.
 
@@ -189,8 +191,9 @@ because a macro in `node_modules` would resolve against the wrong directory.
 <name> @skill references/foo.md  # one embedded file
 ```
 
-`skills/<name>/SKILL.md` stays a stub: trigger frontmatter plus a pointer at
-`@skill`. Do not generate it. Rationale:
+`skills/<name>/SKILL.md` stays an intent-to-action stub: its description routes
+matching tasks directly to `<name> @skill`, while its one-line body preserves a
+harness fallback. Do not generate it. Rationale:
 [docs/proposal-7.8-skill-builtin.md](../../docs/proposal-7.8-skill-builtin.md).
 
 The macro embed fits tools that run from a checkout (dev, `bun link`) or ship
