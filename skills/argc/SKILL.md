@@ -34,13 +34,14 @@ Rendered layout:
 ```
 templates/main.ts          -> src/main.ts
 templates/main.test.ts.tpl -> src/main.test.ts
-templates/SKILL.md.tpl     -> src/SKILL.md
+templates/index.md.tpl     -> src/index.md
 templates/skill.embed.ts   -> src/skill.embed.ts
 templates/package.json     -> package.json
 templates/tsconfig.json    -> tsconfig.json
 templates/ci.yml           -> .github/workflows/ci.yml
 templates/release.yml      -> .github/workflows/release.yml
 templates/install.sh       -> install.sh
+templates/.agents/skills/release/SKILL.md.tpl -> .agents/skills/release/SKILL.md
 templates/tool-skill.md    -> skills/<name>/SKILL.md
 templates/AGENTS.md        -> AGENTS.md
 ```
@@ -48,7 +49,7 @@ templates/AGENTS.md        -> AGENTS.md
 After scaffolding:
 
 - `bun run schema` must read well; this is the agent UI.
-- Fill in `src/SKILL.md` — that is the usage guide the binary serves via `@skill`.
+- Fill in `src/index.md` — that is the usage guide the binary serves via `@skill`.
 - Keep `skills/<name>/SKILL.md` as an intent-to-action stub: its description
   matches concrete user intent and immediately runs `<name> @skill`; its
   one-line body repeats that action as a harness fallback.
@@ -181,7 +182,7 @@ type handlers with `typeof app.Handlers`.
 
 ## Embedded skill
 
-Author the full guide in `src/SKILL.md` (no frontmatter) and optional
+Author the full guide in `src/index.md` (no frontmatter) and optional
 `src/references/*.md`. `src/skill.embed.ts` is a project-local Bun macro that
 calls `pickFiles` from `argc/skill` — the path anchor has to live in the tool,
 because a macro in `node_modules` would resolve against the wrong directory.
@@ -200,7 +201,7 @@ The macro embed fits tools that run from a checkout (dev, `bun link`) or ship
 a built bundle — the standard release path. It does NOT fit source-tarball
 distribution (`bun add` of a .tgz / `github:` ref): Bun refuses to run macros
 from node_modules, so the installed CLI dies at startup. Such tools read
-`src/SKILL.md` at runtime relative to `import.meta.url` instead — the tarball
+`src/index.md` at runtime relative to `import.meta.url` instead — the tarball
 ships the file anyway (gkit is the precedent).
 
 ## References
@@ -245,7 +246,7 @@ bun build src/main.ts --outfile=dist/profile.js --target=bun \
 - `@file` and `-` are input sources only after the command path or inside
   `@run`; first-token `@schema`, `@run`, `@completions`, and `@skill` are
   builtins.
-- Ship `src/SKILL.md` (embedded, served by `@skill`) and a trigger stub at
+- Ship `src/index.md` (embedded, served by `@skill`) and a trigger stub at
   `skills/<name>/SKILL.md`. A CLI without usage context is unfinished.
 - Scaffold payloads that become `SKILL.md` must be named `*.tpl` (or anything
   else). A file literally named `SKILL.md` inside this skill is discovered as

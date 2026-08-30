@@ -40,10 +40,11 @@ New model — the binary is the source of truth:
 
 These were decided with the author; do not reopen them.
 
-1. **Skill files live in `src/`, next to the code**: `src/SKILL.md`,
+1. **Embedded guide files live in `src/`, next to the code**: `src/index.md`,
    `src/references/*.md`, optionally `src/types/*.d.ts` when the project wants
-   to expose type definitions to agents. VFS keys are paths relative to
-   `src/`, posix separators (`SKILL.md`, `references/foo.md`).
+   to expose type definitions to agents. The physical `index.md` maps to the
+   protocol's `SKILL.md` key; other VFS keys are paths relative to `src/` with
+   posix separators (`references/foo.md`).
 2. **The embedded `SKILL.md` carries no frontmatter.** `@skill` prints it
    verbatim; there is no frontmatter parsing or stripping anywhere in argc.
 3. **Command surface is exactly two forms** — no `--list`, no `--path` flag
@@ -208,7 +209,7 @@ change.
 
 ## 5. Changes — scaffold templates (`skills/argc/templates/`)
 
-1. **New `src/SKILL.md` template** — body only, no frontmatter. Carry over the
+1. **New `src/index.md` template** — body only, no frontmatter. Carry over the
    section skeleton from the current `tool-skill.md` (Discover Capabilities
    First / Core Workflow / Anti-Patterns), minus the frontmatter block.
 2. **New `src/skill.embed.ts` template**:
@@ -219,7 +220,13 @@ change.
    // Build-time picker: which src/ files are agent-facing is an editorial
    // decision per project — keep the list explicit, not a framework convention.
    export function embedSkill(): Record<string, string> {
-   	return pickFiles(import.meta.dir, ['SKILL.md', 'references/**/*.md'])
+     const { 'index.md': body, ...references } = pickFiles(import.meta.dir, [
+       'index.md',
+       'references/**/*.md',
+     ])
+     if (body === undefined)
+       throw new Error('Embedded skill body is missing index.md')
+     return { 'SKILL.md': body, ...references }
    }
    ```
 
@@ -236,7 +243,7 @@ change.
    Run `{{APP_NAME}} @skill` now for the full usage guide.
    ```
 5. **`AGENTS.md` template** — the "Using this tool" bullet now points at
-   `src/SKILL.md` as the source of truth and names `skills/{{APP_NAME}}/SKILL.md`
+   `src/index.md` as the source of truth and names `skills/{{APP_NAME}}/SKILL.md`
    as the stub.
 6. **`skills/argc/SKILL.md`** (the argc skill itself) — add a short section
    teaching the convention: where skill files live, the macro wiring, the two

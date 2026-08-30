@@ -86,15 +86,16 @@ render() {
 
 render main.ts src/main.ts
 render main.test.ts.tpl src/main.test.ts
-# .tpl: harnesses recurse on SKILL.md and would load a body-only payload as a skill
-render SKILL.md.tpl src/SKILL.md
+# Keep templates undiscoverable: repository scanners treat every literal
+# SKILL.md as an installable entry, even when the file is only scaffold input.
+render index.md.tpl src/index.md
 render skill.embed.ts src/skill.embed.ts
 render package.json package.json
 render tsconfig.json tsconfig.json
 render ci.yml .github/workflows/ci.yml
 render release.yml .github/workflows/release.yml
 render install.sh install.sh
-render .agents/skills/release/SKILL.md .agents/skills/release/SKILL.md
+render .agents/skills/release/SKILL.md.tpl .agents/skills/release/SKILL.md
 render tool-skill.md "skills/$NAME/SKILL.md"
 render AGENTS.md AGENTS.md
 chmod +x "$DIR/install.sh"
@@ -144,7 +145,7 @@ vX.Y.Z and attaches the bundle automatically.
 ## Agent Skill
 
 \`\`\`text
-src/SKILL.md              # source of truth, served by @skill
+src/index.md              # source of truth, served by @skill
 skills/$NAME/SKILL.md     # intent-to-@skill harness entry
 \`\`\`
 EOF
@@ -170,7 +171,7 @@ Scaffolded $NAME at $DIR
 
 Next steps:
   1. Implement your schema and handlers in src/main.ts
-  2. Fill in src/SKILL.md (the usage guide served by @skill)
+  2. Fill in src/index.md (the usage guide served by @skill)
   3. Replace the bracketed intent in skills/$NAME/SKILL.md; keep its direct @skill action
   4. Create the GitHub repo ($REPO) and push — release.yml handles releases
   5. Use .agents/skills/release/SKILL.md when cutting future releases
