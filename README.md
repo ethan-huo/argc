@@ -9,7 +9,8 @@ handlers, predictable stdout, and an agent-readable `@schema`.
 bun add @celados/argc
 ```
 
-Team registry auth: render `.npmrc` from `.npmrc.tpl` via `hq secret.render`.
+Team registry auth: render `.npmrc` from `.npmrc.tpl` via
+`latch render "{ file: '.npmrc.tpl', format: 'raw' }"`.
 The GitHub tag channel (`bun add github:ethan-huo/argc#v7.11.0`) stays
 available for consumers outside the registry.
 
