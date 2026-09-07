@@ -5,6 +5,8 @@ import { join } from 'node:path'
 
 const tempDirs: string[] = []
 
+const ANSI_RE = /\x1b\[[0-9;]*m/g
+
 afterEach(() => {
 	for (const dir of tempDirs.splice(0)) {
 		rmSync(dir, { recursive: true, force: true })
@@ -46,7 +48,7 @@ describe('downstream bundles', () => {
 					]
 		const run = Bun.spawnSync(command)
 		expect(run.exitCode).toBe(0)
-		const output = readFileSync(ttyFile, 'utf8')
+		const output = readFileSync(ttyFile, 'utf8').replace(ANSI_RE, '')
 		expect(output).toContain('type Demo =')
 		expect(output).not.toContain('Resolving')
 		expect(output).not.toContain('@oxc-parser')
