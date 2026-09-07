@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { parseSync } from 'oxc-parser'
 
 import type { HookDispatcher } from './hook'
 import type { ErrorIssue } from './render'
@@ -18,6 +17,7 @@ export async function readStdin(): Promise<string> {
 
 type ScriptFn = (input?: unknown) => Promise<unknown>
 type ScriptHandlers = ScriptFn | { [key: string]: ScriptHandlers }
+type OxcParserModule = typeof import('oxc-parser')
 
 export type ScriptAPI = {
 	handlers: ScriptHandlers
@@ -60,7 +60,20 @@ export function parseRunSource(token: string | undefined): RunSource {
 	return { kind: 'inline', code: token }
 }
 
-function objectLiteralReturnBody(code: string): string | undefined {
+let parserModule: Promise<OxcParserModule> | undefined
+
+function loadParser(): Promise<OxcParserModule> {
+	// Keep the native parser out of every downstream CLI's startup graph. Only
+	// inline @run needs AST inspection; commands, @schema, and @skill must not
+	// resolve a platform binding before they can run.
+	parserModule ??= import('oxc-parser')
+	return parserModule
+}
+
+function objectLiteralReturnBody(
+	code: string,
+	parseSync: OxcParserModule['parseSync'],
+): string | undefined {
 	const trimmed = code.trim()
 	if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return undefined
 
@@ -289,7 +302,8 @@ async function runInline(
 	code: string,
 	scope: Record<string, unknown>,
 ): Promise<unknown> {
-	const objectBody = objectLiteralReturnBody(code)
+	const { parseSync } = await loadParser()
+	const objectBody = objectLiteralReturnBody(code, parseSync)
 	if (objectBody !== undefined) {
 		return await executeInlineBody(objectBody, scope)
 	}
