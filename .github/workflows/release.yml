@@ -8,6 +8,12 @@ on:
     paths:
       - package.json
 
+# Releases publish to a registry and cut tags — queue them instead of
+# cancelling, so a superseded run never leaves a half-published version.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
