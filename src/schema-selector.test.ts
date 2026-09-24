@@ -175,10 +175,27 @@ describe('parseSchemaSelector', () => {
 		)
 	})
 
-	test('rejects bare non-identifier keys', () => {
-		expect(() => parseSchemaSelector('.content-type')).toThrow(
+	test('parses bare kebab keys', () => {
+		expect(parseSchemaSelector('.cf-builds.list-builds')).toEqual([
+			{ type: 'key', name: 'cf-builds' },
+			{ type: 'key', name: 'list-builds' },
+		])
+		expect(parseSchemaSelector('.{cf-api,cf-builds}')).toEqual([
+			{
+				type: 'set',
+				branches: [
+					[{ type: 'key', name: 'cf-api' }],
+					[{ type: 'key', name: 'cf-builds' }],
+				],
+			},
+		])
+	})
+
+	test('rejects dangling hyphens and bare @ keys', () => {
+		expect(() => parseSchemaSelector('.content-')).toThrow(
 			'Unexpected character "-"',
 		)
+		expect(() => parseSchemaSelector('.-type')).toThrow('Expected identifier')
 		expect(() => parseSchemaSelector('.@add')).toThrow('Expected identifier')
 	})
 

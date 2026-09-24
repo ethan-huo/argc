@@ -597,6 +597,12 @@ describe('argc 7 command surface', () => {
 		expect(selected.exitCode).toBe(0)
 		expect(selected.stdout).toContain('"kebab-case-cmd"(input:')
 
+		const bareSelected = await capture(() =>
+			app.run({ handlers }, ['@schema', '.g1.kebab-case-cmd']),
+		)
+		expect(bareSelected.exitCode).toBe(0)
+		expect(bareSelected.stdout).toContain('"kebab-case-cmd"(input:')
+
 		const bracketRun = await capture(() =>
 			app.run({ handlers }, [
 				'@run',

@@ -329,7 +329,20 @@ function parseKey(
 	}
 
 	let i = start + 1
-	while (i < input.length && BARE_KEY_CHAR_RE.test(charAt(input, i))) i += 1
+	while (i < input.length) {
+		const ch = charAt(input, i)
+		// Kebab keys are valid path segments (`g.kebab-cmd`), so the selector
+		// accepts them bare too; `-` has no selector meaning, so this mirrors
+		// COMMAND_KEY_BODY_RE: a hyphen only between key characters.
+		if (
+			BARE_KEY_CHAR_RE.test(ch) ||
+			(ch === '-' && BARE_KEY_CHAR_RE.test(charAt(input, i + 1)))
+		) {
+			i += 1
+			continue
+		}
+		break
+	}
 
 	return { name: input.slice(start, i), nextIndex: i }
 }
